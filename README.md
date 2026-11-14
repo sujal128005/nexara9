@@ -2,16 +2,18 @@
 
 **Many ventures. One golden standard.**
 
-The website of Nexara9: a home page, a projects page with our flagship ventures, and one
-page per open project that explains the problem, how it works, the methodology, the technology,
-an interactive demo and the concepts behind it.
+The website of Nexara9: a home page, a Projects page, a Flagship ventures page, a Founders page,
+and one page per open project that explains the problem, how it works, the architecture, the
+languages and repository structure, the methodology, the technology, a live or interactive demo
+and the concepts behind it. Inside pages are light by default, with a dark-mode switch.
 
 Live at [nexara9.me](https://nexara9.me), served by GitHub Pages from the `main` branch.
 
 ## Change the words
 
-Every word on the site is in **`src/content.mjs`**: projects, team members, links, flagship
-ventures, tagline and contact email. Edit it, then rebuild:
+Every word on the site is in **`src/content.mjs`** (projects, team members, founders, links,
+flagship ventures, tagline, contact email) and **`src/tech.mjs`** (each project's languages,
+architecture diagram and repository walkthrough). Edit them, then rebuild:
 
 ```bash
 node src/build.mjs
@@ -38,9 +40,12 @@ Then open http://localhost:8080.
 | Path | What |
 |---|---|
 | `src/content.mjs` | All content |
+| `src/tech.mjs` | Languages, architecture and repository walkthrough per project |
 | `src/build.mjs` | Turns content into pages |
 | `src/glyphs.mjs` | Logo and project emblems (SVG) |
-| `assets/css/main.css` | The design |
+| `assets/css/main.css` | Home page design |
+| `assets/css/site.css` | Inside pages design (light and dark themes) |
+| `assets/js/theme.js` | Applies the saved theme before the page appears |
 | `assets/js/main.js` | Menu, filters, step-by-step viewer, scroll effects |
 | `assets/js/home.js` | The home page starfield |
 | `assets/js/demos.js` | Interactive demos on project pages |
