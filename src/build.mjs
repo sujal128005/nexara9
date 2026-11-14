@@ -123,7 +123,7 @@ function dock(active, menu = '') {
   return `<nav class="dock${menu ? ' dock-has-menu' : ''}" aria-label="Projects and ventures">
   <div class="dock-in">
     ${menu}
-    <div class="sw${active === 'ventures' ? ' sw-r' : active === 'projects' ? ' sw-l' : ''}">${seg('/projects/', 'projects', 'Projects')}${seg('/ventures/', 'ventures', 'Ventures')}</div>
+    <div class="sw${active === 'ventures' ? ' sw-r' : active === 'projects' ? ' sw-l' : ''}"><span class="sw-thumb" aria-hidden="true"></span>${seg('/projects/', 'projects', 'Projects')}${seg('/ventures/', 'ventures', 'Ventures')}</div>
   </div>
 </nav>`;
 }
@@ -334,7 +334,7 @@ function foundersPage() {
         </dl>
         ${f.quote ? `<blockquote class="fdr-quote">${esc(f.quote)}</blockquote>` : ''}
         ${f.bio.map((b) => `<p class="fdr-bio">${fmt(b)}</p>`).join('')}
-        ${f.highlights.length ? `<h3 class="sub">Highlights</h3><ol class="hl-list">${f.highlights.map((h) => `<li>${fmt(h)}</li>`).join('')}</ol>` : ''}
+        ${f.highlights.length ? `<h3 class="sub">Highlights</h3><ol class="hl-list">${f.highlights.map((h) => `<li><span>${fmt(h)}</span></li>`).join('')}</ol>` : ''}
         <h3 class="sub">Focus</h3><p class="focus">${f.focus.map(esc).join('<span>/</span>')}</p>
         ${built.length || f.repos ? `<h3 class="sub">Projects</h3><p class="built">${built.map((b) => `<a href="/projects/${b.slug}/">${esc(b.name)}</a>`).join('')}${(f.repos || []).map((r) => ext(r.href, esc(r.name))).join('')}</p>` : ''}
       </div>

@@ -113,6 +113,48 @@
       }, { passive: true });
     }
 
+    // Liquid Projects | Ventures switch: the thumb stretches, squashes and springs into place, then the page opens
+    document.querySelectorAll('.sw').forEach((sw) => {
+      const thumb = sw.querySelector('.sw-thumb');
+      const segs = Array.from(sw.querySelectorAll('.sw-seg'));
+      if (!thumb || segs.length !== 2) return;
+      segs.forEach((seg, idx) => seg.addEventListener('click', (e) => {
+        if (seg.getAttribute('aria-current') === 'page' || e.metaKey || e.ctrlKey || e.shiftKey || e.button > 0) return;
+        if (reduce || !thumb.animate) return;            // plain navigation
+        e.preventDefault();
+        const box = sw.getBoundingClientRect();
+        const pad = 3, w = (box.width - pad * 2) / 2;
+        const from = sw.classList.contains('sw-l') ? 0 : sw.classList.contains('sw-r') ? 1 : -1;
+        const to = idx;
+        const x = (i) => pad + i * w;
+        let frames;
+        if (from === -1) {
+          // nothing selected yet (Founders page): the drop forms at the target
+          frames = [
+            { left: `${x(to) + w / 2 - 8}px`, width: '16px', transform: 'scaleY(.4)', opacity: 0 },
+            { left: `${x(to) - 4}px`, width: `${w + 8}px`, transform: 'scaleY(1.06)', opacity: 1, offset: .65 },
+            { left: `${x(to)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
+          ];
+        } else {
+          const goingRight = to > from;
+          frames = [
+            { left: `${x(from)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
+            // stretch toward the target while the trailing edge holds: the drop elongates and thins
+            { left: `${x(Math.min(from, to))}px`, width: `${w * 2}px`, transform: 'scaleY(.82)', opacity: 1, offset: .42 },
+            // the trailing edge lets go and the drop overshoots a little past its target
+            { left: `${x(to) + (goingRight ? 6 : -6)}px`, width: `${w - 6}px`, transform: 'scaleY(1.08)', opacity: 1, offset: .74 },
+            { left: `${x(to)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
+          ];
+        }
+        sw.classList.add('is-moving');
+        segs.forEach((sg, k) => sg.toggleAttribute('aria-current', false) || (k === to && sg.setAttribute('aria-current', 'page')));
+        const anim = thumb.animate(frames, { duration: 560, easing: 'cubic-bezier(.45, .05, .2, 1)', fill: 'forwards' });
+        const go = () => { window.location.href = seg.href; };
+        anim.onfinish = go;
+        setTimeout(go, 900);                              // safety net
+      }));
+    });
+
     // Sort the project list by build order or complexity
     const sortBtns = Array.from(document.querySelectorAll('.sort-b'));
     const list = document.querySelector('.index');
