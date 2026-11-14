@@ -113,6 +113,55 @@
       }, { passive: true });
     }
 
+    // Section toggles on the project list
+    document.querySelectorAll('.r-toggle').forEach((btn) => {
+      const panel = document.getElementById(btn.getAttribute('aria-controls'));
+      if (!panel) return;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        btn.setAttribute('aria-expanded', String(open));
+        panel.hidden = !open;
+      });
+    });
+
+    // Dropdowns in the project bar
+    const dds = Array.from(document.querySelectorAll('.dd-btn'));
+    const closeAll = (except) => dds.forEach((b) => {
+      if (b === except) return;
+      b.setAttribute('aria-expanded', 'false');
+      const p = document.getElementById(b.getAttribute('aria-controls'));
+      if (p) p.hidden = true;
+    });
+    dds.forEach((btn) => {
+      const panel = document.getElementById(btn.getAttribute('aria-controls'));
+      if (!panel) return;
+      btn.addEventListener('click', () => {
+        const open = btn.getAttribute('aria-expanded') !== 'true';
+        closeAll(btn);
+        btn.setAttribute('aria-expanded', String(open));
+        panel.hidden = !open;
+        if (open) { const cur = panel.querySelector('.active, [aria-current="page"]'); if (cur) cur.scrollIntoView({ block: 'nearest' }); }
+      });
+      panel.addEventListener('click', (e) => { if (e.target.closest('a')) closeAll(); });
+    });
+    if (dds.length) {
+      document.addEventListener('click', (e) => { if (!e.target.closest('.dd')) closeAll(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
+    }
+
+    // Jumping to a folder in the repository walkthrough opens it
+    const openRepo = (hash) => {
+      if (!hash || !hash.startsWith('#repo-')) return;
+      const li = document.getElementById(hash.slice(1));
+      const det = li && li.querySelector(':scope > details');
+      if (det) det.open = true;
+      if (li) li.classList.add('flash');
+      setTimeout(() => li && li.classList.remove('flash'), 1600);
+    };
+    document.querySelectorAll('a[data-repo]').forEach((a) => a.addEventListener('click', () => openRepo(a.getAttribute('href'))));
+    openRepo(location.hash);
+
     // Steppers (accessible tabs)
     document.querySelectorAll('[data-stepper]').forEach((st) => {
       const tabs = Array.from(st.querySelectorAll('[role="tab"]'));
@@ -159,6 +208,13 @@
             tocLinks.forEach((a) => a.classList.remove('active'));
             const a = map.get(en.target.id);
             if (a) a.classList.add('active');
+            const cur = document.querySelector('.pbar-cur');
+            const dl = document.querySelector(`#dd-sec a[data-sec="${en.target.id}"]`);
+            if (cur && dl) {
+              document.querySelectorAll('#dd-sec a[data-sec]').forEach((x) => x.classList.remove('active'));
+              dl.classList.add('active');
+              cur.textContent = dl.lastChild.textContent;
+            }
           }
         });
       }, { rootMargin: '-30% 0px -60% 0px' });

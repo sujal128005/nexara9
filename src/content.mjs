@@ -49,6 +49,7 @@ export const founderProfiles = [
     focus: ['Mechanical design', 'Program management', 'AI products', 'Procurement technology'],
     highlights: [
       'Winner, IBM SkillsBuild Hackathon South Region Finale 2026 · National finalist',
+      'Bangalore region finalist, Paytm Build for India AI Hackathon',
       'Dolphin Tank India Founder Mentorship Program, 2026',
       'Second runner-up, KL University AI Build 2026',
       'Club lead, DataWorks Club (AI/ML and Data Science), IIITDM Kurnool',

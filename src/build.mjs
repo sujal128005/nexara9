@@ -8,7 +8,7 @@ import { tech } from './tech.mjs';
 import { glyph, logoMark, icon } from './glyphs.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const V = '20261116'; // cache-busting version for CSS/JS
+const V = '20261117'; // cache-busting version for CSS/JS
 
 // ---------- helpers ----------
 const esc = (s = '') =>
@@ -160,6 +160,20 @@ function footer() {
 const jumpNav = (items) =>
   `<nav class="jump wrap" aria-label="More">${items.map(([href, label, n]) => `<a href="${href}"><span class="jump-n">${n}</span><span class="jump-t">${label}</span><span class="jump-go">${icon.arrow}</span></a>`).join('')}</nav>`;
 
+const CHEV = '<svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>';
+const slugify = (x) => x.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function sectionsFor(p) {
+  const t = tech[p.slug] || {};
+  return [
+    ['overview', 'Overview'], ['problem', 'Problem and aim'], ['how', 'How it works'],
+    ...(t.arch ? [['architecture', 'Architecture']] : []),
+    ...(t.repo ? [['code', 'Languages and code']] : []),
+    ['method', 'Methodology'], ['stack', 'Technology'], ['demo', 'Demo'],
+    ...(p.results ? [['results', 'Results']] : []),
+    ['learn', 'Concepts'], ['team', 'Team'],
+  ];
+}
+
 // ---------- projects ----------
 function peek(p) {
   return p.image
@@ -170,15 +184,20 @@ function peek(p) {
 function projectRow(p, i) {
   const langs = tech[p.slug]?.languages?.slice(0, 2).map(([l]) => l).join(', ') || '';
   const dots = p.cats.map((c) => `<i class="dot d-${c}" title="${esc(catLabel(c))}"></i>`).join('');
-  return `<li class="row" data-cats="${p.cats.join(' ')}"><a href="/projects/${p.slug}/">
+  const secs = sectionsFor(p);
+  return `<li class="row" data-cats="${p.cats.join(' ')}">
+  <div class="row-main">
     <span class="r-code">${code(i)}</span>
-    <span class="r-name">${esc(p.name)}</span>
+    <span class="r-thumb ${catClass(p)}" aria-hidden="true">${glyph(p.glyph)}</span>
+    <span class="r-namecell"><a class="r-name" href="/projects/${p.slug}/">${esc(p.name)}</a><button type="button" class="r-toggle" aria-expanded="false" aria-controls="secs-${p.slug}" aria-label="Show the sections of ${esc(p.name)}">${CHEV}</button></span>
     <span class="r-desc">${fmt(p.short)}</span>
     <span class="r-stack">${dots}<span>${esc(langs)}</span></span>
     <span class="r-year">${p.year}</span>
     <span class="r-go" aria-hidden="true">${icon.arrow}</span>
     ${peek(p)}
-  </a></li>`;
+  </div>
+  <nav class="r-secs" id="secs-${p.slug}" aria-label="Sections of ${esc(p.name)}" hidden>${secs.map(([id, l], k) => `<a href="/projects/${p.slug}/#${id}"><span>${pad(k + 1)}</span>${l}</a>`).join('')}</nav>
+</li>`;
 }
 
 function projectsPage() {
@@ -324,9 +343,10 @@ function treeHTML(items, depth = 0) {
     .map(([path, desc, kids]) => {
       const isDir = /\/$/.test(path) || kids;
       const row = `<span class="t-ico ${isDir ? 'dir' : 'file'}" aria-hidden="true"></span><code class="t-path">${esc(path)}</code><span class="t-desc">${fmt(desc)}</span>`;
+      const id = depth === 0 ? ` id="repo-${slugify(path)}"` : '';
       return kids
-        ? `<li><details${depth === 0 ? ' open' : ''}><summary>${row}</summary>${treeHTML(kids, depth + 1)}</details></li>`
-        : `<li><div class="t-row">${row}</div></li>`;
+        ? `<li${id}><details${depth === 0 ? ' open' : ''}><summary>${row}</summary>${treeHTML(kids, depth + 1)}</details></li>`
+        : `<li${id}><div class="t-row">${row}</div></li>`;
     })
     .join('')}</ul>`;
 }
@@ -356,14 +376,7 @@ function personRow(key) {
 
 function detailPage(p, idx, prev, next) {
   const t = tech[p.slug] || {};
-  const sections = [
-    ['overview', 'Overview'], ['problem', 'Problem and aim'], ['how', 'How it works'],
-    ...(t.arch ? [['architecture', 'Architecture']] : []),
-    ...(t.repo ? [['code', 'Languages and code']] : []),
-    ['method', 'Methodology'], ['stack', 'Technology'], ['demo', 'Demo'],
-    ...(p.results ? [['results', 'Results']] : []),
-    ['learn', 'Concepts'], ['team', 'Team'],
-  ];
+  const sections = sectionsFor(p);
   const num = Object.fromEntries(sections.map(([id], i) => [id, pad(i + 1)]));
   const sec = (id, title, body) => `<section id="${id}" class="sec reveal"><header class="sec-h"><span class="sec-n">${num[id]}</span><h2>${title}</h2></header><div class="sec-b">${body}</div></section>`;
   const visual = p.image
@@ -390,6 +403,19 @@ ${header('projects')}
       <div><dt>Team</dt><dd>${p.team.map((k) => esc(people[k].name)).join(', ')}</dd></div>
     </dl>
   </section>
+  <div class="pbar" data-pbar>
+    <div class="wrap pbar-in">
+      <div class="dd">
+        <button type="button" class="dd-btn dd-proj" aria-expanded="false" aria-controls="dd-proj"><span class="r-code">${code(idx)}</span><strong>${esc(p.name)}</strong>${CHEV}</button>
+        <div class="dd-panel" id="dd-proj" hidden><p class="dd-h">All projects</p>${open.map((x, k) => `<a href="/projects/${x.slug}/"${x.slug === p.slug ? ' aria-current="page"' : ''}><span>${code(k)}</span>${esc(x.name)}</a>`).join('')}</div>
+      </div>
+      <div class="dd">
+        <button type="button" class="dd-btn dd-sec" aria-expanded="false" aria-controls="dd-sec"><span class="dd-k">Section</span><span class="pbar-cur">${sections[0][1]}</span>${CHEV}</button>
+        <div class="dd-panel dd-panel-r" id="dd-sec" hidden><p class="dd-h">On this page</p>${sections.map(([id, l]) => `<a href="#${id}" data-sec="${id}"><span>${num[id]}</span>${l}</a>${id === 'code' && t.repo ? `<div class="dd-sub">${t.repo.map(([path]) => `<a href="#repo-${slugify(path)}" data-repo>${esc(path)}</a>`).join('')}</div>` : ''}`).join('')}</div>
+      </div>
+      <div class="pbar-links">${p.demo && !p.demo.inPage ? ext(p.demo.href, `${icon.play}<span>Demo</span>`, 'pl') : p.demo?.inPage ? `<a class="pl" href="#demo">${icon.play}<span>Demo</span></a>` : ''}${p.repo ? ext(p.repo, `${icon.github}<span>Code</span>`, 'pl') : ''}</div>
+    </div>
+  </div>
   <figure class="wrap d-visual reveal">${visual}</figure>
 
   <div class="wrap d-body">
