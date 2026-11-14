@@ -8,13 +8,16 @@ import { tech } from './tech.mjs';
 import { glyph, logoMark, icon } from './glyphs.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const V = '20261115'; // cache-busting version for CSS/JS
+const V = '20261116'; // cache-busting version for CSS/JS
 
 // ---------- helpers ----------
 const esc = (s = '') =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const fmt = (s = '') =>
-  esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g, '<a class="tlink" href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 const ext = (href, inner, cls = '') =>
   `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
 const catLabel = (id) => categories.find((c) => c.id === id)?.label ?? id;
@@ -65,6 +68,7 @@ function head({ title, description, path, scripts = [], inner = true }) {
 <link rel="manifest" href="/site.webmanifest">
 ${inner ? `<script src="/assets/js/theme.js?v=${V}"></script>` : `<link rel="preload" href="/assets/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>`}
 <link rel="preload" href="/assets/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+${inner ? '<link rel="preload" href="/assets/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin>' : ''}
 <link rel="stylesheet" href="/assets/css/${inner ? 'site' : 'main'}.css?v=${V}">
 <script src="/assets/js/main.js?v=${V}" defer></script>
 ${scripts.map((s) => `<script src="/assets/js/${s}?v=${V}" defer></script>`).join('\n')}
@@ -92,39 +96,6 @@ function header(active = '', { inner = true } = {}) {
 </header>`;
 }
 
-function personHTML(key) {
-  const p = people[key];
-  const links = p.links.map((l) => ext(l.href, `${esc(l.label)}${icon.external}`, 'chip-link')).join('');
-  return `<li class="person"><span class="avatar" aria-hidden="true">${esc(p.name.split(' ').map((w) => w[0]).join('').slice(0, 2))}</span><span class="person-main"><span class="person-name">${esc(p.name)}</span>${links ? `<span class="person-links">${links}</span>` : ''}</span></li>`;
-}
-
-function footer() {
-  return `<footer class="site-footer" id="contact">
-  <div class="wrap foot-cta">
-    <div>
-      <p class="eyebrow">Work with us</p>
-      <h2 class="h2">Back a Nexara9 venture, or build the next one with us.</h2>
-    </div>
-    <a class="btn btn-primary" ${mailAttrs('Hello Nexara9')}>${icon.mail}<span>Write to us</span></a>
-  </div>
-  <div class="wrap foot-grid">
-    <div>
-      <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'ftr')}<span class="brand-word">NEXARA<b>9</b></span></a>
-      <p class="muted small">${esc(site.tagline)}</p>
-    </div>
-    <div>
-      <p class="label">Explore</p>
-      <ul class="foot-links"><li><a href="/projects/">Projects</a></li><li><a href="/ventures/">Flagship ventures</a></li><li><a href="/founders/">Founders</a></li></ul>
-    </div>
-    <div>
-      <p class="label">Elsewhere</p>
-      <ul class="foot-links"><li>${ext('https://github.com/sujal128005', 'GitHub')}</li><li>${ext(people.sujal.links[1].href, 'Sujal on LinkedIn')}</li><li>${ext(people.navya.links[0].href, 'Navya on LinkedIn')}</li></ul>
-    </div>
-  </div>
-  <p class="wrap legal">© ${new Date().getFullYear()} Nexara9. Designed and built by the Nexara9 team.</p>
-</footer>`;
-}
-
 // ---------- home (unchanged design) ----------
 function homePage() {
   const total = projects.length + flagships.length;
@@ -137,7 +108,7 @@ ${header('home', { inner: false })}
   <div class="home-copy">
     <p class="eyebrow reveal"><span class="pulse"></span>A house of ventures<span class="hide-sm">&nbsp;· Building since ${site.since}</span></p>
     <h1 class="display reveal">Many ventures.<br><em class="gold-text">One golden standard.</em></h1>
-    <p class="lead reveal">Nexara9 is the company we are building: one name over many projects, from autonomous machines and AI agents to apps people use every day. Every one of them is designed, built and shipped by us.</p>
+    <p class="lead reveal">Autonomous machines, AI products and everyday apps, built under one name.</p>
     <div class="cta-row reveal">
       <a class="btn btn-gold" href="/projects/"><span>Explore the projects</span>${icon.arrow}</a>
       <a class="btn btn-ghost" href="/ventures/"><span>Flagship ventures</span></a>
@@ -171,47 +142,61 @@ ${header('home', { inner: false })}
 `;
 }
 
+// ---------- shared inside-page parts ----------
+const code = (i) => `N9/${pad(i + 1)}`;
+
+function footer() {
+  return `<footer class="ft" id="contact">
+  <div class="wrap ft-top">
+    <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'ftr')}<span class="brand-word">NEXARA<b>9</b></span></a>
+    <nav class="ft-nav" aria-label="Footer"><a href="/projects/">Projects</a><a href="/ventures/">Ventures</a><a href="/founders/">Founders</a>${ext('https://github.com/sujal128005', 'GitHub')}</nav>
+    <a class="btn btn-gold" ${mailAttrs('Hello Nexara9')}>${icon.mail}<span>Email the founders</span></a>
+  </div>
+  <p class="ft-mark" aria-hidden="true">NEXARA9</p>
+  <div class="wrap ft-bottom"><span>© ${new Date().getFullYear()} Nexara9</span><span>Kurnool, India</span></div>
+</footer>`;
+}
+
+const jumpNav = (items) =>
+  `<nav class="jump wrap" aria-label="More">${items.map(([href, label, n]) => `<a href="${href}"><span class="jump-n">${n}</span><span class="jump-t">${label}</span><span class="jump-go">${icon.arrow}</span></a>`).join('')}</nav>`;
+
 // ---------- projects ----------
-function projectCard(p, i) {
-  const tags = p.cats.map((c) => `<span class="tag t-${c}">${esc(catLabel(c))}</span>`).join('');
-  const langs = tech[p.slug]?.languages?.slice(0, 2).map(([l]) => l).join(' · ') || '';
-  return `<li class="card reveal" data-cats="${p.cats.join(' ')}"><a class="card-body" href="/projects/${p.slug}/">
-    <div class="card-tile ${catClass(p)}">${glyph(p.glyph)}<span class="card-index">${pad(i + 1)}</span></div>
-    <div class="card-main">
-      <div class="card-meta"><span>${p.year}</span>${langs ? `<span>${esc(langs)}</span>` : ''}</div>
-      <h3 class="card-title">${esc(p.name)}</h3>
-      <p class="card-text">${fmt(p.short)}</p>
-      <div class="card-foot"><div class="tags">${tags}</div><span class="card-go" aria-hidden="true">${icon.arrow}</span></div>
-    </div>
+function peek(p) {
+  return p.image
+    ? `<span class="peek" aria-hidden="true"><img src="/assets/img/projects/${esc(p.image.src)}" alt="" loading="lazy" decoding="async"></span>`
+    : `<span class="peek peek-glyph ${catClass(p)}" aria-hidden="true">${glyph(p.glyph)}</span>`;
+}
+
+function projectRow(p, i) {
+  const langs = tech[p.slug]?.languages?.slice(0, 2).map(([l]) => l).join(', ') || '';
+  const dots = p.cats.map((c) => `<i class="dot d-${c}" title="${esc(catLabel(c))}"></i>`).join('');
+  return `<li class="row" data-cats="${p.cats.join(' ')}"><a href="/projects/${p.slug}/">
+    <span class="r-code">${code(i)}</span>
+    <span class="r-name">${esc(p.name)}</span>
+    <span class="r-desc">${fmt(p.short)}</span>
+    <span class="r-stack">${dots}<span>${esc(langs)}</span></span>
+    <span class="r-year">${p.year}</span>
+    <span class="r-go" aria-hidden="true">${icon.arrow}</span>
+    ${peek(p)}
   </a></li>`;
 }
 
 function projectsPage() {
   const chips = [{ id: 'all', label: 'All' }, ...categories]
-    .map((c, i) => `<button type="button" class="chip" data-filter="${c.id}" aria-pressed="${i === 0}">${esc(c.label)}</button>`)
+    .map((c, i) => `<button type="button" class="chip" data-filter="${c.id}" aria-pressed="${i === 0}">${c.id === 'all' ? '' : `<i class="dot d-${c.id}"></i>`}${esc(c.label)}</button>`)
     .join('');
-  return `${head({ title: 'Projects · Nexara9', description: 'Every open Nexara9 project: what it is, how it is built, the code structure and the ideas behind it.', path: '/projects/' })}
+  return `${head({ title: 'Projects · Nexara9', description: 'Every open Nexara9 project, with its architecture, code structure, demo and the ideas behind it.', path: '/projects/' })}
 <body class="page-projects">
 ${header('projects')}
 <main id="main">
-  <section class="page-hero wrap">
-    <p class="eyebrow reveal">Projects</p>
-    <h1 class="h1 reveal">Everything we have built, and <span class="hl">what it taught us.</span></h1>
-    <p class="lead reveal">Open any project to see the problem, the architecture, the languages and code structure, a live or interactive demo, and the concepts behind it.</p>
-    <dl class="hero-stats reveal">
-      <div><dt>Open projects</dt><dd>${open.length}</dd></div>
-      <div><dt>Flagship ventures</dt><dd>${flagships.length}</dd></div>
-      <div><dt>Building since</dt><dd>${site.since}</dd></div>
-    </dl>
-  </section>
-  <section class="wrap open" aria-label="Projects">
-    <div class="filters" role="group" aria-label="Filter projects">${chips}<span class="filter-count" aria-live="polite"></span></div>
-    <ul class="card-grid">${open.map(projectCard).join('\n')}</ul>
-  </section>
-  <section class="wrap cross reveal">
-    <a class="cross-card cross-dark" href="/ventures/"><span class="label">Flagship ventures</span><span class="cross-title">The work we are betting on</span><span class="cross-go">${icon.arrow}</span></a>
-    <a class="cross-card" href="/founders/"><span class="label">Founders</span><span class="cross-title">Meet the people behind Nexara9</span><span class="cross-go">${icon.arrow}</span></a>
-  </section>
+  <section class="wrap title"><h1 class="mega reveal">Projects<sup>${open.length}</sup></h1></section>
+  <div class="wrap filterbar">
+    <div class="filters" role="group" aria-label="Filter projects">${chips}</div>
+    <span class="filter-count" aria-live="polite"></span>
+  </div>
+  <div class="wrap index-head" aria-hidden="true"><span>No.</span><span>Project</span><span>What it does</span><span>Built with</span><span>Year</span><span></span></div>
+  <ol class="index wrap">${open.map(projectRow).join('\n')}</ol>
+  ${jumpNav([['/ventures/', 'Ventures', '02'], ['/founders/', 'Founders', '03']])}
 </main>
 ${footer()}
 </body>
@@ -233,34 +218,27 @@ function ventureCard(f, big) {
 
 function venturesPage() {
   const [limen, housefi, navya, navyam] = flagships;
-  return `${head({ title: 'Flagship ventures · Nexara9', description: 'The Nexara9 ventures we are betting on: Limen, Housefi and the Autonomy Program.', path: '/ventures/' })}
+  return `${head({ title: 'Ventures · Nexara9', description: 'Limen, Housefi and the Autonomy Program.', path: '/ventures/' })}
 <body class="page-ventures">
 ${header('ventures')}
 <main id="main">
-  <section class="page-hero wrap">
-    <p class="eyebrow reveal">Flagship ventures</p>
-    <h1 class="h1 reveal">The work we are <span class="hl">betting on.</span></h1>
-    <p class="lead reveal">These are kept deliberately quiet. We share more with partners and investors, so if you would like to know more, talk to us.</p>
-  </section>
+  <section class="wrap title"><h1 class="mega reveal">Ventures<sup>${flagships.length}</sup></h1></section>
   <section class="wrap">
     <ul class="venture-grid">${ventureCard(limen, true)}${ventureCard(housefi, true)}</ul>
     <div class="autonomy reveal">
       <div class="autonomy-copy">
-        <p class="eyebrow">The Autonomy Program</p>
-        <h2 class="h2">Two machines. One idea.</h2>
-        <p class="muted">An autonomous car and an autonomous drone, designed to work together. What they will do together is something we will reveal when it is ready.</p>
+        <p class="kicker">The Autonomy Program</p>
+        <h2 class="h2">Two machines.<br>One idea.</h2>
+        <p class="muted">An autonomous car and an autonomous drone, built to work together.</p>
       </div>
       <ul class="autonomy-pair">${ventureCard(navya)}<li class="autonomy-link" aria-hidden="true"><span></span></li>${ventureCard(navyam)}</ul>
     </div>
     <div class="fund-band reveal">
-      <div><p class="eyebrow">Pre-seed</p><p class="fund-text">We are raising for <strong>Limen</strong> and <strong>Housefi</strong>. If you would like to back us, we would love to talk.</p></div>
+      <p class="fund-text">Raising pre-seed for <strong>Limen</strong> and <strong>Housefi</strong>.</p>
       <a class="btn btn-gold" ${mailAttrs('Nexara9: pre-seed funding')}>${icon.mail}<span>Talk to the founders</span></a>
     </div>
   </section>
-  <section class="wrap cross reveal">
-    <a class="cross-card" href="/projects/"><span class="label">Projects</span><span class="cross-title">See everything we have built in the open</span><span class="cross-go">${icon.arrow}</span></a>
-    <a class="cross-card" href="/founders/"><span class="label">Founders</span><span class="cross-title">Meet the people behind Nexara9</span><span class="cross-go">${icon.arrow}</span></a>
-  </section>
+  ${jumpNav([['/projects/', 'Projects', '01'], ['/founders/', 'Founders', '03']])}
 </main>
 ${footer()}
 </body>
@@ -271,39 +249,36 @@ ${footer()}
 // ---------- founders ----------
 function foundersPage() {
   const cards = founderProfiles
-    .map((f) => {
+    .map((f, i) => {
       const p = people[f.key];
       const built = open.filter((x) => x.team.includes(f.key));
-      return `<article class="founder reveal" id="${f.key}">
-      <div class="founder-side">
-        <span class="founder-avatar" aria-hidden="true">${esc(f.initials)}</span>
-        <h2 class="founder-name">${esc(p.name)}</h2>
-        <p class="founder-role">${esc(f.role)}, Nexara9</p>
-        <p class="founder-study">${esc(f.study)}<br><span class="muted">${esc(f.college)}</span></p>
-        <div class="founder-links">${p.links.map((l) => ext(l.href, `<span>${esc(l.label)}</span>${icon.external}`, 'btn btn-outline btn-sm')).join('')}</div>
-      </div>
-      <div class="founder-body">
-        ${f.quote ? `<blockquote class="founder-quote">“${esc(f.quote.replace(/^“|”$/g, ''))}”</blockquote>` : ''}
-        ${f.bio.map((b) => `<p>${fmt(b)}</p>`).join('')}
-        <p class="label">Focus</p>
-        <div class="tags">${f.focus.map((x) => `<span class="tag">${esc(x)}</span>`).join('')}</div>
-        <p class="label">Highlights</p>
-        <ul class="highlights">${f.highlights.map((h) => `<li>${fmt(h)}</li>`).join('')}</ul>
-        ${built.length ? `<p class="label">Projects on this site</p><div class="built">${built.map((b) => `<a class="built-link" href="/projects/${b.slug}/">${esc(b.name)}${icon.arrow}</a>`).join('')}</div>` : ''}
+      const [first, ...rest] = p.name.split(' ');
+      return `<article class="fdr${i % 2 ? ' fdr-flip' : ''}" id="${f.key}">
+      <figure class="fdr-photo reveal"><img src="/assets/img/founders/${esc(f.photo)}" alt="${esc(f.photoAlt)}" width="960" height="1200" decoding="async"><figcaption><span>${esc(p.name)}</span><span>${esc(f.role)}</span></figcaption></figure>
+      <div class="fdr-info reveal">
+        <h2 class="fdr-name">${esc(first)}<br>${esc(rest.join(' '))}</h2>
+        <dl class="spec">
+          <div><dt>Role</dt><dd>${esc(f.role)}, Nexara9</dd></div>
+          <div><dt>Studies</dt><dd>${esc(f.study)}</dd></div>
+          <div><dt>College</dt><dd>${esc(f.college)}</dd></div>
+          <div><dt>Links</dt><dd class="spec-links">${p.links.map((l) => ext(l.href, `${esc(l.label)}${icon.external}`, 'tlink')).join('')}</dd></div>
+        </dl>
+        ${f.quote ? `<blockquote class="fdr-quote">${esc(f.quote)}</blockquote>` : ''}
+        ${f.bio.map((b) => `<p class="fdr-bio">${fmt(b)}</p>`).join('')}
+        ${f.highlights.length ? `<h3 class="sub">Highlights</h3><ol class="hl-list">${f.highlights.map((h) => `<li>${fmt(h)}</li>`).join('')}</ol>` : ''}
+        <h3 class="sub">Focus</h3><p class="focus">${f.focus.map(esc).join('<span>/</span>')}</p>
+        ${built.length ? `<h3 class="sub">Projects</h3><p class="built">${built.map((b) => `<a href="/projects/${b.slug}/">${esc(b.name)}</a>`).join('')}</p>` : ''}
       </div>
     </article>`;
     })
     .join('');
-  return `${head({ title: 'Founders · Nexara9', description: 'Sujal Negi and Made Navya, the founders of Nexara9.', path: '/founders/' })}
+  return `${head({ title: 'Founders · Nexara9', description: 'Sujal Negi and Made Navya, founders of Nexara9.', path: '/founders/' })}
 <body class="page-founders">
 ${header('founders')}
 <main id="main">
-  <section class="page-hero wrap">
-    <p class="eyebrow reveal">Founders</p>
-    <h1 class="h1 reveal">Two builders, <span class="hl">one standard.</span></h1>
-    <p class="lead reveal">Nexara9 was started by two engineering students at IIITDM Kurnool who would rather ship than talk about shipping.</p>
-  </section>
-  <section class="wrap founders-list">${cards}</section>
+  <section class="wrap title"><h1 class="mega reveal">Founders<sup>${founderProfiles.length}</sup></h1></section>
+  <section class="wrap fdr-list">${cards}</section>
+  ${jumpNav([['/projects/', 'Projects', '01'], ['/ventures/', 'Ventures', '02']])}
 </main>
 ${footer()}
 </body>
@@ -317,30 +292,30 @@ function linkButtons(p) {
   if (p.demo?.inPage) out.push(`<a class="btn btn-primary" href="#demo">${icon.play}<span>${esc(p.demo.label)}</span></a>`);
   else if (p.demo) out.push(ext(p.demo.href, `${icon.play}<span>${esc(p.demo.label)}</span>${icon.external}`, 'btn btn-primary'));
   for (const d of p.more || []) out.push(ext(d.href, `<span>${esc(d.label)}</span>${icon.external}`, 'btn btn-outline'));
-  if (p.repo) out.push(ext(p.repo, `${icon.github}<span>View on GitHub</span>${icon.external}`, 'btn btn-outline'));
+  if (p.repo) out.push(ext(p.repo, `${icon.github}<span>GitHub</span>${icon.external}`, 'btn btn-outline'));
   return out.join('');
 }
 
 function stepsHTML(p) {
   const id = p.slug;
-  const tabs = p.steps.map((s, i) => `<li><button type="button" role="tab" id="${id}-t${i}" aria-controls="${id}-p${i}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}"><span class="step-n">${i + 1}</span><span class="step-t">${esc(s.title)}</span></button></li>`).join('');
-  const panels = p.steps.map((s, i) => `<div role="tabpanel" class="step-panel" id="${id}-p${i}" aria-labelledby="${id}-t${i}"${i === 0 ? '' : ' data-inactive'}><p class="step-kicker">Step ${i + 1} of ${p.steps.length}</p><h4>${esc(s.title)}</h4><p>${fmt(s.text)}</p></div>`).join('');
-  return `<div class="stepper" data-stepper><ol class="step-list" role="tablist" aria-label="How ${esc(p.name)} works">${tabs}</ol><div class="step-panels">${panels}<div class="step-progress" aria-hidden="true"><span></span></div><div class="step-nav"><button type="button" class="btn btn-outline btn-sm" data-step="-1">${icon.back}<span>Previous</span></button><button type="button" class="btn btn-outline btn-sm" data-step="1"><span>Next step</span>${icon.arrow}</button></div></div></div>`;
+  const tabs = p.steps.map((s, i) => `<li><button type="button" role="tab" id="${id}-t${i}" aria-controls="${id}-p${i}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}"><span class="step-n">${pad(i + 1)}</span><span class="step-t">${esc(s.title)}</span></button></li>`).join('');
+  const panels = p.steps.map((s, i) => `<div role="tabpanel" class="step-panel" id="${id}-p${i}" aria-labelledby="${id}-t${i}"${i === 0 ? '' : ' data-inactive'}><p class="step-kicker">${pad(i + 1)} / ${pad(p.steps.length)}</p><h4>${esc(s.title)}</h4><p>${fmt(s.text)}</p></div>`).join('');
+  return `<div class="stepper" data-stepper><ol class="step-list" role="tablist" aria-label="How ${esc(p.name)} works">${tabs}</ol><div class="step-panels">${panels}<div class="step-progress" aria-hidden="true"><span></span></div><div class="step-nav"><button type="button" class="btn btn-outline btn-sm" data-step="-1" aria-label="Previous step">${icon.back}</button><button type="button" class="btn btn-outline btn-sm" data-step="1"><span>Next</span>${icon.arrow}</button></div></div></div>`;
 }
 
 function archHTML(a) {
   const tiers = a.tiers
-    .map((t, i) => `${i ? '<div class="tier-arrow" aria-hidden="true"><span></span></div>' : ''}<div class="tier tier-${i + 1}${t.dashed ? ' tier-dashed' : ''}"><p class="tier-name">${esc(t.name)}${t.sub ? ` <code>${esc(t.sub)}</code>` : ''}${t.dashed ? ' <span class="tier-flag">planned</span>' : ''}</p><ul>${t.nodes.map(([n, d]) => `<li><strong>${fmt(n)}</strong><span>${fmt(d)}</span></li>`).join('')}</ul></div>`)
+    .map((t, i) => `${i ? '<div class="tier-arrow" aria-hidden="true"><span></span></div>' : ''}<div class="tier${t.dashed ? ' tier-dashed' : ''}"><p class="tier-name"><span class="tier-n">${String.fromCharCode(65 + i)}</span>${esc(t.name)}${t.sub ? ` <code>${esc(t.sub)}</code>` : ''}${t.dashed ? ' <span class="tier-flag">planned</span>' : ''}</p><ul>${t.nodes.map(([n, d]) => `<li><strong>${fmt(n)}</strong><span>${fmt(d)}</span></li>`).join('')}</ul></div>`)
     .join('');
   return `<figure class="arch"><figcaption class="arch-title">${esc(a.title)}</figcaption><div class="arch-tiers tiers-${a.tiers.length}">${tiers}</div></figure>
-  <p class="label">The journey of one request</p>
+  <h3 class="sub">Request flow</h3>
   <ol class="flow">${a.flow.map((f) => `<li>${fmt(f)}</li>`).join('')}</ol>`;
 }
 
 function langHTML(langs) {
   let x = 0;
   const rects = langs.map(([l, pc]) => { const r = `<rect x="${x.toFixed(2)}" y="0" width="${pc.toFixed(2)}" height="10" fill="${langColor[l] || '#999'}"/>`; x += pc; return r; }).join('');
-  const legend = langs.map(([l, pc]) => `<li><svg viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="5" fill="${langColor[l] || '#999'}"/></svg><span>${esc(l)}</span><span class="muted">${pc.toFixed(1)}%</span></li>`).join('');
+  const legend = langs.map(([l, pc]) => `<li><svg viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" fill="${langColor[l] || '#999'}"/></svg><span>${esc(l)}</span><span class="pc">${pc.toFixed(1)}%</span></li>`).join('');
   return `<div class="langs"><svg class="lang-bar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="${esc(langs.map(([l, pc]) => `${l} ${pc}%`).join(', '))}">${rects}</svg><ul class="lang-legend">${legend}</ul></div>`;
 }
 
@@ -357,87 +332,86 @@ function treeHTML(items, depth = 0) {
 }
 
 function tableHTML(r) {
-  return `<figure class="results"><div class="table-scroll"><table><thead><tr>${r.head.map((h) => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${r.rows.map((row) => `<tr>${row.map((c) => `<td>${fmt(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><figcaption>${fmt(r.caption)}${r.note ? `<br><span class="muted">${fmt(r.note)}</span>` : ''}</figcaption></figure>`;
+  return `<figure class="results"><div class="table-scroll"><table><thead><tr>${r.head.map((h) => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${r.rows.map((row) => `<tr>${row.map((c) => `<td>${fmt(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><figcaption>${fmt(r.caption)}${r.note ? `<br>${fmt(r.note)}` : ''}</figcaption></figure>`;
 }
 
 function demoSection(p) {
   const out = [];
   if (p.demo && !p.demo.inPage) {
-    for (const d of [p.demo, ...(p.more || [])]) {
-      out.push(`<div class="live-card"><div><p class="label">${esc(d.label)}</p><p class="live-url">${esc(d.href.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</p></div>${ext(d.href, `<span>Open</span>${icon.external}`, 'btn btn-primary btn-sm')}</div>`);
-    }
+    out.push(`<ul class="live">${[p.demo, ...(p.more || [])].map((d) => `<li>${ext(d.href, `<span class="live-l">${esc(d.label)}</span><span class="live-url">${esc(d.href.replace(/^https?:\/\//, '').replace(/\/$/, ''))}</span>${icon.external}`, 'live-a')}</li>`).join('')}</ul>`);
   }
-  if (p.widget) out.push(`<div class="widget" data-widget="${p.widget}"><noscript><p class="muted">Turn on JavaScript to use this interactive demo.</p></noscript></div>`);
+  if (p.widget) out.push(`<div class="widget" data-widget="${p.widget}"><noscript><p>Turn on JavaScript to use this demo.</p></noscript></div>`);
   if (p.gallery) {
     out.push(`<div class="gallery">${p.gallery.map((g, i) => `<figure class="shot${i === 0 ? ' shot-wide' : ''}"><img src="/assets/img/projects/${esc(g.src)}" alt="${esc(g.caption)}" loading="lazy" decoding="async"><figcaption>${esc(g.caption)}</figcaption></figure>`).join('')}</div>`);
   }
-  if (p.demo?.inPage) out.push(`<p class="muted small">The demo above runs in your browser and shows how the project behaves. To run the real thing, follow the instructions in the ${ext(p.repo, 'GitHub repository', 'u-link')}.</p>`);
   return out.join('');
+}
+
+function personRow(key) {
+  const p = people[key];
+  const isFounder = founders.includes(key);
+  const links = p.links.map((l) => ext(l.href, `${esc(l.label)}${icon.external}`, 'tlink')).join('');
+  return `<li><span class="pr-name">${isFounder ? `<a href="/founders/#${key}">${esc(p.name)}</a>` : esc(p.name)}</span><span class="pr-role">${isFounder ? 'Co-founder, Nexara9' : 'Team member'}</span><span class="pr-links">${links}</span></li>`;
 }
 
 function detailPage(p, idx, prev, next) {
   const t = tech[p.slug] || {};
-  const n = pad(idx + 1);
   const sections = [
     ['overview', 'Overview'], ['problem', 'Problem and aim'], ['how', 'How it works'],
     ...(t.arch ? [['architecture', 'Architecture']] : []),
     ...(t.repo ? [['code', 'Languages and code']] : []),
     ['method', 'Methodology'], ['stack', 'Technology'], ['demo', 'Demo'],
     ...(p.results ? [['results', 'Results']] : []),
-    ['learn', 'Learn the concepts'], ['team', 'Team'],
+    ['learn', 'Concepts'], ['team', 'Team'],
   ];
   const num = Object.fromEntries(sections.map(([id], i) => [id, pad(i + 1)]));
-  const sh = (id, title) => `<p class="sec-n">${num[id]}</p><h2 class="h2">${title}</h2>`;
-  const tags = p.cats.map((c) => `<span class="tag t-${c}">${esc(catLabel(c))}</span>`).join('');
+  const sec = (id, title, body) => `<section id="${id}" class="sec reveal"><header class="sec-h"><span class="sec-n">${num[id]}</span><h2>${title}</h2></header><div class="sec-b">${body}</div></section>`;
   const visual = p.image
-    ? `<figure class="hero-shot"><img src="/assets/img/projects/${esc(p.image.src)}" alt="${esc(p.image.alt)}" decoding="async"></figure>`
-    : `<div class="hero-tile ${catClass(p)}" aria-hidden="true">${glyph(p.glyph, 'glyph glyph-xl')}<span class="hero-index">${n}</span></div>`;
+    ? `<img src="/assets/img/projects/${esc(p.image.src)}" alt="${esc(p.image.alt)}" decoding="async">`
+    : `<div class="bp ${catClass(p)}" aria-hidden="true"><span class="bp-c bp-tl">${code(idx)}</span><span class="bp-c bp-tr">${p.year}</span><span class="bp-c bp-bl">${esc(p.cats.map(catLabel).join(' · '))}</span><span class="bp-c bp-br">${esc((t.languages || []).map(([l]) => l).slice(0, 2).join(' · '))}</span>${glyph(p.glyph, 'glyph bp-glyph')}</div>`;
 
   return `${head({ title: `${p.name} · Nexara9`, description: p.short, path: `/projects/${p.slug}/`, scripts: p.widget ? ['demos.js'] : [] })}
 <body class="page-detail">
 ${header('projects')}
 <main id="main">
-  <section class="detail-hero wrap">
-    <nav class="crumbs" aria-label="Breadcrumb"><a href="/projects/">Projects</a><span aria-hidden="true">/</span><span>${esc(p.name)}</span></nav>
-    <div class="detail-hero-grid">
-      <div>
-        <p class="eyebrow reveal">Project ${n} · ${p.year}</p>
-        <h1 class="h1 reveal">${esc(p.name)}</h1>
-        <p class="lead reveal">${fmt(p.short)}</p>
-        <div class="tags reveal">${tags}<span class="tag tag-context">${esc(p.context)}</span></div>
-        <div class="cta-row reveal">${linkButtons(p)}</div>
-      </div>
-      <div class="reveal">${visual}</div>
+  <section class="wrap d-head">
+    <a class="back" href="/projects/">${icon.back}<span>All projects</span></a>
+    <p class="d-meta reveal"><span class="r-code">${code(idx)}</span>${p.cats.map((c) => `<span><i class="dot d-${c}"></i>${esc(catLabel(c))}</span>`).join('')}</p>
+    <h1 class="d-title reveal">${esc(p.name)}</h1>
+    <div class="d-intro reveal">
+      <p class="d-lead">${fmt(p.short)}</p>
+      <div class="actions">${linkButtons(p)}</div>
     </div>
-    <dl class="facts reveal">
+    <dl class="spec spec-row reveal">
       <div><dt>Status</dt><dd>${esc(p.status)}</dd></div>
-      <div><dt>Languages</dt><dd>${esc((t.languages || []).slice(0, 3).map(([l]) => l).join(', ') || '—')}</dd></div>
+      <div><dt>Year</dt><dd>${p.year}</dd></div>
       <div><dt>Built for</dt><dd>${esc(p.context)}</dd></div>
+      <div><dt>Languages</dt><dd>${esc((t.languages || []).slice(0, 3).map(([l]) => l).join(', ') || '—')}</dd></div>
       <div><dt>Team</dt><dd>${p.team.map((k) => esc(people[k].name)).join(', ')}</dd></div>
     </dl>
   </section>
+  <figure class="wrap d-visual reveal">${visual}</figure>
 
-  <div class="detail-body wrap">
-    <aside class="toc" aria-label="On this page"><p class="label">On this page</p><ol>${sections.map(([id, l]) => `<li><a href="#${id}"><span>${num[id]}</span>${l}</a></li>`).join('')}</ol></aside>
+  <div class="wrap d-body">
+    <aside class="toc" aria-label="On this page"><ol>${sections.map(([id, l]) => `<li><a href="#${id}"><span>${num[id]}</span>${l}</a></li>`).join('')}</ol></aside>
     <article class="prose">
-      <section id="overview" class="block reveal">${sh('overview', 'Overview')}${p.overview.map((x) => `<p>${fmt(x)}</p>`).join('')}</section>
-      <section id="problem" class="block reveal">${sh('problem', 'Problem and aim')}
-        <div class="pa-grid"><div class="pa"><p class="label">The problem</p><p>${fmt(p.problem)}</p></div><div class="pa pa-aim"><p class="label">The aim</p><p>${fmt(p.aim)}</p></div></div></section>
-      <section id="how" class="block reveal">${sh('how', 'How it works')}<p class="muted">Step through it. Use the tabs, or the arrow keys once a tab is focused.</p>${stepsHTML(p)}</section>
-      ${t.arch ? `<section id="architecture" class="block reveal">${sh('architecture', 'Architecture')}<p class="muted">How the pieces fit together, from what you see to where the data lives.</p>${archHTML(t.arch)}</section>` : ''}
-      ${t.repo ? `<section id="code" class="block reveal">${sh('code', 'Languages and code')}<p class="label">Languages</p>${langHTML(t.languages)}<p class="label">Repository, folder by folder</p><p class="muted small">What each folder and file is responsible for. Open a folder to see inside.</p>${treeHTML(t.repo)}</section>` : ''}
-      <section id="method" class="block reveal">${sh('method', 'Methodology')}<ol class="method">${p.methodology.map((m) => `<li><p>${fmt(m)}</p></li>`).join('')}</ol></section>
-      <section id="stack" class="block reveal">${sh('stack', 'Technology')}<div class="stack">${p.stack.map((g) => `<div class="stack-group"><p class="label">${esc(g.group)}</p><ul>${g.items.map((it) => `<li><span class="stack-name">${esc(it.name)}</span><span class="stack-why">${fmt(it.why)}</span></li>`).join('')}</ul></div>`).join('')}</div></section>
-      <section id="demo" class="block reveal">${sh('demo', 'Demo')}${demoSection(p)}</section>
-      ${p.results ? `<section id="results" class="block reveal">${sh('results', 'Results')}${tableHTML(p.results)}</section>` : ''}
-      <section id="learn" class="block reveal">${sh('learn', 'Learn the concepts')}<p class="muted">The ideas this project is built on, in plain words.</p><div class="learn">${p.learn.map((l, i) => `<details class="qa"${i === 0 ? ' open' : ''}><summary><span class="qa-q">${esc(l.q)}</span><span class="qa-x" aria-hidden="true"></span></summary><div class="qa-a"><p>${fmt(l.a)}</p></div></details>`).join('')}</div></section>
-      <section id="team" class="block reveal">${sh('team', 'Team')}<ul class="people">${p.team.map(personHTML).join('')}</ul></section>
+      ${sec('overview', 'Overview', p.overview.map((x) => `<p>${fmt(x)}</p>`).join(''))}
+      ${sec('problem', 'Problem and aim', `<div class="pa-grid"><div class="pa"><h3 class="sub">Problem</h3><p>${fmt(p.problem)}</p></div><div class="pa pa-aim"><h3 class="sub">Aim</h3><p>${fmt(p.aim)}</p></div></div>`)}
+      ${sec('how', 'How it works', stepsHTML(p))}
+      ${t.arch ? sec('architecture', 'Architecture', archHTML(t.arch)) : ''}
+      ${t.repo ? sec('code', 'Languages and code', `${langHTML(t.languages)}<h3 class="sub">Repository</h3>${treeHTML(t.repo)}`) : ''}
+      ${sec('method', 'Methodology', `<ol class="method">${p.methodology.map((m) => `<li>${fmt(m)}</li>`).join('')}</ol>`)}
+      ${sec('stack', 'Technology', `<div class="stack">${p.stack.map((g) => g.items.map((it, j) => `<div class="st-row"><span class="st-g">${j === 0 ? esc(g.group) : ''}</span><span class="st-n">${esc(it.name)}</span><span class="st-w">${fmt(it.why)}</span></div>`).join('')).join('')}</div>`)}
+      ${sec('demo', 'Demo', demoSection(p))}
+      ${p.results ? sec('results', 'Results', tableHTML(p.results)) : ''}
+      ${sec('learn', 'Concepts', `<div class="learn">${p.learn.map((l, i) => `<details class="qa"${i === 0 ? ' open' : ''}><summary><span class="qa-n">${pad(i + 1)}</span><span class="qa-q">${esc(l.q)}</span><span class="qa-x" aria-hidden="true"></span></summary><div class="qa-a"><p>${fmt(l.a)}</p></div></details>`).join('')}</div>`)}
+      ${sec('team', 'Team', `<ul class="people">${p.team.map(personRow).join('')}</ul>`)}
     </article>
   </div>
 
   <nav class="pager wrap" aria-label="More projects">
-    ${prev ? `<a class="pager-link" href="/projects/${prev.slug}/"><span class="label">${icon.back} Previous</span><span class="pager-name">${esc(prev.name)}</span></a>` : '<span></span>'}
-    ${next ? `<a class="pager-link pager-next" href="/projects/${next.slug}/"><span class="label">Next ${icon.arrow}</span><span class="pager-name">${esc(next.name)}</span></a>` : `<a class="pager-link pager-next" href="/projects/"><span class="label">Back to ${icon.arrow}</span><span class="pager-name">All projects</span></a>`}
+    ${prev ? `<a class="pager-link" href="/projects/${prev.slug}/"><span class="pager-k">${icon.back}${code(idx - 1)}</span><span class="pager-name">${esc(prev.name)}</span></a>` : '<span></span>'}
+    ${next ? `<a class="pager-link pager-next" href="/projects/${next.slug}/"><span class="pager-k">${code(idx + 1)}${icon.arrow}</span><span class="pager-name">${esc(next.name)}</span></a>` : `<a class="pager-link pager-next" href="/projects/"><span class="pager-k">Index${icon.arrow}</span><span class="pager-name">All projects</span></a>`}
   </nav>
 </main>
 ${footer()}
@@ -451,10 +425,9 @@ function notFoundPage() {
 <body class="page-404">
 ${header()}
 <main id="main" class="wrap nf">
-  <p class="eyebrow">Error 404</p>
-  <h1 class="h1">This page is <span class="hl">off the map.</span></h1>
-  <p class="lead">The link may be old, or the page may have moved.</p>
-  <div class="cta-row"><a class="btn btn-primary" href="/"><span>Go home</span>${icon.arrow}</a><a class="btn btn-outline" href="/projects/"><span>See all projects</span></a></div>
+  <h1 class="mega">404</h1>
+  <p class="d-lead">This page does not exist.</p>
+  <div class="actions"><a class="btn btn-primary" href="/"><span>Home</span>${icon.arrow}</a><a class="btn btn-outline" href="/projects/"><span>Projects</span></a></div>
 </main>
 </body>
 </html>

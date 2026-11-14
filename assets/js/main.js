@@ -80,7 +80,7 @@
 
     // Project filters
     const chips = Array.from(document.querySelectorAll('.chip[data-filter]'));
-    const cards = Array.from(document.querySelectorAll('.card-grid .card'));
+    const cards = Array.from(document.querySelectorAll('.card-grid .card, .index .row'));
     const count = document.querySelector('.filter-count');
     const apply = (id) => {
       let shown = 0;
@@ -95,6 +95,22 @@
     if (chips.length) {
       chips.forEach((ch) => ch.addEventListener('click', () => apply(ch.dataset.filter)));
       apply('all');
+    }
+
+    // Project index: a preview that follows the cursor
+    const index = document.querySelector('.index');
+    if (index && window.matchMedia('(hover: hover)').matches) {
+      let raf = 0, x = 0, y = 0;
+      index.addEventListener('pointermove', (e) => {
+        x = e.clientX + 28; y = e.clientY - 110;
+        if (raf) return;
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          const maxX = window.innerWidth - 320;
+          index.style.setProperty('--px', `${Math.min(x, maxX)}px`);
+          index.style.setProperty('--py', `${Math.max(12, y)}px`);
+        });
+      }, { passive: true });
     }
 
     // Steppers (accessible tabs)
