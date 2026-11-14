@@ -100,6 +100,11 @@
     // Project index: a preview that follows the cursor
     const index = document.querySelector('.index');
     if (index && window.matchMedia('(hover: hover)').matches) {
+      // Preview pictures load only when a row is first hovered, so the page itself stays light.
+      index.querySelectorAll('.row-main').forEach((row) => row.addEventListener('pointerenter', () => {
+        const img = row.querySelector('.peek img[data-src]');
+        if (img) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+      }, { once: true }));
       let raf = 0, x = 0, y = 0;
       index.addEventListener('pointermove', (e) => {
         x = e.clientX + 28; y = e.clientY - 110;
@@ -113,45 +118,65 @@
       }, { passive: true });
     }
 
-    // Liquid Projects | Ventures switch: the thumb stretches, squashes and springs into place, then the page opens
+    // Liquid Projects | Ventures switch. Works both ways, navigates early so the page opens fast,
+    // plays a short landing settle on the new page, and resets itself after the browser's Back button.
     document.querySelectorAll('.sw').forEach((sw) => {
       const thumb = sw.querySelector('.sw-thumb');
       const segs = Array.from(sw.querySelectorAll('.sw-seg'));
       if (!thumb || segs.length !== 2) return;
-      segs.forEach((seg, idx) => seg.addEventListener('click', (e) => {
-        if (seg.getAttribute('aria-current') === 'page' || e.metaKey || e.ctrlKey || e.shiftKey || e.button > 0) return;
-        if (reduce || !thumb.animate) return;            // plain navigation
-        e.preventDefault();
-        const box = sw.getBoundingClientRect();
-        const pad = 3, w = (box.width - pad * 2) / 2;
-        const from = sw.classList.contains('sw-l') ? 0 : sw.classList.contains('sw-r') ? 1 : -1;
-        const to = idx;
-        const x = (i) => pad + i * w;
-        let frames;
-        if (from === -1) {
-          // nothing selected yet (Founders page): the drop forms at the target
-          frames = [
-            { left: `${x(to) + w / 2 - 8}px`, width: '16px', transform: 'scaleY(.4)', opacity: 0 },
-            { left: `${x(to) - 4}px`, width: `${w + 8}px`, transform: 'scaleY(1.06)', opacity: 1, offset: .65 },
-            { left: `${x(to)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
-          ];
-        } else {
-          const goingRight = to > from;
-          frames = [
-            { left: `${x(from)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
-            // stretch toward the target while the trailing edge holds: the drop elongates and thins
-            { left: `${x(Math.min(from, to))}px`, width: `${w * 2}px`, transform: 'scaleY(.82)', opacity: 1, offset: .42 },
-            // the trailing edge lets go and the drop overshoots a little past its target
-            { left: `${x(to) + (goingRight ? 6 : -6)}px`, width: `${w - 6}px`, transform: 'scaleY(1.08)', opacity: 1, offset: .74 },
-            { left: `${x(to)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
-          ];
+      const side = () => (sw.classList.contains('sw-l') ? 0 : sw.classList.contains('sw-r') ? 1 : -1);
+      const geom = () => { const box = sw.getBoundingClientRect(); const pad = 3; const w = (box.width - pad * 2) / 2; return { w, x: (i) => pad + i * w }; };
+      let anim = null;
+      const reset = () => {
+        if (anim) { anim.cancel(); anim = null; }
+        sw.classList.remove('is-moving');
+        const cur = side();
+        segs.forEach((sg, k) => { if (k === cur) sg.setAttribute('aria-current', 'page'); else sg.removeAttribute('aria-current'); });
+      };
+      // Back/forward cache restores the page as it was left: put the switch back where it belongs.
+      window.addEventListener('pageshow', (e) => { if (e.persisted) reset(); });
+
+      // Landing: if we just switched here, settle in like a drop arriving from the other side.
+      try {
+        const raw = sessionStorage.getItem('n9-sw');
+        sessionStorage.removeItem('n9-sw');
+        const info = raw && JSON.parse(raw);
+        const cur = side();
+        if (info && cur >= 0 && info.to === cur && Date.now() - info.t < 4000 && !reduce && thumb.animate) {
+          const { w, x } = geom();
+          const fromRight = info.from > cur;
+          thumb.animate([
+            { left: `${x(cur) + (fromRight ? 10 : -10)}px`, width: `${w - 10}px`, transform: 'scaleY(1.1)' },
+            { left: `${x(cur) + (fromRight ? -3 : 3)}px`, width: `${w + 3}px`, transform: 'scaleY(.96)', offset: .6 },
+            { left: `${x(cur)}px`, width: `${w}px`, transform: 'scaleY(1)' },
+          ], { duration: 260, easing: 'cubic-bezier(.3, .7, .2, 1)' });
         }
+      } catch (_) { /* storage blocked: no landing effect */ }
+
+      segs.forEach((seg, to) => seg.addEventListener('click', (e) => {
+        const from = side();
+        if (to === from || e.metaKey || e.ctrlKey || e.shiftKey || e.button > 0) return;
+        try { sessionStorage.setItem('n9-sw', JSON.stringify({ from, to, t: Date.now() })); } catch (_) { /* ignore */ }
+        if (reduce || !thumb.animate) return;            // plain, instant navigation
+        e.preventDefault();
+        const { w, x } = geom();
+        const frames = from === -1
+          ? [
+              { left: `${x(to) + w / 2 - 8}px`, width: '16px', transform: 'scaleY(.4)', opacity: 0 },
+              { left: `${x(to)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
+            ]
+          : [
+              { left: `${x(from)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
+              { left: `${x(Math.min(from, to))}px`, width: `${w * 2}px`, transform: 'scaleY(.84)', opacity: 1, offset: .45 },
+              { left: `${x(to) + (to > from ? 5 : -5)}px`, width: `${w - 5}px`, transform: 'scaleY(1.06)', opacity: 1, offset: .78 },
+              { left: `${x(to)}px`, width: `${w}px`, transform: 'scaleY(1)', opacity: 1 },
+            ];
         sw.classList.add('is-moving');
-        segs.forEach((sg, k) => sg.toggleAttribute('aria-current', false) || (k === to && sg.setAttribute('aria-current', 'page')));
-        const anim = thumb.animate(frames, { duration: 560, easing: 'cubic-bezier(.45, .05, .2, 1)', fill: 'forwards' });
-        const go = () => { window.location.href = seg.href; };
-        anim.onfinish = go;
-        setTimeout(go, 900);                              // safety net
+        segs.forEach((sg, k) => { if (k === to) sg.setAttribute('aria-current', 'page'); else sg.removeAttribute('aria-current'); });
+        if (anim) anim.cancel();
+        anim = thumb.animate(frames, { duration: 340, easing: 'cubic-bezier(.45, .05, .2, 1)', fill: 'forwards' });
+        // Start loading the next page while the drop is still moving: no waiting on the animation.
+        setTimeout(() => { window.location.href = seg.href; }, 150);
       }));
     });
 

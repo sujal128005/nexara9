@@ -73,7 +73,7 @@ function head({ title, description, path, scripts = [], inner = true }) {
 <link rel="manifest" href="/site.webmanifest">
 ${inner ? `<script src="/assets/js/theme.js?v=${V}"></script>` : `<link rel="preload" href="/assets/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>`}
 <link rel="preload" href="/assets/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-${inner ? '<link rel="preload" href="/assets/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin>' : ''}
+${inner ? '<link rel="preload" href="/assets/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>' : ''}
 <link rel="stylesheet" href="/assets/css/${inner ? 'site' : 'main'}.css?v=${V}">
 <script src="/assets/js/main.js?v=${V}" defer></script>
 ${scripts.map((s) => `<script src="/assets/js/${s}?v=${V}" defer></script>`).join('\n')}
@@ -222,7 +222,7 @@ function sectionsFor(p) {
 // ---------- projects ----------
 function peek(p) {
   return p.image
-    ? `<span class="peek" aria-hidden="true"><img src="/assets/img/projects/${esc(p.image.src)}" alt="" loading="lazy" decoding="async"></span>`
+    ? `<span class="peek" aria-hidden="true"><img data-src="/assets/img/projects/${esc(p.image.src)}" alt="" decoding="async"></span>`
     : `<span class="peek peek-glyph ${catClass(p)}" aria-hidden="true">${glyph(p.glyph)}</span>`;
 }
 
