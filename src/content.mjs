@@ -26,10 +26,55 @@ export const people = {
   },
   aryan: { name: 'Aryan Singh', links: [] },
   ashu: { name: 'Ashu Kumar', links: [] },
+  abhay: { name: 'Abhay Kumar', links: [] },
+  sahil: { name: 'Sahil Pazare', links: [] },
   vaishnavi: { name: 'Vaishnavi C R', links: [] },
 };
 
 export const founders = ['sujal', 'navya'];
+
+// The Founders page.
+export const founderProfiles = [
+  {
+    key: 'sujal',
+    initials: 'SN',
+    role: 'Co-founder',
+    study: 'Fourth-year B.Tech, Mechanical Engineering',
+    college: 'IIITDM Kurnool · 2023–2027',
+    quote: 'I don’t start things to try them. I start them to finish them.',
+    bio: [
+      'Engineer by training, builder by instinct. Sujal works across mechanical design, software and program management: he designs vehicle hardware, ships live AI products, and runs teams from the first sketch to the final demo.',
+      'His way of working is simple: gate the spend behind proof, split the roles so no one person holds every key, and always keep a path to real users.',
+    ],
+    focus: ['Mechanical design', 'Product and program management', 'AI products', 'Procurement technology'],
+    highlights: [
+      'Winner, IBM SkillsBuild Hackathon South Region Finale 2026 (top 4 of 25 finalist teams; qualified for the National Finale)',
+      'Selected for the Dolphin Tank India Founder Mentorship Program, 2026',
+      'Second runner-up, KL University AI Build 2026',
+      'Club lead, DataWorks Club (AI/ML and Data Science), IIITDM Kurnool: workshops and hackathons for 600+ students',
+      'Institute coordinator for Udbhav, the Inter-IIIT Tech Meet 2025, across 23 institutes',
+      'Author of 10 books in English and Hindi as alfaazsujalke',
+    ],
+  },
+  {
+    key: 'navya',
+    initials: 'MN',
+    role: 'Co-founder',
+    study: 'Third-year B.Tech, Computer Science and Engineering',
+    college: 'IIITDM Kurnool',
+    quote: '',
+    bio: [
+      'Navya leads much of the software and AI work across Nexara9’s projects. She builds systems that have to be trusted with real decisions: an AI checkout guard that catches hijacked shopping agents, a student platform for a whole campus, and delivery optimisation for one of India’s largest food apps.',
+    ],
+    focus: ['Software engineering', 'AI agents', 'Machine learning', 'Product design'],
+    highlights: [
+      'Built STEALTH · Know Your Agent for the Razorpay AI Buildathon',
+      'Co-built FlexDrop as Team Nexara9 for Swiggy Food for Thought 2.0',
+      'Co-built NexGen Study Guardian, a student dashboard for schools and colleges',
+      'Co-founder on Limen, Nexara9’s procurement venture',
+    ],
+  },
+];
 
 export const categories = [
   { id: 'ai', label: 'AI & agents' },
@@ -91,9 +136,9 @@ export const projects = [
     context: 'Where Nexara9 began',
     status: 'Built and flown',
     glyph: 'udaan',
-    team: ['sujal'],
+    team: ['sujal', 'aryan', 'abhay', 'sahil'],
     repo: 'https://github.com/sujal128005/Project-Udaan',
-    demo: { href: 'https://sujal128005.github.io/Project-Udaan/', label: 'Original Udaan page' },
+    demo: { href: 'https://sujal128005.github.io/Project-Udaan/', label: 'Live page' },
     widget: 'udaan',
     overview: [
       'Udaan (“flight” in Hindi) is where Nexara9 started. The goal was ambitious: an aeroplane that could fly itself. We did not get there. What we built is a conventional radio-controlled plane, flown by a pilot on the ground.',
@@ -144,7 +189,7 @@ export const projects = [
     glyph: 'moodie',
     team: ['sujal', 'aryan', 'ashu'],
     repo: 'https://github.com/sujal128005/moodie-foodie',
-    demo: { href: 'https://moodie-foodie.netlify.app', label: 'Live demo' },
+    demo: { href: 'https://sujal128005.github.io/moodie-foodie/', label: 'Live demo' },
     overview: [
       'Moodie-Foodie answers the oldest question on campus: “what should I eat?” It is a mobile-first web app for the IIITDM Kurnool community that turns your mood, diet and budget into one clear suggestion from the canteens or the day’s mess schedule.',
       'It runs entirely in the browser, with no server, so it opens instantly on a phone.',
@@ -190,7 +235,7 @@ export const projects = [
     glyph: 'nexgen',
     team: ['navya', 'sujal'],
     repo: 'https://github.com/sujal128005/NexGen_Study_Guardian',
-    demo: { href: 'https://sujal128005.github.io/NexGen_Study_Guardian/1_Dashboard/', label: 'Live demo' },
+    demo: { href: 'https://sujal128005.github.io/NexGen_Study_Guardian/', label: 'Live demo' },
     overview: [
       'NexGen brings everything a student needs into one place. Students can generate practice question papers, follow their syllabus, search past-year papers, share and download notes, talk in branch channels and write code, all from a single dashboard.',
       'This repository is the high-fidelity front-end prototype, designed in a glassmorphism style with dark and light modes.',
@@ -500,7 +545,7 @@ export const projects = [
     glyph: 'flexdrop',
     team: ['sujal', 'navya'],
     repo: 'https://github.com/sujal128005/FlexDrop',
-    demo: { inPage: true, label: 'See the demo' },
+    demo: { href: 'https://flexdrop.onrender.com/app/', label: 'Live demo' },
     image: { src: 'flexdrop-operations-dashboard.webp', alt: 'FlexDrop operations dashboard with a 3D campus world, live routes and KPIs' },
     gallery: [
       { src: 'flexdrop-operations-dashboard.webp', caption: 'Operations dashboard: a live 3D world modelled on IIITDM Kurnool and Kurnool city, with routes, KPIs and a decision log.' },
@@ -562,68 +607,6 @@ export const projects = [
     ],
   },
   {
-    slug: 'supplier-decision-lab',
-    name: 'Supplier Decision Lab',
-    short: 'An interactive lab that rebuilds a published supplier-selection study and shows exactly when the winning supplier flips.',
-    year: 2026,
-    cats: ['research'],
-    context: 'Seminar course ME496 · IIITDM Kurnool',
-    status: 'Complete',
-    glyph: 'sdl',
-    team: ['sujal'],
-    repo: 'https://github.com/sujal128005/supplier-decision-lab',
-    demo: { href: 'https://sujal128005.github.io/supplier-decision-lab/', label: 'Live demo' },
-    widget: 'sdl',
-    overview: [
-      'A small Czech car-parts maker had to choose one of three suppliers of copper rods. A 2022 paper (Rodrigues, Šírová and Mugurusi, IFAC PapersOnLine) solved it twice: AHP picked Supplier 2, ANP picked Supplier 1.',
-      'This lab rebuilds both results from the paper’s own tables to four decimals, shows that the change of winner comes from one judgment about how much quality matters against logistics, and adds five improvements, including a robustness test and a two-year cost model.',
-    ],
-    problem:
-      'Two respected methods gave two different answers to the same buying decision. A manager needs to know why, and how sure the answer really is.',
-    aim: 'Make the decision transparent: show every number, find the tipping point and test how robust the choice is.',
-    steps: [
-      { title: 'Rebuild', text: 'Enter the paper’s eight comparison tables and recompute both the AHP and ANP results, matching the paper to four decimals.' },
-      { title: 'Check consistency', text: 'Compute each table’s consistency ratio. Four of the eight tables are above Saaty’s 5% limit.' },
-      { title: 'Find the flip point', text: 'Each supplier’s score is a straight line in the group weight w, so the exact crossing can be solved: Suppliers 1 and 2 swap at w = 0.442.' },
-      { title: 'Test robustness', text: 'Run 5,000 random trials that nudge every judgment and the weight, and count how often each supplier wins.' },
-      { title: 'Cost it', text: 'Model the expected two-year cost of each buying plan, including the cost of bad rods.' },
-    ],
-    methodology: [
-      'Reproduce before you criticise: match the published numbers exactly first.',
-      'Score price, delivery time and defect rate from real numbers instead of opinions.',
-      'Re-check one doubtful answer in each inconsistent table.',
-      'Report robustness and cost alongside the ranking.',
-    ],
-    stack: [
-      { group: 'Web', items: [
-        { name: 'HTML, CSS, JavaScript', why: 'Runs offline, no build step.' },
-        { name: 'Chart.js', why: 'Bundled charts for scores and trials.' },
-      ] },
-      { group: 'Maths', items: [
-        { name: 'Power method', why: 'Principal eigenvector of each comparison table.' },
-        { name: 'Monte Carlo', why: '5,000 seeded robustness trials.' },
-      ] },
-    ],
-    results: {
-      caption: 'Key findings',
-      head: ['Finding', 'Value'],
-      rows: [
-        ['AHP and ANP rebuilt from the paper’s tables', 'Match to 4 decimals'],
-        ['Flip point, Supplier 1 ↔ Supplier 2', 'w = 0.442'],
-        ['Tables above the 5% consistency limit', '4 of 8'],
-        ['Robustness, 5,000 trials (paper’s model)', 'S1 41.9% · S2 58.1% · S3 0%'],
-        ['24-month expected cost: only S1 / only S2 / only S3', '€87,500 / €56,928 / €71,553'],
-      ],
-      note: 'Conclusion: Supplier 3 can be dropped. Suppliers 1 and 2 are nearly tied, and the answer depends on how the company weighs quality against logistics. Over two years Supplier 2 is cheaper unless bad rods are very expensive.',
-    },
-    learn: [
-      { q: 'What is AHP?', a: 'The Analytic Hierarchy Process breaks a decision into criteria and asks experts to compare options two at a time on a 1–9 scale. The comparisons become weights and a final score for each option.' },
-      { q: 'What is a consistency ratio?', a: 'If you say A beats B and B beats C, you should not then say C beats A strongly. The consistency ratio measures how self-contradictory a table of comparisons is; above about 5–10% it should be re-checked.' },
-      { q: 'How does ANP differ?', a: 'The Analytic Network Process allows criteria to influence each other, not just sit in a hierarchy. In this case it behaved like AHP with quality weighted five times more than logistics.' },
-      { q: 'What is a Monte Carlo test?', a: 'Repeat the calculation thousands of times with small random changes to the inputs and see how often the answer changes. It tells you how much to trust the result.' },
-    ],
-  },
-  {
     slug: 'pixelproof',
     name: 'PixelProof',
     short: 'A factory of verified visual puzzles that tests whether AI vision models really read gauges, charts and diagrams.',
@@ -634,7 +617,8 @@ export const projects = [
     glyph: 'pixelproof',
     team: ['sujal'],
     repo: 'https://github.com/sujal128005/Qwen',
-    demo: { href: 'https://sujal128005.github.io/Qwen/data/demo/report.html', label: 'Findings report' },
+    demo: { href: 'https://pixelproof-gk2j.onrender.com', label: 'Open PixelProof Studio' },
+    more: [{ href: 'https://sujal128005.github.io/Qwen/', label: 'Findings report' }],
     widget: 'pixelproof',
     overview: [
       'PixelProof generates, validates and scores visual-reasoning tasks from real operational settings: reading industrial gauges, business charts and wiring diagrams, where one misread value leads to a wrong decision.',
@@ -691,14 +675,65 @@ export const projects = [
   {
     slug: 'arthanetra',
     name: 'ArthaNetra',
-    short: 'Our newest project, just started. Details soon.',
+    short: 'Paste any loan, EMI, credit card or insurance offer and see what it will really cost you, explained in 12 Indian languages.',
     year: 2026,
-    cats: [],
-    context: 'In the lab',
-    status: 'Just started',
+    cats: ['ai', 'fintech'],
+    context: 'Arthaton 2026 · AI for Finance',
+    status: 'Complete',
     glyph: 'arthanetra',
-    team: [],
+    team: ['sujal'],
     repo: 'https://github.com/sujal128005/ArthaNetra',
-    comingSoon: true,
+    demo: { href: 'https://arthanetra.onrender.com', label: 'Live demo' },
+    widget: 'arthanetra',
+    image: { src: 'arthanetra-home.webp', alt: 'ArthaNetra home page: the loan app says 0.1% a day, it really costs 807% a year' },
+    gallery: [
+      { src: 'arthanetra-verdict.webp', caption: 'The verdict: a Trap Score from 0 to 100, with exactly how it was calculated.' },
+      { src: 'arthanetra-compare.webp', caption: 'What they show vs what you pay, side by side.' },
+      { src: 'arthanetra-money.webp', caption: 'Follow the money: every payment, its date and where each rupee goes.' },
+      { src: 'arthanetra-proof.webp', caption: 'Proof: every value shown next to the exact words it came from in the document.' },
+      { src: 'arthanetra-simulator.webp', caption: 'Try different terms: change the fee, rate or prepayment and watch the cost update.' },
+    ],
+    overview: [
+      '“Artha” means money and “Netra” means eye: ArthaNetra is an eye on money. It reads a loan offer, an EMI deal, a Key Facts Statement, a credit card bill or an insurance agent’s WhatsApp pitch, and tells you what it will actually cost. It checks every number against the document, works out the true yearly cost with a calculation engine, flags anything that goes against RBI or IRDAI rules, and explains the result in 12 Indian languages.',
+      'A loan app that says “only 0.1% per day” really costs 807% a year. A “No-Cost EMI” can cost 36.7% a year once the lost discount, fee and GST are counted. ArthaNetra shows the number that matters before you tap Accept.',
+    ],
+    problem:
+      'Most people never see the real price of the credit they take. The number on the screen is real; it is just not the number that matters. In 2021 an RBI working group found that about 600 of roughly 1,100 lending apps it examined were operating illegally.',
+    aim: 'Give every first-time borrower, student, gig worker and family a free, trustworthy way to check any offer before signing, in their own language.',
+    steps: [
+      { title: 'Read safely', text: 'Text, a PDF or a screenshot comes in. Its real file type is checked, and phone, PAN, Aadhaar, account, card and UPI details are masked before any AI sees it.' },
+      { title: 'Two readers', text: 'An AI reader extracts each term and must quote the exact words it came from. A rule-based reader goes through the same document independently.' },
+      { title: 'Prove every number', text: 'Each quote is checked against the document, and each number against its quote. Anything that cannot be proven is kept out of the maths.' },
+      { title: 'Calculate the real cost', text: 'Loans, EMI offers, cards and insurance all become a list of dated payments. The true yearly rate is solved from that list.' },
+      { title: 'Check the rules', text: '21 checks based on RBI and IRDAI circulars, plus pressure-tactic detection, feed a Trap Score from 0 to 100.' },
+      { title: 'Explain', text: 'A plain-language explanation in 12 languages, questions to ask before signing and a reply to send the lender. Every number in the text is checked against the calculation.' },
+    ],
+    methodology: [
+      'Split the work: language models read and explain; tested code computes and decides.',
+      'Never trust a number without a quote from the document that proves it.',
+      'Turn every product into the same thing, a list of dated payments, so one engine handles them all.',
+      'Write each regulation as a small, versioned rule with its citation.',
+      'Work fully offline with no API key, so the core never depends on an AI service.',
+    ],
+    stack: [
+      { group: 'Back end', items: [
+        { name: 'Python + FastAPI', why: 'The analysis API and calculation engine.' },
+        { name: 'pypdf', why: 'Reads the text layer of PDFs.' },
+      ] },
+      { group: 'AI (optional)', items: [
+        { name: 'Groq', why: 'Reading any wording, explanations, voice via Whisper.' },
+        { name: 'Gemini', why: 'Screenshots and scanned PDFs.' },
+      ] },
+      { group: 'Front end', items: [
+        { name: 'HTML, CSS, JavaScript', why: 'The web app, in 12 languages.' },
+      ] },
+      { group: 'Delivery', items: [{ name: 'Docker + Render', why: 'One-command run and free deployment.' }] },
+    ],
+    learn: [
+      { q: 'Flat rate vs reducing rate', a: 'A **flat** rate charges interest on the full loan for the whole term, even though you repay it every month. A **reducing** rate charges only on what you still owe. A 9% flat rate is about 16.4% on a reducing balance.' },
+      { q: 'What is APR?', a: 'The annual percentage rate is the all-inclusive yearly cost of credit: interest plus fees, worked out from the actual money you receive and the payments you make. RBI now requires lenders to show it.' },
+      { q: 'How can “No-Cost EMI” cost money?', a: 'If paying in full would get you a discount, choosing EMI means losing it. Add a processing fee and GST on the interest, and the “0%” plan can cost over 30% a year.' },
+      { q: 'What is XIRR?', a: 'The rate that makes the value of all your dated payments add up to zero. It works for any schedule, which is why ArthaNetra converts every product into dated payments first.' },
+    ],
   },
 ];

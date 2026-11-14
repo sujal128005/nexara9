@@ -342,55 +342,55 @@
     calc();
   };
 
-  // ---------- Supplier Decision Lab: weight slider ----------
-  widgets.sdl = (root) => {
-    const body = shell(root, 'Who wins? Move the weight', 'Scores from the paper’s published AHP and ANP results');
-    // Each supplier's score is a straight line in w (weight of Logistic-Economic criteria).
-    const lines = [
-      { name: 'Supplier 1', a: 0.6335, b: -0.525 },
-      { name: 'Supplier 2', a: 0.269, b: 0.3 },
-      { name: 'Supplier 3', a: 0.098, b: 0.222 },
-    ];
-    const FLIP = 0.442;
-    const range = h('input', { class: 'range', type: 'range', min: '0', max: '1', step: '0.001', value: '0.5', 'aria-label': 'Weight of logistics and economics, w' });
-    const wOut = h('strong', { text: '' });
-    const bars = lines.map((l) => {
-      const fill = h('div', { class: 'bar-fill' });
-      const val = h('span', { class: 'bar-val' });
-      const row = h('div', { class: 'bar' }, h('span', { text: l.name }), h('div', { class: 'bar-track' }, fill), val);
-      return { row, fill, val, l };
-    });
-    const verdict = h('p', { 'aria-live': 'polite' });
-    const flipMark = h('span', { class: 'flip-mark', 'aria-hidden': 'true' });
-    flipMark.style.left = `calc(${FLIP * 100}% - 1px)`;
-    function update() {
-      const w = Number(range.value);
-      wOut.textContent = w.toFixed(3);
-      const sc = lines.map((l) => l.a + l.b * w);
-      const best = sc.indexOf(Math.max(...sc));
-      bars.forEach((b, i) => {
-        b.fill.style.width = `${Math.max(0, (sc[i] / 0.65) * 100).toFixed(1)}%`;
-        b.val.textContent = sc[i].toFixed(3);
-        b.row.classList.toggle('win', i === best);
-      });
-      const close = Math.abs(w - FLIP) < 0.02;
-      verdict.textContent = close
-        ? 'Right at the flip point: Suppliers 1 and 2 are tied.'
-        : `${lines[best].name} wins. ${w < FLIP ? 'Quality is weighted more here, which favours Supplier 1.' : 'Logistics and price are weighted more here, which favours Supplier 2.'}`;
+  // ---------- ArthaNetra: flat rate vs real cost ----------
+  widgets.arthanetra = (root) => {
+    const body = shell(root, 'What does that loan really cost?', 'Same maths idea as ArthaNetra’s engine · runs in your browser');
+    const num = (v, a) => h('input', { class: 'input', type: 'number', value: v, step: 'any', min: '0', inputmode: 'decimal', ...a });
+    const amount = num('100000');
+    const flat = num('9');
+    const months = num('24', { step: '1', min: '1', max: '120' });
+    const fee = num('2', { max: '50' });
+    const out = h('div', { class: 'scen-out', 'aria-live': 'polite' });
+    const inr = (x) => '₹' + Math.round(x).toLocaleString('en-IN');
+    // Monthly rate i that makes the EMIs worth exactly what you received (an IRR, solved by bisection).
+    function irr(net, emi, n) {
+      let lo = 0, hi = 1;
+      const pv = (i) => (i === 0 ? emi * n : emi * (1 - Math.pow(1 + i, -n)) / i);
+      if (pv(0) <= net) return 0;
+      for (let k = 0; k < 200; k++) { const mid = (lo + hi) / 2; if (pv(mid) > net) lo = mid; else hi = mid; }
+      return (lo + hi) / 2;
     }
-    const presets = h('div', { class: 'method-row' },
-      [['Paper’s ANP · w = 1/6', 1 / 6], ['Flip point · w = 0.442', FLIP], ['Paper’s AHP · w = 0.5', 0.5]].map(([l, v]) =>
-        h('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: l, onclick: () => { range.value = String(v); update(); } })));
-    range.addEventListener('input', update);
-    body.append(
-      h('div', { class: 'w-body' },
-        h('p', { class: 'w-note' }, 'w = weight of the Logistic-Economic group (quality gets 1 − w): ', wOut),
-        h('div', { class: 'range-wrap' }, range, flipMark),
-        h('p', { class: 'flip-label', text: '| red line = flip point, w = 0.442' }),
-        h('div', { class: 'bars' }, bars.map((b) => b.row)),
-        verdict,
-        presets));
-    update();
+    function calc() {
+      clear(out);
+      const P = Math.max(Number(amount.value) || 0, 0);
+      const r = Math.max(Number(flat.value) || 0, 0) / 100;
+      const n = Math.min(Math.max(Math.round(Number(months.value) || 0), 1), 120);
+      const f = Math.min(Math.max(Number(fee.value) || 0, 0), 50) / 100;
+      if (!P) { out.append(h('p', { text: 'Enter a loan amount.' })); return; }
+      const emi = (P + P * r * (n / 12)) / n;
+      const feeAmt = P * f;
+      const net = P - feeAmt;
+      const iNoFee = irr(P, emi, n), iFee = irr(net, emi, n);
+      const apr = (i) => (i * 12 * 100).toFixed(1) + '%';
+      out.append(
+        h('div', { class: 'cmp' },
+          h('div', {}, h('h5', { text: 'What they show' }), h('p', { class: 'big-num', text: (r * 100).toFixed(1) + '%' }), h('p', { class: 'w-note', text: '“flat” rate a year' })),
+          h('div', {}, h('h5', { text: 'What you really pay' }), h('p', { class: 'big-num bad', text: apr(iFee) }), h('p', { class: 'w-note', text: 'a year (APR), fee included' }))),
+        h('dl', { class: 'kv' },
+          h('dt', { text: 'Monthly EMI' }), h('dd', { text: inr(emi) }),
+          h('dt', { text: `Processing fee (${(f * 100).toFixed(1)}%)` }), h('dd', { text: inr(feeAmt) }),
+          h('dt', { text: 'Money that reaches you' }), h('dd', { text: inr(net) }),
+          h('dt', { text: 'Total you repay' }), h('dd', { text: inr(emi * n) }),
+          h('dt', { text: 'Real rate without the fee' }), h('dd', { text: apr(iNoFee) }),
+          h('dt', { class: 'total', text: 'Real rate with the fee' }), h('dd', { class: 'total', text: apr(iFee) })),
+        h('p', { class: 'w-note', text: 'A flat rate charges interest on the full amount for the whole term, even as you repay it. The real rate is the one that makes your EMIs worth exactly the money you received.' }),
+      );
+    }
+    [amount, flat, months, fee].forEach((el) => el.addEventListener('input', calc));
+    body.append(h('div', { class: 'w-grid' },
+      h('div', { class: 'w-body' }, field('Loan amount (₹)', amount), field('Flat interest rate (% a year)', flat), field('Tenure (months)', months), field('Processing fee (% of loan, deducted)', fee)),
+      out));
+    calc();
   };
 
   // ---------- PixelProof: counterfactual twins ----------

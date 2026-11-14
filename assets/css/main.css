@@ -467,3 +467,6 @@ a.card-body:hover .card-go { background: var(--gold); color: #17130b; border-col
 /* small-screen refinements */
 @media (max-width: 520px) { .hide-sm { display: none; } }
 @media (max-width: 899px) { .home-emblem { opacity: .22; top: 14vh; } }
+
+/* header wrapper (shared markup with inside pages) */
+.header-right { display: flex; align-items: center; gap: 8px; }
