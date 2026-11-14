@@ -82,7 +82,7 @@ ${scripts.map((s) => `<script src="/assets/js/${s}?v=${V}" defer></script>`).joi
 
 const sunMoon = `<svg class="i-sun" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="10" cy="10" r="3.6"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4"/></svg><svg class="i-moon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16.5 12.5A7 7 0 0 1 7.5 3.5a7 7 0 1 0 9 9z"/></svg>`;
 
-function header(active = '', { inner = true } = {}) {
+function header(active = '', { inner = true, brand = true } = {}) {
   const link = (href, label, key) =>
     `<a href="${href}"${active === key ? ' aria-current="page"' : ''}>${label}</a>`;
   if (inner) {
@@ -96,8 +96,8 @@ function header(active = '', { inner = true } = {}) {
 </header>`;
   }
   return `<a class="skip" href="#main">Skip to content</a>
-<header class="site-header">
-  <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'hdr')}<span class="brand-word">NEXARA<b>9</b></span></a>
+<header class="site-header${brand ? '' : ' no-brand'}">
+  ${brand ? `<a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'hdr')}<span class="brand-word">NEXARA<b>9</b></span></a>` : ''}
   <div class="header-right">
     <nav id="site-nav" class="site-nav" aria-label="Main">
       ${link('/projects/', 'Projects', 'projects')}
@@ -130,43 +130,25 @@ function dock(active, menu = '') {
 
 // ---------- home (unchanged design) ----------
 function homePage() {
-  const total = projects.length + flagships.length;
-  return `${head({ title: 'Nexara9 · Many ventures. One golden standard.', description: site.description, path: '/', scripts: ['home.js'], inner: false })}
+  return `${head({ title: 'Nexara9', description: site.description, path: '/', scripts: ['home.js'], inner: false })}
 <body class="page-home">
-<canvas id="sky" aria-hidden="true"></canvas>
+<div class="aura" aria-hidden="true"><i class="aura-a"></i><i class="aura-b"></i><i class="aura-c"></i></div>
 <div class="home">
-${header('home', { inner: false })}
+${header('home', { inner: false, brand: false })}
 <main id="main" class="home-main">
-  <div class="home-copy">
-    <p class="eyebrow reveal"><span class="pulse"></span>A house of ventures<span class="hide-sm">&nbsp;· Building since ${site.since}</span></p>
-    <h1 class="display reveal">Many ventures.<br><em class="gold-text">One golden standard.</em></h1>
-    <p class="lead reveal">Autonomous machines, AI products and everyday apps, built under one name.</p>
-    <div class="cta-row reveal">
+  <div class="hero">
+    <div class="hero-emblem" aria-hidden="true">
+      ${logoMark('hero-mark', 'hero')}
+    </div>
+    <h1 class="hero-word gold-text">NEXARA9</h1>
+    <div class="cta-row hero-cta">
       <a class="btn btn-gold" href="/projects/"><span>Explore the projects</span>${icon.arrow}</a>
       <a class="btn btn-ghost" ${mailAttrs('Hello Nexara9')}>${icon.mail}<span>Contact</span></a>
     </div>
   </div>
-  <div class="home-emblem" aria-hidden="true">
-    <div class="orbit">
-      <svg class="orbit-ring" viewBox="0 0 400 400" fill="none">
-        <circle cx="200" cy="200" r="196" stroke="currentColor" stroke-opacity=".18"/>
-        <circle cx="200" cy="200" r="150" stroke="currentColor" stroke-opacity=".10" stroke-dasharray="2 6"/>
-        ${Array.from({ length: 9 }, (_, i) => {
-          const a = (i / 9) * Math.PI * 2 - Math.PI / 2;
-          return `<circle cx="${(200 + Math.cos(a) * 196).toFixed(1)}" cy="${(200 + Math.sin(a) * 196).toFixed(1)}" r="3.2" fill="currentColor"/>`;
-        }).join('')}
-      </svg>
-      ${logoMark('hero-mark', 'hero')}
-    </div>
-  </div>
 </main>
 <footer class="home-foot">
-  <dl class="stats">
-    <div><dt>Projects</dt><dd>${total}</dd></div>
-    <div><dt>Flagship ventures</dt><dd>${flagships.length}</dd></div>
-    <div><dt>First build</dt><dd>${site.since}</dd></div>
-  </dl>
-  <p class="founders">Founded by ${founders.map((k) => `<a class="u-link" href="/founders/#${k}">${esc(people[k].name)}</a>`).join(' &amp; ')}</p>
+  <p class="since">Since ${site.since}</p>
 </footer>
 </div>
 </body>

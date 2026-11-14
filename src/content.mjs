@@ -9,7 +9,7 @@ export const site = {
   description:
     'Nexara9 is a venture studio in the making: autonomous machines, AI systems and everyday products, built under one name and one standard.',
   email: 'offsujal128005@gmail.com',
-  since: 2024,
+  since: 2023,
 };
 
 export const people = {
