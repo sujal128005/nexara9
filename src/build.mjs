@@ -298,7 +298,7 @@ function foundersPage() {
   const cards = founderProfiles
     .map((f, i) => {
       const p = people[f.key];
-      const built = open.filter((x) => x.team.includes(f.key));
+      const built = open.filter((x) => x.team.includes(f.key) && !(f.hideProjects || []).includes(x.slug));
       const [first, ...rest] = p.name.split(' ');
       return `<article class="fdr${i % 2 ? ' fdr-flip' : ''}" id="${f.key}">
       <figure class="fdr-photo reveal"><img src="/assets/img/founders/${esc(f.photo)}" alt="${esc(f.photoAlt)}" width="960" height="1200" decoding="async"><figcaption><span>${esc(p.name)}</span><span>${esc(f.role)}</span></figcaption></figure>
@@ -314,8 +314,7 @@ function foundersPage() {
         ${f.bio.map((b) => `<p class="fdr-bio">${fmt(b)}</p>`).join('')}
         ${f.highlights.length ? `<h3 class="sub">Highlights</h3><ol class="hl-list">${f.highlights.map((h) => `<li>${fmt(h)}</li>`).join('')}</ol>` : ''}
         <h3 class="sub">Focus</h3><p class="focus">${f.focus.map(esc).join('<span>/</span>')}</p>
-        ${built.length ? `<h3 class="sub">Projects</h3><p class="built">${built.map((b) => `<a href="/projects/${b.slug}/">${esc(b.name)}</a>`).join('')}</p>` : ''}
-        ${f.repos ? `<h3 class="sub">Own work on GitHub</h3><ul class="repo-list">${f.repos.map((r) => `<li>${ext(r.href, `<span class="rl-name">${esc(r.name)}${icon.external}</span><span class="rl-lang">${esc(r.lang)}</span><span class="rl-desc">${esc(r.desc)}</span>`, 'rl')}</li>`).join('')}</ul>` : ''}
+        ${built.length || f.repos ? `<h3 class="sub">Projects</h3><p class="built">${built.map((b) => `<a href="/projects/${b.slug}/">${esc(b.name)}</a>`).join('')}${(f.repos || []).map((r) => ext(r.href, `${esc(r.name)}${icon.external}`, 'built-ext')).join('')}</p>` : ''}
       </div>
     </article>`;
     })
@@ -462,7 +461,7 @@ ${dock('projects', `<div class="dd dock-dd">
         <p class="dd-h">${esc(p.name)}</p>
         ${sections.map(([id, l]) => `<a href="#${id}" data-sec="${id}"><span>${num[id]}</span>${l}</a>${id === 'code' && t.repo ? `<div class="dd-sub">${t.repo.map(([path]) => `<a href="#repo-${slugify(path)}" data-repo>${esc(path)}</a>`).join('')}</div>` : ''}`).join('')}
         <p class="dd-h dd-h2">Other projects</p>
-        ${open.map((x, k) => `<a href="/projects/${x.slug}/"${x.slug === p.slug ? ' aria-current="page"' : ''}><span>${code(k)}</span>${esc(x.name)}</a>`).join('')}
+        ${open.map((x, k) => `<a class="dd-proj-link" href="/projects/${x.slug}/"${x.slug === p.slug ? ' aria-current="page"' : ''}><span>${code(k)}</span>${esc(x.name)}</a>`).join('')}
       </div>
     </div>
     <span class="dock-sep" aria-hidden="true"></span>`)}

@@ -745,3 +745,9 @@ details[open] > summary .t-ico.dir { opacity: .6; }
   .r-namecell .r-toggle { display: inline-grid; vertical-align: 0.15em; margin-left: 8px; width: 28px; height: 28px; }
 }
 @media (min-width: 1001px) { .page-projects .r-name { font-size: clamp(1.15rem, 1.6vw, 1.5rem); } }
+
+/* dock menu: project codes need a wider column than section numbers */
+#dd-sec a.dd-proj-link { grid-template-columns: 58px minmax(0, 1fr); gap: 4px; }
+/* founders: GitHub projects inline with the rest */
+.built a.built-ext { display: inline-flex; align-items: center; gap: 4px; }
+.built a.built-ext svg { width: 11px; height: 11px; color: var(--muted); }

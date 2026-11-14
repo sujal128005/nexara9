@@ -62,6 +62,7 @@ export const founderProfiles = [
   },
   {
     key: 'navya',
+    hideProjects: ['stealth'],
     photo: 'navya.webp',
     photoAlt: 'Made Navya outside the IBM office',
     role: 'Co-founder',
