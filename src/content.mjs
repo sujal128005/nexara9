@@ -36,6 +36,9 @@ export const people = {
 
 export const founders = ['sujal', 'navya'];
 
+// Project complexity, 1–5, judged from code size, number of moving parts and how hard the core problem is.
+export const complexityLabels = ['', 'Light', 'Moderate', 'Involved', 'Advanced', 'Complex'];
+
 // The Founders page.
 export const founderProfiles = [
   {
@@ -119,7 +122,7 @@ export const flagships = [
     name: 'Housefi',
     kind: 'Venture',
     glyph: 'housefi',
-    badge: 'Home services startup',
+    badge: 'Home services startup · IBM SkillsBuild National Finalist 2026',
     line:
       'Verified technicians for India’s tier-2 and tier-3 cities: plumbing, electrical, cleaning, AC repair, furniture and more, booked in one app.',
     funding: true,
@@ -148,6 +151,7 @@ export const flagships = [
 export const projects = [
   {
     slug: 'udaan',
+    complexity: 2,
     name: 'Project Udaan',
     short: 'Our first build: a radio-controlled aeroplane, built by hand and flown from the ground.',
     year: 2024,
@@ -199,6 +203,7 @@ export const projects = [
   },
   {
     slug: 'moodie-foodie',
+    complexity: 1,
     name: 'Moodie-Foodie',
     short: 'Tell it your mood and budget; it picks the best-value meal from the campus canteens and today’s mess menu.',
     year: 2025,
@@ -245,6 +250,7 @@ export const projects = [
   },
   {
     slug: 'nexgen',
+    complexity: 2,
     name: 'NexGen Study Guardian',
     short: 'A student dashboard for schools and colleges: AI question papers, syllabus tracking, past papers, notes, branch channels and a code editor.',
     year: 2025,
@@ -296,6 +302,7 @@ export const projects = [
   },
   {
     slug: 'binance-futures-bot',
+    complexity: 1,
     name: 'Binance Futures Trading Bot',
     short: 'A clean Python command-line tool that places market and limit orders on the Binance Futures testnet.',
     year: 2026,
@@ -348,6 +355,7 @@ export const projects = [
   },
   {
     slug: 'finance-api',
+    complexity: 1,
     name: 'Finance Tracking API',
     short: 'A FastAPI backend for recording income and expenses, with roles that decide who can read, add or summarise.',
     year: 2026,
@@ -398,6 +406,7 @@ export const projects = [
   },
   {
     slug: 'khata',
+    complexity: 4,
     name: 'Khata',
     short: 'A live co-pilot for sales calls: it checks every number a rep quotes against the real product rules and corrects mistakes in about a second.',
     year: 2026,
@@ -451,6 +460,7 @@ export const projects = [
   },
   {
     slug: 'stealth',
+    complexity: 5,
     name: 'STEALTH · Know Your Agent',
     short: 'A trust gateway between AI shopping agents and checkout: it checks that what the agent is buying matches what the human authorised.',
     year: 2026,
@@ -502,6 +512,7 @@ export const projects = [
   },
   {
     slug: 'paypal-attribute',
+    complexity: 4,
     name: 'PayPal Attribute',
     short: 'When an AI shopping agent recommends a product, the creators it cited get a fair share of the sale, paid through PayPal.',
     year: 2026,
@@ -555,6 +566,7 @@ export const projects = [
   },
   {
     slug: 'flexdrop',
+    complexity: 5,
     name: 'FlexDrop',
     short: 'Customers trade a little delivery flexibility for a small reward; FlexDrop uses it to batch orders onto fewer, shorter routes.',
     year: 2026,
@@ -627,6 +639,7 @@ export const projects = [
   },
   {
     slug: 'pixelproof',
+    complexity: 3,
     name: 'PixelProof',
     short: 'A factory of verified visual puzzles that tests whether AI vision models really read gauges, charts and diagrams.',
     year: 2026,
@@ -693,6 +706,7 @@ export const projects = [
   },
   {
     slug: 'arthanetra',
+    complexity: 4,
     name: 'ArthaNetra',
     short: 'Paste any loan, EMI, credit card or insurance offer and see what it will really cost you, explained in 12 Indian languages.',
     year: 2026,

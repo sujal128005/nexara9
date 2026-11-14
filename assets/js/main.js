@@ -113,6 +113,19 @@
       }, { passive: true });
     }
 
+    // Sort the project list by build order or complexity
+    const sortBtns = Array.from(document.querySelectorAll('.sort-b'));
+    const list = document.querySelector('.index');
+    if (sortBtns.length && list) {
+      sortBtns.forEach((btn) => btn.addEventListener('click', () => {
+        const byCx = btn.dataset.sort === 'cx';
+        const rows = Array.from(list.querySelectorAll(':scope > .row'));
+        rows.sort((a, b) => byCx ? (b.dataset.cx - a.dataset.cx) || (a.dataset.order - b.dataset.order) : a.dataset.order - b.dataset.order);
+        rows.forEach((r) => list.appendChild(r));
+        sortBtns.forEach((x) => x.setAttribute('aria-pressed', String(x === btn)));
+      }));
+    }
+
     // Section toggles on the project list
     document.querySelectorAll('.r-toggle').forEach((btn) => {
       const panel = document.getElementById(btn.getAttribute('aria-controls'));
@@ -213,7 +226,7 @@
             if (cur && dl) {
               document.querySelectorAll('#dd-sec a[data-sec]').forEach((x) => x.classList.remove('active'));
               dl.classList.add('active');
-              cur.textContent = dl.lastChild.textContent;
+              cur.textContent = dl.dataset.short || dl.lastChild.textContent;
             }
           }
         });

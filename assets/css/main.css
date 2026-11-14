@@ -41,7 +41,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-behavior: 
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 body {
   margin: 0; background: var(--bg); color: var(--text);
-  font: 400 16px/1.6 var(--sans); letter-spacing: -0.005em;
+  font: 400 1rem/1.6 var(--sans); letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
@@ -482,3 +482,18 @@ a.card-body:hover .card-go { background: var(--gold); color: #17130b; border-col
   .stats dd { font-size: 1.6rem; margin-top: 4px; }
   .orbit { width: min(32vw, 58vh, 440px); }
 }
+
+/* home: keep the decorative emblem inside the screen on phones */
+.home { overflow-x: clip; }
+@supports not (overflow: clip) { .home { overflow-x: hidden; } }
+@media (max-width: 300px) {
+  .display { font-size: 2.05rem; }
+  .home-copy .lead { font-size: 0.92rem; }
+  .cta-row .btn { flex: 1 1 100%; white-space: normal; text-align: center; }
+  .stats { gap: 12px; } .stats dd { font-size: 1.25rem; } .stats dt { font-size: 0.6rem; }
+  .eyebrow { font-size: 0.66rem; letter-spacing: 0.1em; }
+}
+
+/* large and very large screens */
+@media (min-width: 2300px) { html { font-size: 20px; } .brand-mark { width: 30px; } .brand-word { font-size: 1.1rem; } }
+@media (min-width: 3000px) { html { font-size: 26px; } .brand-mark { width: 40px; } }

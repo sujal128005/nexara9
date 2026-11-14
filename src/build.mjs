@@ -1,14 +1,19 @@
 // Builds the static site from src/content.mjs and src/tech.mjs into the repository root.
 // Usage: node src/build.mjs
-import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { site, people, founders, founderProfiles, categories, flagships, projects } from './content.mjs';
+import { site, people, founders, founderProfiles, categories, flagships, projects, complexityLabels } from './content.mjs';
 import { tech } from './tech.mjs';
 import { glyph, logoMark, icon } from './glyphs.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const V = '20261118'; // cache-busting version for CSS/JS
+// Cache-busting version: a hash of every stylesheet and script, so a changed file always gets a new URL.
+const V = createHash('sha256')
+  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js']
+    .map((f) => readFileSync(join(ROOT, f))).join('\n'))
+  .digest('hex').slice(0, 10);
 
 // ---------- helpers ----------
 const esc = (s = '') =>
@@ -84,7 +89,10 @@ function header(active = '', { inner = true } = {}) {
     return `<a class="skip" href="#main">Skip to content</a>
 <header class="site-header">
   <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'hdr')}<span class="brand-word">NEXARA<b>9</b></span></a>
-  <button class="theme-toggle" type="button" aria-label="Switch between light and dark theme">${sunMoon}</button>
+  <div class="header-right">
+    <a class="hdr-link" href="/founders/"${active === 'founders' ? ' aria-current="page"' : ''}>Founders</a>
+    <button class="theme-toggle" type="button" aria-label="Switch between light and dark theme">${sunMoon}</button>
+  </div>
 </header>`;
   }
   return `<a class="skip" href="#main">Skip to content</a>
@@ -111,14 +119,11 @@ const dockIcon = {
   sections: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M7 5h10M7 10h10M7 15h10"/><circle cx="3.5" cy="5" r="1"/><circle cx="3.5" cy="10" r="1"/><circle cx="3.5" cy="15" r="1"/></svg>',
 };
 function dock(active, menu = '') {
-  const tab = (href, key, label) => `<a class="dock-tab" href="${href}"${active === key ? ' aria-current="page"' : ''}>${dockIcon[key]}<span>${label}</span></a>`;
-  return `<nav class="dock${menu ? ' dock-has-menu' : ''}" aria-label="Main">
+  const seg = (href, key, label) => `<a class="sw-seg" href="${href}"${active === key ? ' aria-current="page"' : ''}>${dockIcon[key]}<span>${label}</span></a>`;
+  return `<nav class="dock${menu ? ' dock-has-menu' : ''}" aria-label="Projects and ventures">
   <div class="dock-in">
     ${menu}
-    ${tab('/projects/', 'projects', 'Projects')}
-    ${tab('/ventures/', 'ventures', 'Ventures')}
-    ${tab('/founders/', 'founders', 'Founders')}
-    <a class="dock-tab" ${mailAttrs('Hello Nexara9')}>${dockIcon.contact}<span>Contact</span></a>
+    <div class="sw${active === 'ventures' ? ' sw-r' : active === 'projects' ? ' sw-l' : ''}">${seg('/projects/', 'projects', 'Projects')}${seg('/ventures/', 'ventures', 'Ventures')}</div>
   </div>
 </nav>`;
 }
@@ -138,7 +143,7 @@ ${header('home', { inner: false })}
     <p class="lead reveal">Autonomous machines, AI products and everyday apps, built under one name.</p>
     <div class="cta-row reveal">
       <a class="btn btn-gold" href="/projects/"><span>Explore the projects</span>${icon.arrow}</a>
-      <a class="btn btn-ghost" href="/ventures/"><span>Flagship ventures</span></a>
+      <a class="btn btn-ghost" ${mailAttrs('Hello Nexara9')}>${icon.mail}<span>Contact</span></a>
     </div>
   </div>
   <div class="home-emblem" aria-hidden="true">
@@ -174,10 +179,20 @@ const code = (i) => `N9/${pad(i + 1)}`;
 
 function footer() {
   return `<footer class="ft" id="contact">
+  <div class="wrap ft-contact">
+    <div>
+      <p class="kicker">Contact</p>
+      <p class="ft-title">Talk to the founders.</p>
+    </div>
+    <div class="ft-actions">
+      <a class="btn btn-gold" ${mailAttrs('Hello Nexara9')}>${icon.mail}<span>Email us</span></a>
+      ${ext(people.sujal.links[1].href, `<span>Sujal on LinkedIn</span>${icon.external}`, 'btn btn-dark')}
+      ${ext(people.navya.links[0].href, `<span>Navya on LinkedIn</span>${icon.external}`, 'btn btn-dark')}
+    </div>
+  </div>
   <div class="wrap ft-top">
     <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'ftr')}<span class="brand-word">NEXARA<b>9</b></span></a>
     <nav class="ft-nav" aria-label="Footer"><a href="/projects/">Projects</a><a href="/ventures/">Ventures</a><a href="/founders/">Founders</a>${ext('https://github.com/sujal128005', 'GitHub')}</nav>
-    <a class="btn btn-gold" ${mailAttrs('Hello Nexara9')}>${icon.mail}<span>Email the founders</span></a>
   </div>
   <p class="ft-mark" aria-hidden="true">NEXARA9</p>
   <div class="wrap ft-bottom"><span>© ${new Date().getFullYear()} Nexara9</span><span>Kurnool, India</span></div>
@@ -188,16 +203,19 @@ const jumpNav = (items) =>
   `<nav class="jump wrap" aria-label="More">${items.map(([href, label, n]) => `<a href="${href}"><span class="jump-n">${n}</span><span class="jump-t">${label}</span><span class="jump-go">${icon.arrow}</span></a>`).join('')}</nav>`;
 
 const CHEV = '<svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8l5 5 5-5"/></svg>';
+const cxMeter = (n) => n
+  ? `<span class="cx cx-${n}" title="Complexity ${n} of 5: ${complexityLabels[n]}"><span class="cx-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span class="cx-l"><span class="sr">Complexity: </span>${complexityLabels[n]}</span></span>`
+  : '';
 const slugify = (x) => x.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 function sectionsFor(p) {
   const t = tech[p.slug] || {};
   return [
-    ['overview', 'Overview'], ['problem', 'Problem and aim'], ['how', 'How it works'],
-    ...(t.arch ? [['architecture', 'Architecture']] : []),
-    ...(t.repo ? [['code', 'Languages and code']] : []),
-    ['method', 'Methodology'], ['stack', 'Technology'], ['demo', 'Demo'],
-    ...(p.results ? [['results', 'Results']] : []),
-    ['learn', 'Concepts'], ['team', 'Team'],
+    ['overview', 'Overview', 'Info'], ['problem', 'Problem and aim', 'Aim'], ['how', 'How it works', 'How'],
+    ...(t.arch ? [['architecture', 'Architecture', 'Arch']] : []),
+    ...(t.repo ? [['code', 'Languages and code', 'Code']] : []),
+    ['method', 'Methodology', 'Plan'], ['stack', 'Technology', 'Tech'], ['demo', 'Demo', 'Demo'],
+    ...(p.results ? [['results', 'Results', 'Data']] : []),
+    ['learn', 'Concepts', 'Idea'], ['team', 'Team', 'Team'],
   ];
 }
 
@@ -212,11 +230,11 @@ function projectRow(p, i) {
   const langs = tech[p.slug]?.languages?.slice(0, 2).map(([l]) => l).join(', ') || '';
   const dots = p.cats.map((c) => `<i class="dot d-${c}" title="${esc(catLabel(c))}"></i>`).join('');
   const secs = sectionsFor(p);
-  return `<li class="row" data-cats="${p.cats.join(' ')}">
+  return `<li class="row" data-cats="${p.cats.join(' ')}" data-cx="${p.complexity || 0}" data-order="${i}">
   <div class="row-main">
     <span class="r-code">${code(i)}</span>
     <span class="r-thumb ${catClass(p)}" aria-hidden="true">${glyph(p.glyph)}</span>
-    <span class="r-namecell"><a class="r-name" href="/projects/${p.slug}/">${esc(p.name)}</a><button type="button" class="r-toggle" aria-expanded="false" aria-controls="secs-${p.slug}" aria-label="Show the sections of ${esc(p.name)}">${CHEV}</button></span>
+    <span class="r-namecell"><a class="r-name" href="/projects/${p.slug}/">${esc(p.name)}</a><button type="button" class="r-toggle" aria-expanded="false" aria-controls="secs-${p.slug}" aria-label="Show the sections of ${esc(p.name)}">${CHEV}</button>${cxMeter(p.complexity)}</span>
     <span class="r-desc">${fmt(p.short)}</span>
     <span class="r-stack">${dots}<span>${esc(langs)}</span></span>
     <span class="r-year">${p.year}</span>
@@ -239,6 +257,10 @@ ${header('projects')}
   <div class="wrap filterbar">
     <div class="filters" role="group" aria-label="Filter projects">${chips}</div>
     <span class="filter-count" aria-live="polite"></span>
+  </div>
+  <div class="wrap sortbar">
+    <div class="sort" role="group" aria-label="Sort projects"><span class="sort-k">Sort</span><button type="button" class="sort-b" data-sort="order" aria-pressed="true">Built order</button><button type="button" class="sort-b" data-sort="cx" aria-pressed="false">Complexity</button></div>
+    <div class="cx-legend" aria-hidden="true">${cxMeter(1)}${cxMeter(3)}${cxMeter(5)}</div>
   </div>
   <div class="wrap index-head" aria-hidden="true"><span>No.</span><span>Project</span><span>What it does</span><span>Built with</span><span>Year</span><span></span></div>
   <ol class="index wrap">${open.map(projectRow).join('\n')}</ol>
@@ -314,7 +336,7 @@ function foundersPage() {
         ${f.bio.map((b) => `<p class="fdr-bio">${fmt(b)}</p>`).join('')}
         ${f.highlights.length ? `<h3 class="sub">Highlights</h3><ol class="hl-list">${f.highlights.map((h) => `<li>${fmt(h)}</li>`).join('')}</ol>` : ''}
         <h3 class="sub">Focus</h3><p class="focus">${f.focus.map(esc).join('<span>/</span>')}</p>
-        ${built.length || f.repos ? `<h3 class="sub">Projects</h3><p class="built">${built.map((b) => `<a href="/projects/${b.slug}/">${esc(b.name)}</a>`).join('')}${(f.repos || []).map((r) => ext(r.href, `${esc(r.name)}${icon.external}`, 'built-ext')).join('')}</p>` : ''}
+        ${built.length || f.repos ? `<h3 class="sub">Projects</h3><p class="built">${built.map((b) => `<a href="/projects/${b.slug}/">${esc(b.name)}</a>`).join('')}${(f.repos || []).map((r) => ext(r.href, esc(r.name))).join('')}</p>` : ''}
       </div>
     </article>`;
     })
@@ -418,7 +440,7 @@ ${header('projects')}
 <main id="main">
   <section class="wrap d-head">
     <a class="back" href="/projects/">${icon.back}<span>All projects</span></a>
-    <p class="d-meta reveal"><span class="r-code">${code(idx)}</span>${p.cats.map((c) => `<span><i class="dot d-${c}"></i>${esc(catLabel(c))}</span>`).join('')}</p>
+    <p class="d-meta reveal"><span class="r-code">${code(idx)}</span>${p.cats.map((c) => `<span><i class="dot d-${c}"></i>${esc(catLabel(c))}</span>`).join('')}${cxMeter(p.complexity)}</p>
     <h1 class="d-title reveal">${esc(p.name)}</h1>
     <div class="d-intro reveal">
       <p class="d-lead">${fmt(p.short)}</p>
@@ -456,15 +478,15 @@ ${header('projects')}
   </nav>
 </main>
 ${dock('projects', `<div class="dd dock-dd">
-      <button type="button" class="dd-btn dock-tab dock-menu" aria-expanded="false" aria-controls="dd-sec">${dockIcon.sections}<span class="pbar-cur">${sections[0][1]}</span>${CHEV}</button>
+      <button type="button" class="dd-btn dock-menu" aria-expanded="false" aria-controls="dd-sec" aria-label="Sections of this project">${dockIcon.sections}<span class="pbar-cur">${sections[0][2]}</span></button>
       <div class="dd-panel dock-panel" id="dd-sec" hidden>
         <p class="dd-h">${esc(p.name)}</p>
-        ${sections.map(([id, l]) => `<a href="#${id}" data-sec="${id}"><span>${num[id]}</span>${l}</a>${id === 'code' && t.repo ? `<div class="dd-sub">${t.repo.map(([path]) => `<a href="#repo-${slugify(path)}" data-repo>${esc(path)}</a>`).join('')}</div>` : ''}`).join('')}
+        ${sections.map(([id, l, sh]) => `<a href="#${id}" data-sec="${id}" data-short="${sh}"><span>${num[id]}</span>${l}</a>${id === 'code' && t.repo ? `<div class="dd-sub">${t.repo.map(([path]) => `<a href="#repo-${slugify(path)}" data-repo>${esc(path)}</a>`).join('')}</div>` : ''}`).join('')}
         <p class="dd-h dd-h2">Other projects</p>
         ${open.map((x, k) => `<a class="dd-proj-link" href="/projects/${x.slug}/"${x.slug === p.slug ? ' aria-current="page"' : ''}><span>${code(k)}</span>${esc(x.name)}</a>`).join('')}
       </div>
     </div>
-    <span class="dock-sep" aria-hidden="true"></span>`)}
+`)}
 ${footer()}
 </body>
 </html>
