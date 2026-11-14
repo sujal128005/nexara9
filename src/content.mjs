@@ -22,7 +22,10 @@ export const people = {
   },
   navya: {
     name: 'Made Navya',
-    links: [{ label: 'LinkedIn', href: 'https://www.linkedin.com/in/navya-made-7236b633a/' }],
+    links: [
+      { label: 'LinkedIn', href: 'https://www.linkedin.com/in/navya-made-7236b633a/' },
+      { label: 'GitHub', href: 'https://github.com/crimson17-debug' },
+    ],
   },
   aryan: { name: 'Aryan Singh', links: [] },
   ashu: { name: 'Ashu Kumar', links: [] },
@@ -49,7 +52,7 @@ export const founderProfiles = [
     focus: ['Mechanical design', 'Program management', 'AI products', 'Procurement technology'],
     highlights: [
       'Winner, IBM SkillsBuild Hackathon South Region Finale 2026 · National finalist',
-      'Bangalore region finalist, Paytm Build for India AI Hackathon',
+      'Bangalore finalist, Paytm Build for India AI Hackathon',
       'Dolphin Tank India Founder Mentorship Program, 2026',
       'Second runner-up, KL University AI Build 2026',
       'Club lead, DataWorks Club (AI/ML and Data Science), IIITDM Kurnool',
@@ -69,6 +72,14 @@ export const founderProfiles = [
       'Navya works where software meets the physical world: computer vision with YOLOv8 and OpenCV, cloud, and the communities that build with them. She started the first AWS Student Builder Group at IIITDM Kurnool and coordinates the DataWorks Club.',
     ],
     focus: ['Computer vision', 'AWS and cloud', 'Compilers', 'Product and community'],
+    repos: [
+      { name: 'Persuas', lang: 'TypeScript', href: 'https://github.com/crimson17-debug/VPersuas', desc: 'An agent that finds at-risk revenue, decides whether stepping in is worth it, acts through Razorpay and measures how much of the recovery it actually caused. Razorpay AI Buildathon.' },
+      { name: 'Pseudo++ compiler', lang: 'C++ · Flex · Bison', href: 'https://github.com/crimson17-debug/ANC-compiler', desc: 'A readable language of her own and its full compiler: parser, AST, symbol table, three-address code and a native C++ executable.' },
+      { name: 'LaMGen-2.0', lang: 'Python', href: 'https://github.com/crimson17-debug/LamGen-2.0', desc: 'A reproducible re-examination of the LaMGen drug-design model and a fragment-based generator for EGFR/HER2 multi-target molecules.' },
+      { name: 'TCP/IP Routing Simulator', lang: 'C++', href: 'https://github.com/crimson17-debug/TCP_IP_Routing_simulator', desc: 'A multi-threaded network simulator with virtual routers, ARP resolution, routing tables and link-failure recovery over Linux sockets.' },
+      { name: 'DROWSY_TECH', lang: 'Arduino C++', href: 'https://github.com/crimson17-debug/Emergency_sleep_alarm', desc: 'An IoT alarm that detects driver drowsiness with an IR blink sensor and raises an alert before an accident.' },
+      { name: 'StarLiners PrismOS', lang: 'HTML · CSS · JavaScript', href: 'https://github.com/crimson17-debug/Starliners-PrismOs', desc: 'A Windows-style desktop built for the browser, as team lead of StarLiners in the HackSlash community.' },
+    ],
     highlights: [
       'Winner, IBM SkillsBuild Hackathon South Region Finale 2026 · National finalist',
       'AWS Student Builder Group Leader: founded the first AWS Student Builder Group at IIITDM Kurnool',

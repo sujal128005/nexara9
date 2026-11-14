@@ -199,7 +199,7 @@
     });
 
     // Table of contents: highlight the section in view
-    const tocLinks = Array.from(document.querySelectorAll('.toc a'));
+    const tocLinks = Array.from(document.querySelectorAll('.toc a, #dd-sec a[data-sec]'));
     if (tocLinks.length && 'IntersectionObserver' in window) {
       const map = new Map(tocLinks.map((a) => [a.getAttribute('href').slice(1), a]));
       const spy = new IntersectionObserver((entries) => {

@@ -8,7 +8,7 @@ import { tech } from './tech.mjs';
 import { glyph, logoMark, icon } from './glyphs.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const V = '20261117'; // cache-busting version for CSS/JS
+const V = '20261118'; // cache-busting version for CSS/JS
 
 // ---------- helpers ----------
 const esc = (s = '') =>
@@ -80,6 +80,13 @@ const sunMoon = `<svg class="i-sun" viewBox="0 0 20 20" fill="none" stroke="curr
 function header(active = '', { inner = true } = {}) {
   const link = (href, label, key) =>
     `<a href="${href}"${active === key ? ' aria-current="page"' : ''}>${label}</a>`;
+  if (inner) {
+    return `<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'hdr')}<span class="brand-word">NEXARA<b>9</b></span></a>
+  <button class="theme-toggle" type="button" aria-label="Switch between light and dark theme">${sunMoon}</button>
+</header>`;
+  }
   return `<a class="skip" href="#main">Skip to content</a>
 <header class="site-header">
   <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'hdr')}<span class="brand-word">NEXARA<b>9</b></span></a>
@@ -90,10 +97,30 @@ function header(active = '', { inner = true } = {}) {
       ${link('/founders/', 'Founders', 'founders')}
       <a class="nav-cta" ${mailAttrs('Hello Nexara9')}>Contact</a>
     </nav>
-    ${inner ? `<button class="theme-toggle" type="button" aria-label="Switch between light and dark theme">${sunMoon}</button>` : ''}
     <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav"><span class="sr">Menu</span><i></i><i></i></button>
   </div>
 </header>`;
+}
+
+// Bottom navigation for inside pages. On project pages it also carries the section and project menu.
+const dockIcon = {
+  projects: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/></svg>',
+  ventures: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.8l5-.7z"/></svg>',
+  founders: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="7.5" cy="7" r="2.8"/><circle cx="14" cy="8" r="2.2"/><path d="M2.5 16.5c.6-3 2.6-4.6 5-4.6s4.4 1.6 5 4.6M13 12.2c2.2 0 4 1.3 4.5 4.3"/></svg>',
+  contact: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="14" height="10" rx="2"/><path d="M3.5 6l6.5 5 6.5-5"/></svg>',
+  sections: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M7 5h10M7 10h10M7 15h10"/><circle cx="3.5" cy="5" r="1"/><circle cx="3.5" cy="10" r="1"/><circle cx="3.5" cy="15" r="1"/></svg>',
+};
+function dock(active, menu = '') {
+  const tab = (href, key, label) => `<a class="dock-tab" href="${href}"${active === key ? ' aria-current="page"' : ''}>${dockIcon[key]}<span>${label}</span></a>`;
+  return `<nav class="dock${menu ? ' dock-has-menu' : ''}" aria-label="Main">
+  <div class="dock-in">
+    ${menu}
+    ${tab('/projects/', 'projects', 'Projects')}
+    ${tab('/ventures/', 'ventures', 'Ventures')}
+    ${tab('/founders/', 'founders', 'Founders')}
+    <a class="dock-tab" ${mailAttrs('Hello Nexara9')}>${dockIcon.contact}<span>Contact</span></a>
+  </div>
+</nav>`;
 }
 
 // ---------- home (unchanged design) ----------
@@ -215,8 +242,8 @@ ${header('projects')}
   </div>
   <div class="wrap index-head" aria-hidden="true"><span>No.</span><span>Project</span><span>What it does</span><span>Built with</span><span>Year</span><span></span></div>
   <ol class="index wrap">${open.map(projectRow).join('\n')}</ol>
-  ${jumpNav([['/ventures/', 'Ventures', '02'], ['/founders/', 'Founders', '03']])}
 </main>
+${dock('projects')}
 ${footer()}
 </body>
 </html>
@@ -259,6 +286,7 @@ ${header('ventures')}
   </section>
   ${jumpNav([['/projects/', 'Projects', '01'], ['/founders/', 'Founders', '03']])}
 </main>
+${dock('ventures')}
 ${footer()}
 </body>
 </html>
@@ -287,6 +315,7 @@ function foundersPage() {
         ${f.highlights.length ? `<h3 class="sub">Highlights</h3><ol class="hl-list">${f.highlights.map((h) => `<li>${fmt(h)}</li>`).join('')}</ol>` : ''}
         <h3 class="sub">Focus</h3><p class="focus">${f.focus.map(esc).join('<span>/</span>')}</p>
         ${built.length ? `<h3 class="sub">Projects</h3><p class="built">${built.map((b) => `<a href="/projects/${b.slug}/">${esc(b.name)}</a>`).join('')}</p>` : ''}
+        ${f.repos ? `<h3 class="sub">Own work on GitHub</h3><ul class="repo-list">${f.repos.map((r) => `<li>${ext(r.href, `<span class="rl-name">${esc(r.name)}${icon.external}</span><span class="rl-lang">${esc(r.lang)}</span><span class="rl-desc">${esc(r.desc)}</span>`, 'rl')}</li>`).join('')}</ul>` : ''}
       </div>
     </article>`;
     })
@@ -299,6 +328,7 @@ ${header('founders')}
   <section class="wrap fdr-list">${cards}</section>
   ${jumpNav([['/projects/', 'Projects', '01'], ['/ventures/', 'Ventures', '02']])}
 </main>
+${dock('founders')}
 ${footer()}
 </body>
 </html>
@@ -403,23 +433,9 @@ ${header('projects')}
       <div><dt>Team</dt><dd>${p.team.map((k) => esc(people[k].name)).join(', ')}</dd></div>
     </dl>
   </section>
-  <div class="pbar" data-pbar>
-    <div class="wrap pbar-in">
-      <div class="dd">
-        <button type="button" class="dd-btn dd-proj" aria-expanded="false" aria-controls="dd-proj"><span class="r-code">${code(idx)}</span><strong>${esc(p.name)}</strong>${CHEV}</button>
-        <div class="dd-panel" id="dd-proj" hidden><p class="dd-h">All projects</p>${open.map((x, k) => `<a href="/projects/${x.slug}/"${x.slug === p.slug ? ' aria-current="page"' : ''}><span>${code(k)}</span>${esc(x.name)}</a>`).join('')}</div>
-      </div>
-      <div class="dd">
-        <button type="button" class="dd-btn dd-sec" aria-expanded="false" aria-controls="dd-sec"><span class="dd-k">Section</span><span class="pbar-cur">${sections[0][1]}</span>${CHEV}</button>
-        <div class="dd-panel dd-panel-r" id="dd-sec" hidden><p class="dd-h">On this page</p>${sections.map(([id, l]) => `<a href="#${id}" data-sec="${id}"><span>${num[id]}</span>${l}</a>${id === 'code' && t.repo ? `<div class="dd-sub">${t.repo.map(([path]) => `<a href="#repo-${slugify(path)}" data-repo>${esc(path)}</a>`).join('')}</div>` : ''}`).join('')}</div>
-      </div>
-      <div class="pbar-links">${p.demo && !p.demo.inPage ? ext(p.demo.href, `${icon.play}<span>Demo</span>`, 'pl') : p.demo?.inPage ? `<a class="pl" href="#demo">${icon.play}<span>Demo</span></a>` : ''}${p.repo ? ext(p.repo, `${icon.github}<span>Code</span>`, 'pl') : ''}</div>
-    </div>
-  </div>
   <figure class="wrap d-visual reveal">${visual}</figure>
 
   <div class="wrap d-body">
-    <aside class="toc" aria-label="On this page"><ol>${sections.map(([id, l]) => `<li><a href="#${id}"><span>${num[id]}</span>${l}</a></li>`).join('')}</ol></aside>
     <article class="prose">
       ${sec('overview', 'Overview', p.overview.map((x) => `<p>${fmt(x)}</p>`).join(''))}
       ${sec('problem', 'Problem and aim', `<div class="pa-grid"><div class="pa"><h3 class="sub">Problem</h3><p>${fmt(p.problem)}</p></div><div class="pa pa-aim"><h3 class="sub">Aim</h3><p>${fmt(p.aim)}</p></div></div>`)}
@@ -440,6 +456,16 @@ ${header('projects')}
     ${next ? `<a class="pager-link pager-next" href="/projects/${next.slug}/"><span class="pager-k">${code(idx + 1)}${icon.arrow}</span><span class="pager-name">${esc(next.name)}</span></a>` : `<a class="pager-link pager-next" href="/projects/"><span class="pager-k">Index${icon.arrow}</span><span class="pager-name">All projects</span></a>`}
   </nav>
 </main>
+${dock('projects', `<div class="dd dock-dd">
+      <button type="button" class="dd-btn dock-tab dock-menu" aria-expanded="false" aria-controls="dd-sec">${dockIcon.sections}<span class="pbar-cur">${sections[0][1]}</span>${CHEV}</button>
+      <div class="dd-panel dock-panel" id="dd-sec" hidden>
+        <p class="dd-h">${esc(p.name)}</p>
+        ${sections.map(([id, l]) => `<a href="#${id}" data-sec="${id}"><span>${num[id]}</span>${l}</a>${id === 'code' && t.repo ? `<div class="dd-sub">${t.repo.map(([path]) => `<a href="#repo-${slugify(path)}" data-repo>${esc(path)}</a>`).join('')}</div>` : ''}`).join('')}
+        <p class="dd-h dd-h2">Other projects</p>
+        ${open.map((x, k) => `<a href="/projects/${x.slug}/"${x.slug === p.slug ? ' aria-current="page"' : ''}><span>${code(k)}</span>${esc(x.name)}</a>`).join('')}
+      </div>
+    </div>
+    <span class="dock-sep" aria-hidden="true"></span>`)}
 ${footer()}
 </body>
 </html>
