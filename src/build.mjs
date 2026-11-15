@@ -12,7 +12,7 @@ import { glyph, logoMark, icon } from './glyphs.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Cache-busting version: a hash of every stylesheet and script, so a changed file always gets a new URL.
 const V = createHash('sha256')
-  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/css/search.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js', 'assets/js/code.js', 'assets/js/search.js']
+  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/css/search.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js', 'assets/js/code.js', 'assets/js/search.js', 'assets/js/orb.js']
     .map((f) => readFileSync(join(ROOT, f))).join('\n'))
   .digest('hex').slice(0, 10);
 
@@ -53,7 +53,8 @@ function head({ title, description, path, scripts = [], inner = true }) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="${CSP.replace("connect-src 'none'", "connect-src 'self'")}">
+<meta http-equiv="Content-Security-Policy" content="${CSP.replace("connect-src 'none'", `connect-src 'self' ${AI_URL}`)}">
+<meta name="n9-ai" content="${AI_URL}">
 <meta name="n9-search" content="/search-index.json?v=${SV}">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
@@ -116,7 +117,8 @@ function header(active = '', { inner = true, brand = true } = {}) {
 }
 
 const searchIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5.6"/><path d="M13 13l4.2 4.2"/></svg>';
-let SV = '';   // version of the search index, filled in once the index is built
+let SV = '';
+const AI_URL = 'https://nexara9-ai.nexara9.workers.dev';   // the Nexara9 AI Worker (ai-worker/worker.js)   // version of the search index, filled in once the index is built
 
 // Bottom navigation for inside pages. On project pages it also carries the section and project menu.
 const dockIcon = {
@@ -478,7 +480,7 @@ function detailPage(p, idx, prev, next) {
     ? `<img src="/assets/img/projects/${esc(p.image.src)}" alt="${esc(p.image.alt)}" decoding="async">`
     : `<div class="bp ${catClass(p)}" aria-hidden="true"><span class="bp-c bp-tl">${code(idx)}</span><span class="bp-c bp-tr">${p.year}</span><span class="bp-c bp-bl">${esc(p.cats.map(catLabel).join(' · '))}</span><span class="bp-c bp-br">${esc((t.languages || []).map(([l]) => l).slice(0, 2).join(' · '))}</span>${glyph(p.glyph, 'glyph bp-glyph')}</div>`;
 
-  return `${head({ title: `${p.name} · Nexara9`, description: p.short, path: `/projects/${p.slug}/`, scripts: [...(p.widget ? ['demos.js'] : []), 'code.js'] })}
+  return `${head({ title: `${p.name} · Nexara9`, description: p.short, path: `/projects/${p.slug}/`, scripts: [...(p.widget ? ['demos.js'] : []), 'code.js', 'orb.js'] })}
 <body class="page-detail">
 ${header('projects')}
 <main id="main">

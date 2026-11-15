@@ -75,7 +75,7 @@
       setTimeout(() => { label.textContent = 'Copy'; }, 1600);
     });
     root.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); hide(); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); if (document.querySelector('.orb-card:not([hidden]), .orb-menu:not([hidden])')) { document.dispatchEvent(new CustomEvent('orb:escape')); return; } hide(); return; }
       if (e.key !== 'Tab') return;
       const items = Array.from(panel.querySelectorAll(FOCUSABLE)).filter((x) => !x.hidden);
       if (!items.length) return;
@@ -140,6 +140,7 @@
       if (ui.title.textContent !== path) return;
       ui.code.innerHTML = splitLines(html).map((l) => `<span class="ln">${l || ' '}</span>`).join('');
       ui.body.scrollTop = 0; ui.body.scrollLeft = 0;
+      document.dispatchEvent(new CustomEvent('cv:loaded', { detail: { btn, panel: ui.panel, body: ui.body, code: ui.code, project } }));
     } catch (_) {
       ui.code.textContent = 'This file could not be loaded. Open it on GitHub instead.';
     }
@@ -150,6 +151,7 @@
     const done = () => {
       ui.root.hidden = true;
       document.documentElement.style.overflow = ui.overflow;
+      document.dispatchEvent(new CustomEvent('cv:closed'));
       ui.trigger?.focus?.({ preventScroll: true });
     };
     if (reduce) return done();
