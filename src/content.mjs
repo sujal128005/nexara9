@@ -88,7 +88,7 @@ export const founderProfiles = [
     highlights: [
       'Winner, IBM SkillsBuild Hackathon South Region Finale 2026 · National finalist',
       'AWS Student Builder Group Leader: founded the first AWS Student Builder Group at IIITDM Kurnool',
-      '2× hackathon winner · 4th place, RizeOS Hackathon 2026',
+      '2× hackathon winner · Winner, RizeOS Hackathon 2026',
       'Semi-finalist, Flipkart GRiD 8.0',
       'Coordinator, DataWorks Club, IIITDM Kurnool (volunteer → sub-coordinator → coordinator)',
       'Aspire Leadership Program, Cohort 2',
