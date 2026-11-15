@@ -1,0 +1,51 @@
+[
+  {
+    "id": "01_instant_loan_app",
+    "title": "Instant loan app",
+    "subtitle": "Only 0.1% per day",
+    "icon": "bolt",
+    "category": "Digital lending"
+  },
+  {
+    "id": "02_no_cost_emi",
+    "title": "No-Cost EMI phone",
+    "subtitle": "0% interest, they say",
+    "icon": "phone",
+    "category": "EMI checkout"
+  },
+  {
+    "id": "03_credit_card",
+    "title": "Credit card bill",
+    "subtitle": "Pay just the minimum",
+    "icon": "card",
+    "category": "Credit card"
+  },
+  {
+    "id": "04_insurance_pitch",
+    "title": "Agent's WhatsApp pitch",
+    "subtitle": "Double money, guaranteed",
+    "icon": "chat",
+    "category": "Insurance plan"
+  },
+  {
+    "id": "05_home_loan_kfs",
+    "title": "Home loan KFS",
+    "subtitle": "₹40 lakh, floating rate",
+    "icon": "home",
+    "category": "Home loan"
+  },
+  {
+    "id": "06_vehicle_flat_rate",
+    "title": "Two-wheeler loan",
+    "subtitle": "Lowest rate 9%",
+    "icon": "scooter",
+    "category": "Vehicle loan"
+  },
+  {
+    "id": "07_fair_personal_loan",
+    "title": "Co-op bank loan",
+    "subtitle": "A fair offer, for contrast",
+    "icon": "check",
+    "category": "Personal loan"
+  }
+]

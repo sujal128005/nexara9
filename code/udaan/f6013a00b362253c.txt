@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Udaan by G-Cruise Alliance">
+    <title>Udaan - G-Cruise Alliance</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --sky: #87ceeb;
+            --ink: #0b1d33;
+            --gold: #f5b700;
+            --green: #4caf50;
+            --green-dark: #3d8b40;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* White to sky blue on load */
+        body {
+            min-height: 100vh;
+            min-height: 100dvh;
+            background-color: var(--sky);
+            animation: skyFade 3s ease-in-out both;
+            font-family: 'Inter', system-ui, sans-serif;
+            color: var(--ink);
+        }
+
+        @keyframes skyFade {
+            from { background-color: #ffffff; }
+            to   { background-color: var(--sky); }
+        }
+
+        /* Flying plane layer (does not affect layout) */
+        .sky {
+            position: fixed;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .big-airplane {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            display: inline-block;
+            font-size: clamp(80px, 18vw, 150px);
+            line-height: 1;
+            opacity: 0;
+            animation: flyAcross 10s linear forwards;
+        }
+
+        @keyframes flyAcross {
+            0%   { transform: translate(-100%, 100%); opacity: 0; }
+            15%  { opacity: 1; }
+            85%  { opacity: 1; }
+            100% { transform: translate(110vw, -110vh); opacity: 0; }
+        }
+
+        /* Centered content, fades in shortly after load */
+        .content-wrapper {
+            position: relative;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            text-align: center;
+            animation: fadeIn 0.8s ease-out 0.6s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: none; }
+        }
+
+        .logo {
+            font-size: clamp(36px, 8vw, 50px);
+            line-height: 1;
+        }
+
+        .udaan-text {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 800;
+            font-size: clamp(2.8rem, 14vw, 5em);
+            letter-spacing: 0.08em;
+            color: #000;
+            margin: 8px 0 0;
+            line-height: 1.1;
+        }
+
+        .g-cruise-text {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 600;
+            font-size: clamp(1rem, 4.5vw, 1.8em);
+            color: var(--gold);
+            letter-spacing: 0.06em;
+            margin: 4px 0 32px;
+            text-shadow: 0 1px 0 #7a5a00, 0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        .next-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background-color: var(--green);
+            color: #fff;
+            font: 600 1rem 'Inter', system-ui, sans-serif;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+            transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
+        }
+
+        .next-button:hover {
+            background-color: var(--green-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.22);
+        }
+
+        .next-button:focus-visible {
+            outline: 3px solid #fff;
+            outline-offset: 3px;
+        }
+
+        .next-button .arrow {
+            transition: transform 0.2s;
+        }
+
+        .next-button:hover .arrow {
+            transform: translateX(4px);
+        }
+
+        /* Fade-to-black page transition */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background-color: #000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease-in-out;
+            z-index: 10;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            body, .content-wrapper { animation: none; }
+            .big-airplane { display: none; }
+            .overlay { transition: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sky" aria-hidden="true">
+        <span class="big-airplane">✈️</span>
+    </div>
+
+    <main class="content-wrapper">
+        <span class="logo" aria-hidden="true">🛩️</span>
+        <h1 class="udaan-text">UDAAN</h1>
+        <p class="g-cruise-text">G-Cruise Alliance</p>
+        <button class="next-button" type="button">Next Page <span class="arrow" aria-hidden="true">→</span></button>
+    </main>
+
+    <div class="overlay"></div>
+
+    <script>
+        const nextButton = document.querySelector('.next-button');
+        const overlay = document.querySelector('.overlay');
+        const nextPageURL = "index2.html";
+
+        nextButton.addEventListener('click', () => {
+            overlay.classList.add('active');
+            setTimeout(() => {
+                window.location.href = nextPageURL;
+            }, 500);
+        });
+
+        // Clear the black overlay if the user comes back with the Back button
+        window.addEventListener('pageshow', () => {
+            overlay.classList.remove('active');
+        });
+    </script>
+</body>
+</html>

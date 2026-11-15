@@ -1,0 +1,57 @@
+/**
+ * The seeded demo accounts, in one place.
+ *
+ * scripts/reset-demo.ts seeds from this, the README block is generated
+ * from this, and the login screen prints it. A password that exists in
+ * three files is a password that eventually disagrees with itself, and
+ * discovering that at 11 AM on demo day is not recoverable.
+ *
+ * No imports, so it is safe on the client.
+ */
+
+export const DEMO_PASSWORD = "YOUR_SECRET_HERE";
+
+export interface DemoUser {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "sales";
+}
+
+export const DEMO_USERS: DemoUser[] = [
+  {
+    id: "usr_admin_pr",
+    name: "Priya Raghavan",
+    email: "priya.raghavan@khata.example",
+    role: "admin",
+  },
+  {
+    id: "rep_nb_04",
+    name: "Nikhil Bhandari",
+    email: "nikhil.bhandari@khata.example",
+    role: "sales",
+  },
+  {
+    id: "rep_sr_11",
+    name: "Sneha Rathore",
+    email: "sneha.rathore@khata.example",
+    role: "sales",
+  },
+  {
+    id: "rep_am_07",
+    name: "Arjun Menon",
+    email: "arjun.menon@khata.example",
+    role: "sales",
+  },
+];
+
+/**
+ * Whether the login screen prints the credentials.
+ *
+ * Default ON. Being locked out of your own demo is a worse failure than
+ * a development build showing a development password, so this has to be
+ * switched off deliberately rather than switched on deliberately.
+ */
+export function showDemoCredentials(): boolean {
+  return process.env.NEXT_PUBLIC_KHATA_HIDE_DEMO_CREDENTIALS !== "1";
+}

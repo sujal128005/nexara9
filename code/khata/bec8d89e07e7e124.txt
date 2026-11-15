@@ -1,0 +1,323 @@
+/**
+ * Rep drill-down at /reps/[userId]. Admin only.
+ *
+ * A sales user does not get a scoped version of this page — they get a
+ * 404. There is no version of "one rep's record" that belongs to another
+ * rep, so scoping it would be inventing a use case to justify a route.
+ *
+ * Same metrics module as the dashboard, so a rep's figures here and their
+ * row on the team table cannot disagree.
+ */
+
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import { AppHeader } from "@/app/header";
+import {
+  TABLE,
+  TD,
+  TD_LINK,
+  TD_META,
+  TD_NUM,
+  TD_NUM_MUTED,
+  TH,
+  TH_NUM,
+  THEAD_ROW,
+  TR,
+} from "@/app/table";
+import { canReviewOtherReps } from "@/lib/access";
+import { listKhatas, readApproval } from "@/lib/closer";
+import {
+  getUser,
+  isInitialised,
+  listCallsByRep,
+  listCustomers,
+} from "@/lib/db";
+import {
+  factsFromKhata,
+  fieldLabel,
+  misquotedFields,
+  topMisquotedField,
+  totals,
+} from "@/lib/metrics";
+import type { CallFacts } from "@/lib/metrics";
+import { currentSession } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
+
+const LABEL = "font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40";
+const NO_DATA = "insufficient data";
+
+function rupees(n: number): string {
+  return "₹" + n.toFixed(2);
+}
+
+function percent(rate: number | null): string {
+  return rate === null ? NO_DATA : `${(rate * 100).toFixed(1)}%`;
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-10 bg-paper px-8 py-12">
+      {children}
+    </main>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+}) {
+  return (
+    <div className="border-t border-hairline pt-3">
+      <span className={LABEL}>{label}</span>
+      <p
+        className={`mt-1.5 font-mono text-lg ${
+          value === NO_DATA ? "text-ink/35" : "text-ink"
+        }`}
+      >
+        {value}
+      </p>
+      {note && <p className="font-mono text-[11px] text-ink/40">{note}</p>}
+    </div>
+  );
+}
+
+export default async function RepPage({
+  params,
+}: {
+  params: Promise<{ userId: string }>;
+}) {
+  const { userId } = await params;
+
+  if (!isInitialised()) {
+    return (
+      <Shell>
+        <p className="font-sans text-sm text-ink/70">
+          The database has not been initialised.
+        </p>
+      </Shell>
+    );
+  }
+
+  const session = await currentSession();
+  if (!session) {
+    return (
+      <Shell>
+        <p className="font-sans text-sm text-ink/70">Not signed in.</p>
+      </Shell>
+    );
+  }
+  if (!canReviewOtherReps(session.role)) notFound();
+
+  const rep = getUser(userId);
+  if (!rep || rep.role !== "sales") notFound();
+
+  const calls = listCallsByRep(userId);
+  const callIds = new Set(calls.map((c) => c.call_id));
+  const khatas = (await listKhatas()).filter((k) => callIds.has(k.callId));
+
+  const facts: CallFacts[] = [];
+  for (const khata of khatas) {
+    const approval = await readApproval(khata.callId);
+    facts.push(factsFromKhata(khata, userId, approval !== null));
+  }
+  facts.sort((a, b) => (a.endedAt < b.endedAt ? 1 : -1));
+
+  const overall = totals(facts);
+  const topField = topMisquotedField(facts);
+  const allFields = misquotedFields(facts);
+
+  const checked = facts.reduce((s, f) => s + f.coverageChecked, 0);
+  const captured = facts.reduce((s, f) => s + f.coverageUtterances, 0);
+
+  const names = new Map(listCustomers().map((c) => [c.id, c.name]));
+
+  return (
+    <Shell>
+      <AppHeader
+        role={session.role}
+        name={session.name}
+        page="rep record"
+        current=""
+      />
+
+      <section className="-mt-4">
+        <h1 className="font-sans text-xl font-semibold tracking-tight text-ink">
+          {rep.name}
+        </h1>
+        <p className="mt-1 font-mono text-xs text-ink/45">
+          {rep.email} &nbsp;·&nbsp; {userId}
+        </p>
+        <p className="mt-3 max-w-2xl font-sans text-sm leading-relaxed text-ink/60">
+          Everything this rep has closed, and the product field they misquote
+          most often. Read-only — nothing here changes a call or a CRM row.
+        </p>
+      </section>
+
+      {facts.length === 0 ? (
+        <section className="max-w-2xl">
+          <h2 className="font-sans text-lg font-medium text-ink">
+            {rep.name} has not closed a call yet
+          </h2>
+          <p className="mt-2 font-sans text-sm leading-relaxed text-ink/70">
+            Once they close one, this page will show their misquote rate, the
+            product field they get wrong most often, how many corrections were
+            put in front of them, and what share of each call was actually
+            checked — with every call listed below, newest first.
+          </p>
+          <p className="mt-3 font-sans text-sm leading-relaxed text-ink/60">
+            Until then there is nothing to aggregate, and that is not a zero.
+            There is no denominator to divide by, and a 0% misquote rate here
+            would say the opposite of what is true.
+          </p>
+        </section>
+      ) : (
+        <>
+          <section>
+            <h2 className={LABEL}>Record</h2>
+            <div className="mt-4 grid grid-cols-2 gap-x-10 gap-y-7 md:grid-cols-4">
+              <Stat label="Calls" value={String(overall.calls)} />
+              <Stat label="Claims checked" value={String(overall.claims)} />
+              <Stat
+                label="Misquote rate"
+                value={percent(overall.misquoteRate)}
+                note={
+                  overall.misquoteRate === null
+                    ? "no verdicts to divide by"
+                    : `${overall.misquotes} of ${overall.verdicts} claims`
+                }
+              />
+              <Stat
+                label="Coverage"
+                value={captured === 0 ? NO_DATA : `${checked}/${captured}`}
+                note={
+                  captured === 0
+                    ? undefined
+                    : `${((checked / captured) * 100).toFixed(1)}% of utterances checked`
+                }
+              />
+              <Stat
+                label="Corrections offered"
+                value={String(overall.correctionsOffered)}
+                note="self-checked before display"
+              />
+              <Stat
+                label="Fully checked calls"
+                value={`${overall.fullyCheckedCalls}/${overall.calls}`}
+              />
+              <Stat
+                label="Proposals approved"
+                value={`${overall.approvedCalls}/${overall.calls}`}
+              />
+              <Stat label="Model cost" value={rupees(overall.costInr)} />
+            </div>
+          </section>
+
+          <section className="border-t border-hairline pt-8">
+            <h2 className={LABEL}>The field this rep misses most</h2>
+            {topField === null ? (
+              <>
+                <p className="mt-3 font-mono text-2xl text-ink/35">{NO_DATA}</p>
+                <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/60">
+                  No misquotes across {overall.calls} call
+                  {overall.calls === 1 ? "" : "s"}. Nothing to coach.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 font-sans text-2xl font-semibold tracking-tight text-ink">
+                  {fieldLabel(topField.field)}
+                </p>
+                <p className="mt-2 font-mono text-xs text-ink/50">
+                  {topField.field} &nbsp;·&nbsp; wrong {topField.count} time
+                  {topField.count === 1 ? "" : "s"} of {overall.misquotes} total
+                </p>
+                {allFields.length > 1 && (
+                  <ul className="mt-5 flex flex-wrap gap-x-8 gap-y-2">
+                    {allFields.slice(1).map((f) => (
+                      <li
+                        key={f.field}
+                        className="font-mono text-[11px] text-ink/50"
+                      >
+                        {fieldLabel(f.field)}
+                        <span className="ml-2 text-ink/35">{f.count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </section>
+
+          <section className="border-t border-hairline pt-8">
+            <h2 className={LABEL}>Calls — newest first</h2>
+            <table className={TABLE}>
+              <thead>
+                <tr className={THEAD_ROW}>
+                  <th className={TH}>Customer</th>
+                  <th className={TH}>Ended</th>
+                  {[
+                    "Claims",
+                    "Verified",
+                    "Wrong",
+                    "Stale",
+                    "Coverage",
+                    "Approved",
+                    "Cost",
+                  ].map((label) => (
+                    <th key={label} className={TH_NUM}>
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {facts.map((f) => (
+                  <tr key={f.callId} className={TR}>
+                    <td className={TD}>
+                      <Link href={`/calls/${f.callId}`} className={TD_LINK}>
+                        {names.get(f.customerId) ?? f.customerId}
+                      </Link>
+                    </td>
+                    <td className={TD_META}>{shortDate(f.endedAt)}</td>
+                    <td className={TD_NUM}>{f.claims}</td>
+                    <td className={TD_NUM_MUTED}>{f.verified}</td>
+                    <td className={TD_NUM}>{f.wrong}</td>
+                    <td className={TD_NUM_MUTED}>{f.stale}</td>
+                    <td className={f.coverageComplete ? TD_NUM_MUTED : TD_NUM}>
+                      {f.coverageChecked}/{f.coverageUtterances}
+                    </td>
+                    <td className={TD_NUM_MUTED}>{f.approved ? "yes" : "no"}</td>
+                    <td className={TD_NUM_MUTED}>{rupees(f.costInr)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </>
+      )}
+
+      <Link
+        href="/dashboard"
+        className="self-start font-mono text-xs text-ink underline underline-offset-4"
+      >
+        Back to team dashboard
+      </Link>
+    </Shell>
+  );
+}

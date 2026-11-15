@@ -1,0 +1,76 @@
+<!doctype html><html><head><meta charset=utf-8><title>desktop</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:1920px;height:1080px;overflow:hidden;font-family:"Segoe UI",Inter,system-ui,sans-serif}
+body{background:radial-gradient(1400px 900px at 30% 20%,#2b5f9e 0,#163a68 45%,#0d2240 100%)}
+/* taskbar */
+.task{position:absolute;left:0;right:0;bottom:0;height:48px;background:rgba(32,32,36,.92);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;gap:6px;color:#fff;z-index:20}
+.task .ic{width:40px;height:40px;border-radius:8px;display:grid;place-items:center;font-size:20px}
+.task .ic.on{background:rgba(255,255,255,.12);position:relative}.task .ic.on:after{content:"";position:absolute;bottom:2px;width:16px;height:3px;border-radius:2px;background:#6cb8ff}
+.clock{position:absolute;right:18px;text-align:right;font-size:12px;line-height:1.3}
+.tray{position:absolute;right:110px;font-size:14px;opacity:.85;letter-spacing:6px}
+/* windows */
+.win{position:absolute;border-radius:10px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s}
+.hidden{opacity:0;transform:scale(.96);pointer-events:none}
+/* terminal */
+#term{left:250px;top:110px;width:1420px;height:800px;background:#0c0c0c}
+.tbar{height:40px;background:#1f1f1f;display:flex;align-items:center;color:#ddd;font-size:13px}
+.ttab{background:#0c0c0c;height:32px;margin:8px 0 0 10px;border-radius:8px 8px 0 0;padding:0 16px;display:flex;align-items:center;gap:8px}
+.wbtn{margin-left:auto;display:flex}.wbtn span{width:46px;text-align:center;color:#ccc;font-size:14px}
+#tbody{padding:16px 20px;font-family:"Cascadia Mono","JetBrains Mono","DejaVu Sans Mono",monospace;font-size:19px;line-height:1.55;color:#cccccc;white-space:pre-wrap;word-break:break-all}
+.ps{color:#cccccc}.cmd{color:#f9f1a5}.ok{color:#16c60c}.dim{color:#8a8a8a}.url{color:#3b78ff;text-decoration:underline}
+.caret{display:inline-block;width:11px;height:22px;background:#ccc;vertical-align:-4px;animation:bl 1s steps(1) infinite}@keyframes bl{50%{opacity:0}}
+/* browser */
+#browser{left:0;top:0;width:1920px;height:1032px;border-radius:0;background:#fff}
+.chrome{height:86px;background:#dfe3ea;border-bottom:1px solid #c9ced8}
+.tabs{height:42px;display:flex;align-items:flex-end;padding-left:10px;gap:2px}
+.tab{height:34px;min-width:230px;max-width:260px;padding:0 14px;display:flex;align-items:center;gap:9px;font-size:13px;color:#333;border-radius:9px 9px 0 0}
+.tab.on{background:#fff}.tab .fav{width:16px;height:16px;border-radius:4px;background:linear-gradient(135deg,#e8772e,#2a78d6)}
+.tab .x{margin-left:auto;color:#777;font-size:12px}.newtab{font-size:20px;color:#555;padding:0 12px 6px}
+.bwin{margin-left:auto;display:flex;align-self:stretch}.bwin span{width:46px;display:grid;place-items:center;color:#333;font-size:14px}
+.addr{height:44px;background:#fff;display:flex;align-items:center;gap:14px;padding:0 14px;color:#555;font-size:16px}
+.omni{flex:1;height:32px;background:#eef1f5;border-radius:16px;display:flex;align-items:center;padding:0 16px;gap:10px;font-size:15px;color:#222}
+.omni .lock{font-size:13px;color:#666}
+#frame{position:absolute;top:86px;left:0;width:1920px;height:946px;border:0;background:#fff}
+/* cursor */
+#cur{position:absolute;left:960px;top:540px;width:30px;height:30px;z-index:100;pointer-events:none;transition-property:left,top;transition-timing-function:cubic-bezier(.35,.05,.25,1)}
+#cur svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+.ripple{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px solid rgba(232,119,46,.9);z-index:99;pointer-events:none;animation:rp .55s ease-out forwards}
+@keyframes rp{from{transform:scale(.3);opacity:1}to{transform:scale(1.4);opacity:0}}
+</style></head><body>
+<div class="win" id=term>
+ <div class=tbar><div class=ttab>⚡ Windows PowerShell <span style="color:#888;margin-left:8px">✕</span></div><div class=wbtn><span>—</span><span>☐</span><span>✕</span></div></div>
+ <div id=tbody></div>
+</div>
+<div class="win hidden" id=browser>
+ <div class=chrome>
+  <div class=tabs><div class="tab on" id=tab1><i class=fav></i><span id=t1>PixelProof Studio</span><span class=x>✕</span></div>
+   <div class="tab" id=tab2 style="display:none"><i class=fav></i><span>PixelProof findings</span><span class=x>✕</span></div>
+   <div class=newtab>+</div><div class=bwin><span>—</span><span>☐</span><span>✕</span></div></div>
+  <div class=addr><span>←</span><span>→</span><span>⟳</span><div class=omni><span class=lock>ⓘ</span><span id=url>127.0.0.1:8765</span></div><span>☆</span><span>⋮</span></div>
+ </div>
+ <iframe id=frame></iframe>
+</div>
+<div id=cur><svg width="30" height="30" viewBox="0 0 24 24"><path d="M4 2 L4 19 L8.5 15 L11.5 22 L14.5 20.7 L11.6 14 L18 14 Z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+<div class=task>
+ <div class=ic>⊞</div><div class=ic>🔍</div><div class=ic>📁</div><div class="ic on" id=icterm>⚡</div><div class=ic id=icbr>🌐</div><div class=ic>✉</div>
+ <div class=tray>⌃ 📶 🔊 🔋</div><div class=clock><div id=clk>10:42 AM</div><div>14-11-2026</div></div>
+</div>
+<script>
+const T=document.getElementById('tbody');
+window.term={
+ clear(){T.innerHTML=''},
+ line(html){T.insertAdjacentHTML('beforeend',html+'\n');},
+ prompt(){T.insertAdjacentHTML('beforeend','<span class=ps>PS C:\\Users\\demo&gt; </span><span class=cmd id=typing></span><span class=caret id=caret></span>')},
+ type(ch){document.getElementById('typing').textContent+=ch},
+ enter(){const c=document.getElementById('caret');c&&c.remove();const t=document.getElementById('typing');t&&t.removeAttribute('id');T.insertAdjacentHTML('beforeend','\n')}
+};
+window.desk={
+ showBrowser(src){document.getElementById('frame').src=src;document.getElementById('term').classList.add('hidden');
+   document.getElementById('browser').classList.remove('hidden');document.getElementById('icbr').classList.add('on');},
+ url(u){document.getElementById('url').textContent=u},
+ tab2(){document.getElementById('tab2').style.display='';document.getElementById('tab1').classList.remove('on');document.getElementById('tab2').classList.add('on')},
+ tab1(){document.getElementById('tab2').classList.remove('on');document.getElementById('tab1').classList.add('on')},
+ move(x,y,ms){const c=document.getElementById('cur');c.style.transitionDuration=ms+'ms';c.style.left=x+'px';c.style.top=y+'px'},
+ click(x,y){const r=document.createElement('div');r.className='ripple';r.style.left=x+'px';r.style.top=y+'px';document.body.appendChild(r);setTimeout(()=>r.remove(),700)}
+};
+</script></body></html>

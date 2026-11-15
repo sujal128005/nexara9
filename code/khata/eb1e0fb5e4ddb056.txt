@@ -1,0 +1,211 @@
+/**
+ * npm run reset:demo — put the demo back to its opening state.
+ *
+ * Seeds users, customers and deals; clears calls and khatas. A live call
+ * rewrites the deal row and adds a khata, which is the product working
+ * correctly and also why the second run of the demo looks nothing like
+ * the first.
+ *
+ * data/customers.json and data/crm.json are the SEED FIXTURES. They stay
+ * version-controlled and reviewable; SQLite is the runtime store. Seeding
+ * from the files rather than from a copy in this script is what keeps the
+ * demo scripts identical to what the replay driver expects.
+ *
+ * data/product_truth.json is untouched — it is a spec, not a dataset.
+ */
+
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { applySchema, db } from "../lib/db";
+import { hashPassword } from "../lib/auth";
+import { DEMO_PASSWORD, DEMO_USERS } from "../lib/demo-accounts";
+
+const DATA = join(process.cwd(), "data");
+
+interface SeedCustomer {
+  id: string;
+  name: string;
+  city: string;
+  phone: string;
+  cart: { item: string; ticketInr: number };
+  interestedTenureMonths: number;
+  demoScript: Array<{ speaker: string; text: string }>;
+}
+
+interface SeedDeal {
+  customerId: string;
+  repId: string;
+  stage: string;
+  openObjection: string;
+  nextStep: string;
+  quotedTenureMonths: number;
+  attemptsSoFar: number;
+  lastContactAt: string;
+}
+
+/**
+ * Accounts and password come from lib/demo-accounts.ts, which the login
+ * screen also reads. Hashed with scrypt before storage; printed on seed
+ * and written into the README, because being locked out of your own demo
+ * because the password only existed in a closed terminal is a bad five
+ * minutes.
+ */
+const USERS = DEMO_USERS;
+
+applySchema();
+
+const customers = (
+  JSON.parse(readFileSync(join(DATA, "customers.json"), "utf8")) as {
+    customers: SeedCustomer[];
+  }
+).customers;
+
+const deals = (
+  JSON.parse(readFileSync(join(DATA, "crm.json"), "utf8")) as { deals: SeedDeal[] }
+).deals;
+
+const handle = db();
+
+// Children first: calls and khatas reference customers and users.
+handle.exec("DELETE FROM khatas");
+handle.exec("DELETE FROM calls");
+handle.exec("DELETE FROM deals");
+handle.exec("DELETE FROM customers");
+handle.exec("DELETE FROM users");
+
+const now = new Date().toISOString();
+
+const insertUser = handle.prepare(
+  "INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+);
+for (const u of USERS) {
+  insertUser.run(u.id, u.name, u.email, hashPassword(DEMO_PASSWORD), u.role, now);
+}
+
+const ownerByCustomer = new Map(deals.map((d) => [d.customerId, d.repId]));
+
+const insertCustomer = handle.prepare(
+  `INSERT INTO customers (id, name, city, product, ticket_inr, tenure_months, phone, demo_script, assigned_user_id)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+);
+for (const c of customers) {
+  insertCustomer.run(
+    c.id,
+    c.name,
+    c.city,
+    c.cart.item,
+    c.cart.ticketInr,
+    c.interestedTenureMonths,
+    c.phone,
+    JSON.stringify(c.demoScript),
+    ownerByCustomer.get(c.id) ?? null
+  );
+}
+
+const insertDeal = handle.prepare(
+  `INSERT INTO deals (customer_id, stage, open_objection, next_step,
+     quoted_tenure_months, attempts_so_far, last_contact_at,
+     approved_by_user_id, last_call_id)
+   VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
+);
+for (const d of deals) {
+  insertDeal.run(
+    d.customerId,
+    d.stage,
+    d.openObjection,
+    d.nextStep,
+    d.quotedTenureMonths,
+    d.attemptsSoFar,
+    d.lastContactAt
+  );
+}
+
+// Approval records are still files — the schema has no approvals table.
+// They belong to cleared calls, so they go with them.
+const APPROVALS_DIR = join(DATA, "khatas");
+let clearedApprovals = 0;
+if (existsSync(APPROVALS_DIR)) {
+  for (const file of readdirSync(APPROVALS_DIR)) {
+    if (!file.endsWith(".approval.json")) continue;
+    try {
+      rmSync(join(APPROVALS_DIR, file));
+      clearedApprovals++;
+    } catch {
+      // Held open by the dev server; not worth aborting the reset for.
+    }
+  }
+}
+
+console.log(
+  `Seeded ${USERS.length} users, ${customers.length} customers, ${deals.length} deals.`
+);
+if (clearedApprovals > 0) {
+  console.log(`Removed ${clearedApprovals} approval record(s).`);
+}
+console.log("Cleared calls and khatas — the next khata will be genesis.\n");
+
+console.log("Demo credentials — sign in at /login:");
+console.log(`  password for all accounts: ${DEMO_PASSWORD}\n`);
+for (const u of USERS) {
+  const owned = customers.filter((c) => ownerByCustomer.get(c.id) === u.id).length;
+  console.log(
+    `  ${u.role.padEnd(6)} ${u.email.padEnd(34)} ${u.name.padEnd(18)} ${
+      u.role === "sales" ? `${owned} customer${owned === 1 ? "" : "s"}` : ""
+    }`
+  );
+}
+/**
+ * Write the credentials into the README as well as printing them.
+ *
+ * Being locked out of your own demo because the password only ever
+ * existed in a terminal you have since closed is a genuinely bad five
+ * minutes. The block is delimited so re-running this replaces it rather
+ * than stacking copies.
+ */
+const README_PATH = join(process.cwd(), "README.md");
+const START = "<!-- BEGIN:demo-credentials -->";
+const END = "<!-- END:demo-credentials -->";
+
+const rows = USERS.map((u) => {
+  const owned = customers.filter((c) => ownerByCustomer.get(c.id) === u.id).length;
+  return `| ${u.role} | \`${u.email}\` | ${u.name} | ${
+    u.role === "sales" ? `${owned}` : "all"
+  } |`;
+}).join("\n");
+
+const block = [
+  START,
+  "",
+  "## Demo accounts",
+  "",
+  `Every account uses the password \`${DEMO_PASSWORD}\`. Regenerate them with`,
+  "`npm run reset:demo`.",
+  "",
+  "| Role | Email | Name | Customers |",
+  "| --- | --- | --- | --- |",
+  rows,
+  "",
+  "Locked out? Set `KHATA_DISABLE_AUTH=1` in `.env.local` and restart — the",
+  "middleware gate is skipped entirely and you land as the admin.",
+  "",
+  END,
+].join("\n");
+
+try {
+  const readme = existsSync(README_PATH)
+    ? readFileSync(README_PATH, "utf8")
+    : "# Khata\n";
+  const startAt = readme.indexOf(START);
+  const endAt = readme.indexOf(END);
+  const next =
+    startAt !== -1 && endAt > startAt
+      ? readme.slice(0, startAt) + block + readme.slice(endAt + END.length)
+      : `${readme.trimEnd()}\n\n${block}\n`;
+  writeFileSync(README_PATH, next, "utf8");
+  console.log("Credentials written to README.md.\n");
+} catch {
+  console.log("Could not update README.md — credentials are above.\n");
+}
+
+console.log("Demo reset. Reload /console.\n");

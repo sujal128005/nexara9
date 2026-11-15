@@ -1,0 +1,102 @@
+{
+  "product": "Khata Pay-in-3 / Zero-Cost EMI",
+  "version": "4.2",
+  "effectiveFrom": "2026-07-14",
+  "supersedes": "4.1",
+  "currency": "INR",
+
+  "tenures": {
+    "3": {
+      "tenureMonths": 3,
+      "label": "Pay-in-3",
+      "processingFee": 199,
+      "gstPercent": 18,
+      "customerInterestPercent": 0,
+      "merchantSubsidised": true
+    },
+    "6": {
+      "tenureMonths": 6,
+      "label": "6-month EMI",
+      "processingFee": 349,
+      "gstPercent": 18,
+      "customerInterestPercent": 14,
+      "merchantSubsidised": false
+    },
+    "9": {
+      "tenureMonths": 9,
+      "label": "9-month EMI",
+      "processingFee": 499,
+      "gstPercent": 18,
+      "customerInterestPercent": 14,
+      "merchantSubsidised": false
+    }
+  },
+
+  "lateFee": {
+    "flatInr": 250,
+    "monthlyPercentOnOverduePrincipal": 2,
+    "gracePeriodDays": 3
+  },
+
+  "eligibility": {
+    "minAgeYears": 21,
+    "minTicketInr": 3000,
+    "maxTicketInr": 60000
+  },
+
+  "kyc": {
+    "methods": ["Aadhaar OTP", "DigiLocker"],
+    "panRequired": false,
+    "physicalDocsRequired": false
+  },
+
+  "archive": [
+    {
+      "version": "4.1",
+      "effectiveFrom": "2026-03-01",
+      "effectiveTo": "2026-07-13",
+      "changeNote": "3-month processing fee raised from Rs 99 to Rs 199 in v4.2. Everything else unchanged.",
+      "tenures": {
+        "3": {
+          "tenureMonths": 3,
+          "label": "Pay-in-3",
+          "processingFee": 99,
+          "gstPercent": 18,
+          "customerInterestPercent": 0,
+          "merchantSubsidised": true
+        },
+        "6": {
+          "tenureMonths": 6,
+          "label": "6-month EMI",
+          "processingFee": 349,
+          "gstPercent": 18,
+          "customerInterestPercent": 14,
+          "merchantSubsidised": false
+        },
+        "9": {
+          "tenureMonths": 9,
+          "label": "9-month EMI",
+          "processingFee": 499,
+          "gstPercent": 18,
+          "customerInterestPercent": 14,
+          "merchantSubsidised": false
+        }
+      },
+      "lateFee": {
+        "flatInr": 250,
+        "monthlyPercentOnOverduePrincipal": 2,
+        "gracePeriodDays": 3
+      },
+      "eligibility": {
+        "minAgeYears": 21,
+        "minTicketInr": 3000,
+        "maxTicketInr": 60000
+      },
+      "kyc": {
+        "methods": ["Aadhaar OTP", "DigiLocker"],
+        "panRequired": false,
+        "physicalDocsRequired": false
+      }
+    }
+  ]
+}

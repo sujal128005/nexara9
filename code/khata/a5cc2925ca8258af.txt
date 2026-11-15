@@ -1,0 +1,57 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+# ...but the template must be committed, or nobody can set the project up.
+!.env.example
+
+# call audit records. these contain real transcript-derived claims and
+# customer ids; a product about PII handling should not ship them.
+data/khatas/*
+!data/khatas/.gitkeep
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# SQLite runtime store. Seed fixtures live in data/*.json and ARE committed.
+db/*.db
+db/*.db-wal
+db/*.db-shm
+
+PROJECT-LOG.md
+
+PROJECT-LOG.md

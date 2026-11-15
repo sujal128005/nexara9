@@ -1,0 +1,57 @@
+# Copy to .env.local and fill in. .env.local is gitignored; this file is not.
+#
+# NEVER put a real key in this file. This one IS committed to git.
+#
+# Khata speaks two protocols and picks automatically:
+#   - Set KHATA_LLM_BASE_URL + KHATA_LLM_API_KEY -> any OpenAI-compatible
+#     provider (Groq, Cerebras, OpenRouter, Mistral, GitHub Models, Ollama)
+#   - Set GOOGLE_API_KEY                          -> Google Gemini
+#   - Set neither                                 -> offline stub mode, which
+#     runs the entire pipeline deterministically with no network at all
+#
+# Recommended free option: Groq. No credit card, 30 req/min, 14,400/day.
+# https://console.groq.com/keys
+KHATA_LLM_BASE_URL=https://api.groq.com/openai/v1
+KHATA_LLM_API_KEY=
+KHATA_TRIAGE_MODEL=llama-3.1-8b-instant
+KHATA_EXTRACT_MODEL=llama-3.3-70b-versatile
+
+# Google AI Studio instead. Keys start with "AIza".
+# https://aistudio.google.com/apikey
+# GOOGLE_API_KEY=
+
+# Signs the session cookie. 32+ random characters.
+# Generate one with:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Leave empty and a PUBLIC development fallback is used instead, with a
+# startup warning — anyone reading the source could forge a session. Fine
+# for a local demo, never for anything exposed.
+KHATA_SESSION_SECRET=
+
+# Set to 1 to bypass the auth middleware completely. Every protected page
+# opens without a login and you are treated as the seeded admin. This is
+# the escape hatch: a broken session must never be able to kill the demo.
+# Leave unset for normal operation.
+KHATA_DISABLE_AUTH=
+
+# Encryption at rest for data/khatas/. 32 bytes as 64 hex characters.
+# Generate one with:
+#   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# Leave empty and khatas are written in plaintext with a startup warning —
+# the demo never fails on a missing key.
+KHATA_ENCRYPTION_KEY=
+
+# Minimum milliseconds between outbound model calls. Free tiers are
+# capped per minute and triage fires on every finalised utterance, so
+# calls are queued and spaced rather than sent in parallel.
+# 30 rpm -> 2000. 15 rpm -> 4000.
+KHATA_MIN_CALL_GAP_MS=2000
+
+# Where SQLite lives. Defaults to db/khata.db under the project root.
+# Only worth setting to run the self-check against a scratch database.
+KHATA_DB_PATH=
+
+# Set to 1 to hide the seeded demo credentials on the login screen.
+# Defaults to showing them: being locked out of your own demo is worse
+# than a development build printing a development password.
+NEXT_PUBLIC_KHATA_HIDE_DEMO_CREDENTIALS=

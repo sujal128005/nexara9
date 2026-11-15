@@ -1,0 +1,391 @@
+# Khata
+
+**[Live demo](https://khata-avs8.onrender.com/login)** · [Technical write-up](docs/Khata-Tech-Writeup.pdf)
+
+Khata is a real-time co-pilot for inside-sales agents selling a pay-in-3 /
+zero-cost EMI product. It listens to the rep's side of a call, extracts the
+factual claims they make about the product, and checks each one against a
+version-controlled source of truth. When a claim is wrong it says so within
+about a second and offers a corrected sentence the rep can read out.
+
+Every call ends with a khata: an audit receipt listing each claim, its verdict,
+and the exact field in the product spec that produced that verdict.
+
+It is not a suggestion engine. It does not tell the rep what to sell or how to
+handle an objection. It tells them when they have quoted a number that is not
+true.
+
+## Trying it
+
+The hosted instance runs in offline stub mode with no model keys set, so every
+verdict comes from the deterministic path — the same verdicts a live model
+produces, because verification was never the model's job. It is on a free tier,
+so the first request may take up to a minute to wake. The demo credentials at
+the bottom of this file are public by design.
+
+The console models an inbound call, so it opens with the line idle rather
+than with a customer already chosen. Press **Wait for incoming call**, then
+**Answer**, tick consent, and search for the caller by the name they give you.
+
+To see a full call without a microphone, identify one of the three scripted
+customers — Meenakshi Iyer, Rohit Deshmukh or Farhan Qureshi — then tick
+**Replay** and press **Start replay**. The scripted call runs through the same
+pipeline and writes a real khata. Anjali Bhatt has no script; she exists for
+live phone calls, and replay says so rather than offering an empty call.
+
+## Design philosophy
+
+The LLM never decides what is true. Its only job is turning a sentence into a
+structured claim object. A deterministic TypeScript module does the arithmetic
+and issues the verdict.
+
+This is why `lib/adjudicate.ts` imports nothing from `lib/llm.ts`, and why
+`data/product_truth.json` is never sent to a model. The adjudicator resolves a
+claim in single-digit milliseconds because it is doing arithmetic, not
+inference.
+
+The consequence we care about most: when the model is unavailable, wrong, or
+returns nonsense, the verdicts are still correct. Verification was never the
+model's job, so there is nothing to degrade.
+
+## Verdict types
+
+| Verdict | Meaning |
+| --- | --- |
+| `VERIFIED` | Matches the current product spec. |
+| `WRONG` | Contradicts it. |
+| `STALE` | Was true under an archived version. The rep is quoting an old price list. |
+| `UNSUPPORTED` | Nothing in the spec can settle it, so we say nothing rather than guess. |
+
+`STALE` exists because a rep quoting last quarter's fee is making a different
+mistake from one inventing a number, and coaching them the same way is useless.
+The spec carries its own archive: v4.2 is in force from 2026-07-14, v4.1 stopped
+applying on 2026-07-13.
+
+`UNSUPPORTED` is the honest answer, not a failure. A claim we cannot check must
+not be reported as fine.
+
+## The self-check loop
+
+When a claim is `WRONG`, we ask a model to draft a correction. Models get
+numbers wrong, so the draft is not shown to anyone. It is re-parsed into a claim
+and re-adjudicated by the same deterministic path. Three tiers:
+
+1. The model's draft passes re-adjudication, and is shown.
+2. It fails, so a deterministic string template is built from the spec, held to
+   the same standard, and shown instead.
+3. That fails too, so no sentence is shown at all — only the correct figure and
+   the field it came from.
+
+The rep is never shown a sentence that has not survived the same check the
+original claim failed. `lib/correction.ts` also enforces that a correction must
+be about the same kind of thing as the claim it corrects: a fee claim cannot be
+"corrected" by a sentence about interest.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  MIC[Web Speech API, rep channel only] --> RED[lib/redact.ts]
+  REPLAY[Replay driver, scripted call] --> RED
+  RED -->|redacted text only| TRIAGE["/api/triage — is there a claim?"]
+  TRIAGE -->|no| DROP[counted as checked, no claim]
+  TRIAGE -->|yes| EXTRACT["/api/extract — parse into Claim objects"]
+  EXTRACT --> ADJ[lib/adjudicate.ts]
+  TRUTH[(data/product_truth.json)] --> ADJ
+  ADJ --> VERDICT{verdict}
+  VERDICT -->|VERIFIED / STALE / UNSUPPORTED| SHOW[shown on the call log]
+  VERDICT -->|WRONG| DRAFT["/api/correct — draft a sentence"]
+  DRAFT --> RECHECK[re-parse and re-adjudicate]
+  RECHECK -->|passes| SHOW
+  RECHECK -->|fails| TEMPLATE[deterministic template]
+  TEMPLATE -->|passes| SHOW
+  TEMPLATE -->|fails| FIGURE[correct figure only, no sentence]
+  SHOW --> KHATA[khata: hashed, encrypted, written to SQLite]
+  FIGURE --> KHATA
+  KHATA --> APPROVE{rep approves?}
+  APPROVE -->|no| NOTHING[nothing is written to the CRM]
+  APPROVE -->|yes| CRM[whitelisted CRM fields updated]
+```
+
+The customer channel never touches this pipeline:
+
+```mermaid
+flowchart LR
+  CUST[simulated customer line] --> GUARD{speaker}
+  GUARD -->|customer| CLASSIFY["/api/classify — intent and sentiment"]
+  GUARD -->|rep| PIPE[claim pipeline above]
+  CLASSIFY --> SIGNAL[CustomerSignal: no verdict, ever]
+```
+
+We measured what that guard is worth. Running all twelve scripted customer lines
+through the extractor with it bypassed, eight parse as claims and three
+adjudicate `WRONG` — three misquote verdicts filed against a rep for words the
+customer said.
+
+Reads are scoped by role in the SQL, not in the page:
+
+```mermaid
+flowchart LR
+  REQ[request] --> SESSION[signed session cookie]
+  SESSION --> ROLE{role}
+  ROLE -->|sales| OWN["WHERE user_id = ?"]
+  ROLE -->|admin| ALL[no filter]
+  OWN --> DEC[decrypt only these khatas]
+  ALL --> DEC
+```
+
+## Key mechanisms
+
+**Redaction before the network.** `lib/redact.ts` strips phone numbers, Aadhaar,
+PAN, email and the customer's name, and runs in the browser before the first
+fetch. Only redacted text is ever POSTed.
+
+The hard part is what must survive. `₹199`, `14%`, `3 months` and `₹28,400` are
+the claim itself — redact them and there is nothing left to check. `₹60,000` is
+the dangerous case: it is the eligibility ceiling, a number reps quote
+constantly, and to a loose regex it looks like a phone number. Order matters
+too. Email and PAN are letter-anchored so they go first; Aadhaar (12 digits)
+before phone (10), or the phone pattern eats the middle of an Aadhaar number.
+Name substitution goes last so it cannot corrupt tokens already placed.
+
+**Coverage.** Every khata records how many utterances were captured, how many
+completed checking, and how many did not. See "Bugs and learnings" for why.
+
+**Human approval.** Nothing reaches the CRM until a rep clicks approve. The
+proposal is generated at close; the write happens on approval, and only for
+whitelisted fields with validated values.
+
+**Hash chain.** Each khata carries a SHA-256 hash over its own key-sorted JSON
+plus the previous khata's hash. Editing a record after the fact breaks the
+chain. The hash is computed over the plaintext, before encryption, so a khata
+still verifies after being decrypted — encrypting first would make the hash a
+property of one particular ciphertext rather than of the record.
+
+**Encryption at rest.** Khatas are AES-256-GCM encrypted in SQLite when
+`KHATA_ENCRYPTION_KEY` is set. When it is missing or malformed we write
+plaintext and print a loud warning rather than failing the call.
+
+**Offline stub and replay are resilience features, not developer tools.** With
+no API key, `lib/stub.ts` runs the whole pipeline deterministically and every
+claim is tagged `source: "stub"` so the khata records that no model parsed it.
+With no network at all, replay feeds a scripted call in as finalised utterances,
+because Web Speech ships audio to Google's servers and dies with the wifi. In
+both modes the verdicts are genuine, because the adjudicator never needed the
+network.
+
+## Roles
+
+Two roles, and they are two different jobs rather than one job with different
+permissions.
+
+**Sales** place calls. They see only customers assigned to them, only their own
+calls, and only their own khatas.
+
+**Admin** read. They see every rep. They cannot open `/console` at all: an admin
+has no assigned customers, and a call started from an admin session would be
+attributed to them and distort the per-rep figures they exist to read. The rule
+lives in `lib/access.ts`; `/console` is guarded by a server layout, and
+`/api/bootstrap` independently returns nothing to an admin, so the console has
+no data even if the layout is bypassed.
+
+Scoping is a `WHERE` clause, not a filter after fetching. A rep requesting a
+colleague's call id gets the same 404 as a rep requesting an id that does not
+exist, and the khata behind it is never decrypted.
+
+## Routes
+
+| Route | Who | What |
+| --- | --- | --- |
+| `/login` | anyone | Sign in. Seeded credentials shown in a dev block. |
+| `/console` | sales only | The live call: mic or replay, verdicts, khata, approval. |
+| `/product` | both | The product spec, rendered from `product_truth.json`. |
+| `/dashboard` | both | Team record for admin, own record for sales. |
+| `/analytics` | both | One row per closed call. Role-scoped. |
+| `/calls/[callId]` | own calls; admin any | Full read-only review of one call. |
+| `/reps/[userId]` | admin only | One rep's record. 404 for sales. |
+| `/script` | sales only | Rehearsal sheet for a live phone call. Not in the nav. |
+
+## Bugs and learnings
+
+**A false accusation was the worst thing we shipped.** A rep said "the late fee
+is ₹250 flat plus 2% a month on the overdue amount" — which is exactly right.
+Multi-claim extraction split it into a late-fee claim and a spurious `interest`
+claim of 2%, which adjudicated `WRONG`. The system was about to tell a rep they
+had misquoted when they had not. Fixed in `lib/stub.ts`: an interest anchor
+whose window contains late-fee language defers and emits no claim. It was a
+parsing bug, not a prompt problem, and no amount of prompt tuning would have
+found it.
+
+**"We checked and found nothing" and "we could not check" were the same state.**
+Every model call was failing on a bad credential. The console reported "no
+misquotes detected", the close path overwrote a real customer objection with
+"no new objection raised on the last call", and drafted a follow-up saying
+everything discussed stood — after the rep had misquoted twice. Absence of
+evidence had been coded as evidence of absence. Fixed by adding `CallCoverage`
+to the khata and a `coverageGuard()` that withholds `openObjection`, `stage` and
+`nextStep` whenever any utterance went unchecked, and says why.
+
+**A field whitelist that permits any value is not a guard.** A model wrote the
+literal string `"true"` into `openObjection`. The whitelist checked which field
+was being written, never what was being written into it. `validateCrmValue()`
+now checks the value too.
+
+**A test that compares a rep with themselves proves nothing.** Our first
+role-isolation assertion picked two customers that turned out to belong to the
+same rep, so it would have passed regardless of what the scoping did. It now
+selects a user provably not the owner, and asserts that first.
+
+**A green typecheck is not proof.** After moving to SQLite, `customer` became
+nullable, but `tsc` stayed silent because `customers[0]` is not typed as
+possibly-undefined. Annotating the `useMemo` explicitly surfaced ten real sites.
+
+## Live phone calls
+
+Khata already works alongside a real call: the rep sits at the console and
+talks to the customer on an ordinary phone. The browser is not carrying the
+call. It is listening to the rep's microphone, which is the only channel it
+has ever listened to, and the customer's audio never reaches this machine.
+The console states this on screen so an answer to a judge and the answer on
+the display are the same answer.
+
+**The rep must use wired earbuds, not speakerphone.** Web Speech gives one
+undiarized channel, so on speakerphone the customer's question enters as a
+rep utterance and files a misquote against a rep who said nothing — the exact
+false accusation the customer guard exists to prevent. Earbuds solve it
+physically, with no code.
+
+`/script` holds the conversation the two operators rehearse, against a fourth
+seeded customer: Anjali Bhatt, Indore, an LG washing machine at ₹53,700 over
+9 months. Her EMI of ₹6,320.10 is nowhere near Meenakshi's, so a misquoted EMI
+is visibly about her basket rather than a generic figure. Nothing on that page
+records an expected verdict — each rep line is run through redact, extraction
+and the adjudicator at render time and the page prints what actually comes
+back.
+
+## Known limitations
+
+- **Chrome only.** `webkitSpeechRecognition` is not implemented in Firefox or
+  Safari. Replay mode works in any browser.
+- **Grant the mic as "Allow", not "Allow this time."** The recognition loop
+  restarts continuously, and a one-shot grant makes it stop mid-call.
+- **`npm run build` needs internet.** `next/font/google` fetches IBM Plex at
+  build time. `npm run dev` degrades to fallback fonts and runs fine offline,
+  but a production build on venue wifi will fail. Build before you travel.
+- **One audio channel.** Web Speech gives no diarization, so a real customer
+  side cannot exist on a live call. The customer channel is replay only and is
+  labelled simulated everywhere it appears.
+- **A khata stores claims, not the transcript.** An utterance that produced no
+  claim leaves no text behind, so `/calls/[callId]` reproduces the checkable
+  part of a call and states plainly how much it is not showing.
+- **Corrections offered is measurable; corrections accepted is not.** Nothing
+  observes whether the rep read the sentence out, so the dashboard prints
+  "insufficient data" rather than substituting a proxy.
+- **Khatas are encrypted at rest but decrypted to render a page.** In production
+  this route would sit behind the same identity provider as the CRM.
+- **The cost figure covers model inference only.** Speech-to-text is unpriced.
+  The browser API is free but is not licensable for production use.
+- **We have not performed a DPDP Act gap analysis.** Data minimisation and
+  encryption at rest are implemented; compliance is not claimed.
+- **`unredact` is not a perfect inverse for names.** Every part of a customer's
+  name collapses to one `[CUST_NAME]` token by design, so restoring gives the
+  full name back where a first name was used.
+- **Middleware is a redirect, not the security boundary.** Every page and route
+  re-reads the session and scopes its own query. The `middleware` file
+  convention is also deprecated in Next 16.3 and prints a warning on boot.
+
+## Repository layout
+
+```text
+app/
+  api/            triage, extract, correct, classify, close, bootstrap, auth
+  console/        the live call (client component + server role guard)
+  calls/[callId]/ read-only call review
+  reps/[userId]/  per-rep record, admin only
+  dashboard/      role-aware summary
+  analytics/      call log
+  product/        the spec, rendered
+  login/
+lib/
+  adjudicate.ts   deterministic verdicts. no model, ever
+  emi.ts          reducing-balance EMI, total payable, effective APR
+  redact.ts       PII stripping and restoration
+  llm.ts          two transports: OpenAI-compatible and Gemini
+  stub.ts         offline pipeline, no network
+  correction.ts   the self-check loop
+  closer.ts       khata, hash chain, encryption, CRM guard
+  db.ts           SQLite via node:sqlite, and every scoping helper
+  auth.ts         scrypt passwords, signed session cookies
+  access.ts       what each role may do
+  metrics.ts      dashboard aggregation, pure functions
+  selfcheck.ts    324 assertions, no test framework
+data/
+  product_truth.json   the spec. version-controlled on purpose
+  customers.json       seed fixtures
+  crm.json             seed fixtures
+db/schema.sql
+docs/             technical write-up
+scripts/          db-init, reset-demo
+```
+
+**Product terms stay a file, not a table.** SQLite holds customers, deals, calls
+and khatas. `product_truth.json` deliberately does not move: it is a spec rather
+than a dataset, its git history is part of the audit story, and both the
+adjudicator and `/product` must read identical bytes.
+
+## Running locally
+
+Requires Node 22 or later — `lib/db.ts` uses the built-in `node:sqlite` module,
+so there is no database dependency to install.
+
+```bash
+npm install
+cp .env.example .env.local   # works with everything left blank
+npm run db:init              # create db/khata.db from db/schema.sql
+npm run reset:demo           # seed users, customers, deals; print credentials
+npm run selfcheck            # 324 assertions, exits non-zero on failure
+npm run dev
+```
+
+Open `http://localhost:3000` and sign in. You will land on `/console` as a rep
+or `/dashboard` as an admin.
+
+With `.env.local` left blank the app runs in offline stub mode with no network
+calls at all, and the verdicts are identical. To use a real model, set
+`KHATA_LLM_BASE_URL` and `KHATA_LLM_API_KEY` for any OpenAI-compatible provider,
+or `GOOGLE_API_KEY` for Gemini. Every variable is documented in `.env.example`.
+
+`npm run reset:demo` restores the opening state at any time: it reseeds from
+`data/*.json`, clears calls and khatas, prints the credentials and rewrites the
+block below.
+
+To run a call without a microphone: press **Wait for incoming call**, then
+**Answer**, tick consent, search for one of the three scripted customers, tick
+**Replay** and press **Start replay**. The scripted call runs through the same
+pipeline and writes a real khata.
+
+<!-- BEGIN:demo-credentials -->
+
+## Demo accounts
+
+Every account uses the password `khata-demo-2026`. Regenerate them with
+`npm run reset:demo`.
+
+| Role | Email | Name | Customers |
+| --- | --- | --- | --- |
+| admin | `priya.raghavan@khata.example` | Priya Raghavan | all |
+| sales | `nikhil.bhandari@khata.example` | Nikhil Bhandari | 3 |
+| sales | `sneha.rathore@khata.example` | Sneha Rathore | 1 |
+| sales | `arjun.menon@khata.example` | Arjun Menon | 0 |
+
+Locked out? Set `KHATA_DISABLE_AUTH=1` in `.env.local` and restart — the
+middleware gate is skipped entirely and you land as the admin.
+
+<!-- END:demo-credentials -->
+
+## Built by
+
+**Sujal** and **Vaishnavi** — Team Code Catalyst
+IIITDM Kurnool
+
+Built for AI Build 2026 at KL University.

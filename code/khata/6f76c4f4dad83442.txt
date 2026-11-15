@@ -1,0 +1,11 @@
+import { redirect } from "next/navigation";
+
+import { homeFor } from "@/lib/access";
+import { currentSession } from "@/lib/session";
+
+// / is not gated by middleware, so an unauthenticated hit falls through
+// to /login via the console guard.
+export default async function Home() {
+  const session = await currentSession();
+  redirect(session ? homeFor(session.role) : "/login");
+}

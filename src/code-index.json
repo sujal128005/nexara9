@@ -1,0 +1,4133 @@
+{
+ "udaan": {
+  "repo": "sujal128005/Project-Udaan",
+  "branch": "main",
+  "files": [
+   {
+    "path": "README.md",
+    "bytes": 73,
+    "lang": "markdown",
+    "lines": 3,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "index.html",
+    "bytes": 6223,
+    "lang": "xml",
+    "lines": 203,
+    "key": "f6013a00b362253c"
+   },
+   {
+    "path": "index2.html",
+    "bytes": 3183,
+    "lang": "xml",
+    "lines": 103,
+    "key": "ee7a83c6261516ab"
+   }
+  ]
+ },
+ "moodie-foodie": {
+  "repo": "sujal128005/moodie-foodie",
+  "branch": "main",
+  "files": [
+   {
+    "path": "LICENSE",
+    "bytes": 1071,
+    "lang": "plaintext",
+    "lines": 21,
+    "key": "0398ccd0f49298b1"
+   },
+   {
+    "path": "README.md",
+    "bytes": 2412,
+    "lang": "markdown",
+    "lines": 50,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "code/data.js",
+    "bytes": 8493,
+    "lang": "javascript",
+    "masked": true,
+    "lines": 117,
+    "key": "2ab2a57256510a5e"
+   },
+   {
+    "path": "code/index.html",
+    "bytes": 16137,
+    "lang": "xml",
+    "lines": 322,
+    "key": "324083e0e2a8a4df"
+   },
+   {
+    "path": "code/logic.js",
+    "bytes": 18500,
+    "lang": "javascript",
+    "masked": true,
+    "lines": 424,
+    "key": "2def0af93f654638"
+   },
+   {
+    "path": "index.html",
+    "bytes": 241,
+    "lang": "xml",
+    "lines": 11,
+    "key": "f6013a00b362253c"
+   },
+   {
+    "path": "work-flow logic",
+    "bytes": 1265,
+    "lang": "plaintext",
+    "lines": 35,
+    "key": "91c5368ca3393a4b"
+   }
+  ]
+ },
+ "nexgen": {
+  "repo": "sujal128005/NexGen_Study_Guardian",
+  "branch": "main",
+  "files": [
+   {
+    "path": "1_Dashboard/index.css",
+    "bytes": 17810,
+    "lang": "css",
+    "lines": 356,
+    "key": "513da4ceb9e174ac"
+   },
+   {
+    "path": "1_Dashboard/index.html",
+    "bytes": 7577,
+    "lang": "xml",
+    "lines": 155,
+    "key": "4e2651e90bf6e01d"
+   },
+   {
+    "path": "1_Dashboard/index.js",
+    "bytes": 6923,
+    "lang": "javascript",
+    "lines": 181,
+    "key": "ecb57e87d07a4161"
+   },
+   {
+    "path": "2_AIPaperGenerator/aipapergen.css",
+    "bytes": 17524,
+    "lang": "css",
+    "lines": 494,
+    "key": "fbe5d2077371bc6b"
+   },
+   {
+    "path": "2_AIPaperGenerator/aipapergen.html",
+    "bytes": 7647,
+    "lang": "xml",
+    "lines": 170,
+    "key": "2f21f67b0b3a900c"
+   },
+   {
+    "path": "2_AIPaperGenerator/aipapergen.js",
+    "bytes": 12317,
+    "lang": "javascript",
+    "lines": 303,
+    "key": "ebd56fdb540cac37"
+   },
+   {
+    "path": "3_PYQ_Archive/archive.css",
+    "bytes": 17338,
+    "lang": "css",
+    "lines": 211,
+    "key": "e598c04dba41c4fa"
+   },
+   {
+    "path": "3_PYQ_Archive/archive.html",
+    "bytes": 9005,
+    "lang": "xml",
+    "lines": 196,
+    "key": "f2ae725bbd53dd9d"
+   },
+   {
+    "path": "3_PYQ_Archive/archive.js",
+    "bytes": 13171,
+    "lang": "javascript",
+    "lines": 298,
+    "key": "3607edd9935fd582"
+   },
+   {
+    "path": "4_Branch_Channels/channels.css",
+    "bytes": 19541,
+    "lang": "css",
+    "lines": 347,
+    "key": "1e38332e83bacbf8"
+   },
+   {
+    "path": "4_Branch_Channels/channels.html",
+    "bytes": 17137,
+    "lang": "xml",
+    "lines": 304,
+    "key": "264e2b51a2bd7348"
+   },
+   {
+    "path": "4_Branch_Channels/channels.js",
+    "bytes": 14611,
+    "lang": "javascript",
+    "lines": 333,
+    "key": "ac3fae68c20938b1"
+   },
+   {
+    "path": "5_Code_Editor/editor.css",
+    "bytes": 17925,
+    "lang": "css",
+    "lines": 213,
+    "key": "b5b980e09887bdb4"
+   },
+   {
+    "path": "5_Code_Editor/editor.html",
+    "bytes": 9096,
+    "lang": "xml",
+    "lines": 173,
+    "key": "8fd565d35e9faa82"
+   },
+   {
+    "path": "5_Code_Editor/editor.js",
+    "bytes": 14369,
+    "lang": "javascript",
+    "lines": 381,
+    "key": "e8d7c9563bb4767f"
+   },
+   {
+    "path": "6_Notes_Repository/notes.css",
+    "bytes": 15821,
+    "lang": "css",
+    "lines": 244,
+    "key": "1a0b97a948057934"
+   },
+   {
+    "path": "6_Notes_Repository/notes.html",
+    "bytes": 9953,
+    "lang": "xml",
+    "lines": 210,
+    "key": "d8e5d615e9bf353f"
+   },
+   {
+    "path": "6_Notes_Repository/notes.js",
+    "bytes": 11492,
+    "lang": "javascript",
+    "lines": 284,
+    "key": "9080e49777cb6713"
+   },
+   {
+    "path": "7_Syllabus_List/syllabus-list.css",
+    "bytes": 16620,
+    "lang": "css",
+    "lines": 281,
+    "key": "995120ed28c3174b"
+   },
+   {
+    "path": "7_Syllabus_List/syllabus-list.html",
+    "bytes": 9255,
+    "lang": "xml",
+    "lines": 189,
+    "key": "1011c15fae6efd3d"
+   },
+   {
+    "path": "7_Syllabus_List/syllabus-list.js",
+    "bytes": 11057,
+    "lang": "javascript",
+    "lines": 255,
+    "key": "794f6d10e51d0c0f"
+   },
+   {
+    "path": "8_Syllabus/syllabus.css",
+    "bytes": 16438,
+    "lang": "css",
+    "lines": 318,
+    "key": "9fd92cd8927fa74d"
+   },
+   {
+    "path": "8_Syllabus/syllabus.html",
+    "bytes": 14448,
+    "lang": "xml",
+    "lines": 287,
+    "key": "1c57bcfada1b2ff4"
+   },
+   {
+    "path": "8_Syllabus/syllabus.js",
+    "bytes": 11980,
+    "lang": "javascript",
+    "lines": 291,
+    "key": "5c07ad8d71ab9445"
+   },
+   {
+    "path": "NexGen_html_code/README.md",
+    "bytes": 8,
+    "lang": "markdown",
+    "lines": 1,
+    "key": "d9d67965f3898361"
+   },
+   {
+    "path": "NexGen_html_code/aipapergen.html",
+    "bytes": 34813,
+    "lang": "xml",
+    "lines": 912,
+    "key": "580e7d7ce9907a84"
+   },
+   {
+    "path": "NexGen_html_code/archive.html",
+    "bytes": 35701,
+    "lang": "xml",
+    "lines": 621,
+    "key": "db50e1b0ea3809c7"
+   },
+   {
+    "path": "NexGen_html_code/channels.html",
+    "bytes": 48159,
+    "lang": "xml",
+    "lines": 920,
+    "key": "656ae64a252e32d4"
+   },
+   {
+    "path": "NexGen_html_code/dashboard.html",
+    "bytes": 28901,
+    "lang": "xml",
+    "lines": 607,
+    "key": "8ea902af6008c81e"
+   },
+   {
+    "path": "NexGen_html_code/editor.html",
+    "bytes": 39679,
+    "lang": "xml",
+    "lines": 777,
+    "key": "b5436ad4f0cc953c"
+   },
+   {
+    "path": "NexGen_html_code/notes.html",
+    "bytes": 33050,
+    "lang": "xml",
+    "lines": 646,
+    "key": "f8326b2ae6b48881"
+   },
+   {
+    "path": "NexGen_html_code/syllabus-list.html",
+    "bytes": 33753,
+    "lang": "xml",
+    "lines": 642,
+    "key": "0d643d649e259555"
+   },
+   {
+    "path": "NexGen_html_code/syllabus.html",
+    "bytes": 38921,
+    "lang": "xml",
+    "lines": 812,
+    "key": "17f4166e9b4b394b"
+   },
+   {
+    "path": "README.md",
+    "bytes": 5152,
+    "lang": "markdown",
+    "lines": 116,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "index.html",
+    "bytes": 352,
+    "lang": "xml",
+    "lines": 12,
+    "key": "f6013a00b362253c"
+   }
+  ]
+ },
+ "binance-futures-bot": {
+  "repo": "sujal128005/binance-futures-trading-bot",
+  "branch": "main",
+  "files": [
+   {
+    "path": ".env.example",
+    "bytes": 70,
+    "lang": "plaintext",
+    "masked": true,
+    "lines": 2,
+    "key": "d4dae00d11854b35"
+   },
+   {
+    "path": ".gitignore",
+    "bytes": 4688,
+    "lang": "plaintext",
+    "lines": 207,
+    "key": "a5cc2925ca8258af"
+   },
+   {
+    "path": "README.md",
+    "bytes": 4022,
+    "lang": "markdown",
+    "lines": 218,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "bot/client.py",
+    "bytes": 337,
+    "lang": "python",
+    "lines": 11,
+    "key": "5780ecc0a05699e1"
+   },
+   {
+    "path": "bot/logger.py",
+    "bytes": 276,
+    "lang": "python",
+    "lines": 11,
+    "key": "a4a8335ea0e5679e"
+   },
+   {
+    "path": "bot/orders.py",
+    "bytes": 750,
+    "lang": "python",
+    "lines": 26,
+    "key": "4ceb23743eb6b3d1"
+   },
+   {
+    "path": "cli.py",
+    "bytes": 1199,
+    "lang": "python",
+    "lines": 30,
+    "key": "155c3b607ba082a5"
+   },
+   {
+    "path": "requirements.txt",
+    "bytes": 35,
+    "lang": "plaintext",
+    "lines": 3,
+    "key": "19359a61ae2446b5"
+   }
+  ]
+ },
+ "finance-api": {
+  "repo": "sujal128005/finance_backend",
+  "branch": "main",
+  "files": [
+   {
+    "path": ".gitignore",
+    "bytes": 39,
+    "lang": "plaintext",
+    "lines": 4,
+    "key": "a5cc2925ca8258af"
+   },
+   {
+    "path": "README.md",
+    "bytes": 371,
+    "lang": "markdown",
+    "lines": 12,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "database.py",
+    "bytes": 1054,
+    "lang": "python",
+    "lines": 41,
+    "key": "12d0bfc8adac6eee"
+   },
+   {
+    "path": "main.py",
+    "bytes": 2699,
+    "lang": "python",
+    "lines": 60,
+    "key": "f1bdda93d9a278e3"
+   },
+   {
+    "path": "requirements.txt",
+    "bytes": 132,
+    "lang": "plaintext",
+    "lines": 8,
+    "key": "19359a61ae2446b5"
+   },
+   {
+    "path": "schemas.py",
+    "bytes": 632,
+    "lang": "python",
+    "lines": 27,
+    "key": "dc854a8114ddd470"
+   },
+   {
+    "path": "test_main.py",
+    "bytes": 1307,
+    "lang": "python",
+    "lines": 38,
+    "key": "a23e969147c8e853"
+   }
+  ]
+ },
+ "khata": {
+  "repo": "sujal128005/khata",
+  "branch": "main",
+  "files": [
+   {
+    "path": ".env.example",
+    "bytes": 2551,
+    "lang": "plaintext",
+    "lines": 57,
+    "key": "d4dae00d11854b35"
+   },
+   {
+    "path": ".gitignore",
+    "bytes": 886,
+    "lang": "plaintext",
+    "lines": 57,
+    "key": "a5cc2925ca8258af"
+   },
+   {
+    "path": "CONTRIBUTORS.md",
+    "bytes": 1139,
+    "lang": "markdown",
+    "lines": 29,
+    "key": "419d52dcfa39c76b"
+   },
+   {
+    "path": "LICENSE",
+    "bytes": 1081,
+    "lang": "plaintext",
+    "lines": 21,
+    "key": "0398ccd0f49298b1"
+   },
+   {
+    "path": "README.md",
+    "bytes": 18414,
+    "lang": "markdown",
+    "lines": 391,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "app/analytics/page.tsx",
+    "bytes": 12850,
+    "lang": "typescript",
+    "lines": 349,
+    "key": "a4f70334f42bacda"
+   },
+   {
+    "path": "app/api/auth/login/route.ts",
+    "bytes": 2761,
+    "lang": "typescript",
+    "lines": 99,
+    "key": "99bea047b02b4931"
+   },
+   {
+    "path": "app/api/auth/logout/route.ts",
+    "bytes": 597,
+    "lang": "typescript",
+    "lines": 22,
+    "key": "6198d1bf512888f3"
+   },
+   {
+    "path": "app/api/bootstrap/route.ts",
+    "bytes": 1238,
+    "lang": "typescript",
+    "lines": 37,
+    "key": "ea753d36ea5d6ec9"
+   },
+   {
+    "path": "app/api/classify/route.ts",
+    "bytes": 3447,
+    "lang": "typescript",
+    "lines": 117,
+    "key": "ddd1915e83114f95"
+   },
+   {
+    "path": "app/api/close/route.ts",
+    "bytes": 12198,
+    "lang": "typescript",
+    "lines": 376,
+    "key": "be4f47f3963dc65c"
+   },
+   {
+    "path": "app/api/correct/route.ts",
+    "bytes": 7206,
+    "lang": "typescript",
+    "lines": 237,
+    "key": "80fdfe55a644e0a3"
+   },
+   {
+    "path": "app/api/extract/route.ts",
+    "bytes": 9175,
+    "lang": "typescript",
+    "lines": 280,
+    "key": "bdc00487ee4e29bd"
+   },
+   {
+    "path": "app/api/triage/route.ts",
+    "bytes": 4133,
+    "lang": "typescript",
+    "lines": 134,
+    "key": "2eb4a27548c7ea7a"
+   },
+   {
+    "path": "app/calls/[callId]/page.tsx",
+    "bytes": 22576,
+    "lang": "typescript",
+    "lines": 555,
+    "key": "9f69b237a2967458"
+   },
+   {
+    "path": "app/console/layout.tsx",
+    "bytes": 985,
+    "lang": "typescript",
+    "lines": 30,
+    "key": "40305143f13304f4"
+   },
+   {
+    "path": "app/console/page.tsx",
+    "bytes": 81769,
+    "lang": "typescript",
+    "lines": 2183,
+    "key": "e48346ba50d7c9e9"
+   },
+   {
+    "path": "app/dashboard/page.tsx",
+    "bytes": 16422,
+    "lang": "typescript",
+    "lines": 485,
+    "key": "12fef110c4fa21b6"
+   },
+   {
+    "path": "app/globals.css",
+    "bytes": 1566,
+    "lang": "css",
+    "lines": 62,
+    "key": "4dfa49b133211615"
+   },
+   {
+    "path": "app/header.tsx",
+    "bytes": 2838,
+    "lang": "typescript",
+    "lines": 84,
+    "key": "f9fca61153a89c61"
+   },
+   {
+    "path": "app/layout.tsx",
+    "bytes": 850,
+    "lang": "typescript",
+    "lines": 38,
+    "key": "ee80c90a95b380fd"
+   },
+   {
+    "path": "app/login/page.tsx",
+    "bytes": 7554,
+    "lang": "typescript",
+    "lines": 202,
+    "key": "ef6d8010637089bf"
+   },
+   {
+    "path": "app/logout-button.tsx",
+    "bytes": 1160,
+    "lang": "typescript",
+    "lines": 32,
+    "key": "e8d1d2f409bfa340"
+   },
+   {
+    "path": "app/page.tsx",
+    "bytes": 382,
+    "lang": "typescript",
+    "lines": 11,
+    "key": "6f76c4f4dad83442"
+   },
+   {
+    "path": "app/product/page.tsx",
+    "bytes": 15006,
+    "lang": "typescript",
+    "lines": 414,
+    "key": "0ebf82c05d2c4f0a"
+   },
+   {
+    "path": "app/reps/[userId]/page.tsx",
+    "bytes": 10665,
+    "lang": "typescript",
+    "lines": 323,
+    "key": "bec8d89e07e7e124"
+   },
+   {
+    "path": "app/script/page.tsx",
+    "bytes": 8754,
+    "lang": "typescript",
+    "lines": 224,
+    "key": "7d4021363dc23e18"
+   },
+   {
+    "path": "app/script/print-button.tsx",
+    "bytes": 452,
+    "lang": "typescript",
+    "lines": 14,
+    "key": "0a4abb314f651c66"
+   },
+   {
+    "path": "app/table.tsx",
+    "bytes": 1846,
+    "lang": "typescript",
+    "lines": 43,
+    "key": "ed876fc49948fda7"
+   },
+   {
+    "path": "data/crm.json",
+    "bytes": 2970,
+    "lang": "json",
+    "lines": 69,
+    "key": "472586d6ca5257b9"
+   },
+   {
+    "path": "data/customers.json",
+    "bytes": 6078,
+    "lang": "json",
+    "masked": true,
+    "lines": 179,
+    "key": "35884323d67620da"
+   },
+   {
+    "path": "data/product_truth.json",
+    "bytes": 2414,
+    "lang": "json",
+    "lines": 102,
+    "key": "aaabb3256391df07"
+   },
+   {
+    "path": "data/rates.json",
+    "bytes": 1229,
+    "lang": "json",
+    "lines": 27,
+    "key": "2bc0b57aef651f4a"
+   },
+   {
+    "path": "db/schema.sql",
+    "bytes": 2327,
+    "lang": "sql",
+    "lines": 67,
+    "key": "d19519c76e8593a7"
+   },
+   {
+    "path": "eslint.config.mjs",
+    "bytes": 465,
+    "lang": "javascript",
+    "lines": 18,
+    "key": "461c8d07f6daba9a"
+   },
+   {
+    "path": "lib/access.ts",
+    "bytes": 2041,
+    "lang": "typescript",
+    "lines": 53,
+    "key": "aa9c599c2cd3758c"
+   },
+   {
+    "path": "lib/adjudicate.ts",
+    "bytes": 18163,
+    "lang": "typescript",
+    "lines": 592,
+    "key": "59c47edfe56ddd73"
+   },
+   {
+    "path": "lib/auth-shared.ts",
+    "bytes": 1005,
+    "lang": "typescript",
+    "lines": 26,
+    "key": "c03f81904708412f"
+   },
+   {
+    "path": "lib/auth.ts",
+    "bytes": 4291,
+    "lang": "typescript",
+    "lines": 152,
+    "key": "7350ead4a29d992c"
+   },
+   {
+    "path": "lib/bootstrap.ts",
+    "bytes": 3753,
+    "lang": "typescript",
+    "lines": 128,
+    "key": "03341473db123fd8"
+   },
+   {
+    "path": "lib/callflow.ts",
+    "bytes": 5149,
+    "lang": "typescript",
+    "lines": 130,
+    "key": "2da7f56a1bb89d0a"
+   },
+   {
+    "path": "lib/closer.ts",
+    "bytes": 25354,
+    "lang": "typescript",
+    "lines": 808,
+    "key": "db47c64ee94da44d"
+   },
+   {
+    "path": "lib/correction.ts",
+    "bytes": 7287,
+    "lang": "typescript",
+    "lines": 210,
+    "key": "ca65da4c5db398b5"
+   },
+   {
+    "path": "lib/db.ts",
+    "bytes": 10924,
+    "lang": "typescript",
+    "lines": 365,
+    "key": "e3746f45c99e3d9f"
+   },
+   {
+    "path": "lib/demo-accounts.ts",
+    "bytes": 1451,
+    "lang": "typescript",
+    "masked": true,
+    "lines": 57,
+    "key": "8bf93e2c4c249f5a"
+   },
+   {
+    "path": "lib/emi.ts",
+    "bytes": 4859,
+    "lang": "typescript",
+    "lines": 141,
+    "key": "8c35fb353b5b659b"
+   },
+   {
+    "path": "lib/livescript.ts",
+    "bytes": 4667,
+    "lang": "typescript",
+    "lines": 128,
+    "key": "e659c3ee09737e1f"
+   },
+   {
+    "path": "lib/llm.ts",
+    "bytes": 13714,
+    "lang": "typescript",
+    "lines": 455,
+    "key": "e09d77b5003fe82b"
+   },
+   {
+    "path": "lib/metrics.ts",
+    "bytes": 5505,
+    "lang": "typescript",
+    "lines": 183,
+    "key": "3a7ec8aa04a96dbd"
+   },
+   {
+    "path": "lib/redact.ts",
+    "bytes": 5490,
+    "lang": "typescript",
+    "lines": 155,
+    "key": "9fa1981aa50668f9"
+   },
+   {
+    "path": "lib/selfcheck.ts",
+    "bytes": 70745,
+    "lang": "typescript",
+    "masked": true,
+    "lines": 2079,
+    "key": "f8c6ab4ea096bc80"
+   },
+   {
+    "path": "lib/session.ts",
+    "bytes": 1648,
+    "lang": "typescript",
+    "lines": 53,
+    "key": "694d45ab7a86ac0d"
+   },
+   {
+    "path": "lib/stub.ts",
+    "bytes": 14531,
+    "lang": "typescript",
+    "lines": 444,
+    "key": "c1e2d11d5fd39694"
+   },
+   {
+    "path": "lib/types.ts",
+    "bytes": 8875,
+    "lang": "typescript",
+    "lines": 223,
+    "key": "79efdb51715b7017"
+   },
+   {
+    "path": "lib/useListener.ts",
+    "bytes": 10361,
+    "lang": "typescript",
+    "lines": 310,
+    "key": "f0791be1fa50eebb"
+   },
+   {
+    "path": "middleware.ts",
+    "bytes": 3265,
+    "lang": "typescript",
+    "lines": 108,
+    "key": "306298667dd8f63c"
+   },
+   {
+    "path": "next.config.ts",
+    "bytes": 133,
+    "lang": "typescript",
+    "lines": 7,
+    "key": "a0c2fdd26b1bc645"
+   },
+   {
+    "path": "package.json",
+    "bytes": 767,
+    "lang": "json",
+    "lines": 31,
+    "key": "7030d0b2f71b999f"
+   },
+   {
+    "path": "postcss.config.mjs",
+    "bytes": 94,
+    "lang": "javascript",
+    "lines": 7,
+    "key": "aaf1cf9fa3c8ee0e"
+   },
+   {
+    "path": "scripts/db-init.ts",
+    "bytes": 832,
+    "lang": "typescript",
+    "lines": 24,
+    "key": "80628b488e8d5165"
+   },
+   {
+    "path": "scripts/reset-demo.ts",
+    "bytes": 6471,
+    "lang": "typescript",
+    "lines": 211,
+    "key": "eb1e0fb5e4ddb056"
+   },
+   {
+    "path": "tsconfig.json",
+    "bytes": 666,
+    "lang": "json",
+    "lines": 34,
+    "key": "61ebb9fd6e8cf908"
+   }
+  ]
+ },
+ "stealth": {
+  "repo": "sujal128005/bouncerkya",
+  "branch": "main",
+  "files": [
+   {
+    "path": ".env.example",
+    "bytes": 2993,
+    "lang": "plaintext",
+    "masked": true,
+    "lines": 64,
+    "key": "d4dae00d11854b35"
+   },
+   {
+    "path": ".gitignore",
+    "bytes": 731,
+    "lang": "plaintext",
+    "lines": 56,
+    "key": "a5cc2925ca8258af"
+   },
+   {
+    "path": "README.md",
+    "bytes": 34927,
+    "lang": "markdown",
+    "lines": 717,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "app/_components/icons.tsx",
+    "bytes": 4065,
+    "lang": "typescript",
+    "lines": 137,
+    "key": "51470ac9431be62e"
+   },
+   {
+    "path": "app/_components/reveal.tsx",
+    "bytes": 2494,
+    "lang": "typescript",
+    "lines": 76,
+    "key": "8c2344889ba90c6f"
+   },
+   {
+    "path": "app/_components/setup-notice.tsx",
+    "bytes": 1198,
+    "lang": "typescript",
+    "lines": 34,
+    "key": "cc1fcef96f8210f6"
+   },
+   {
+    "path": "app/_components/site-footer.tsx",
+    "bytes": 4498,
+    "lang": "typescript",
+    "lines": 110,
+    "key": "0cdf6c2ba721ddf2"
+   },
+   {
+    "path": "app/_components/theme-toggle.tsx",
+    "bytes": 3718,
+    "lang": "typescript",
+    "lines": 115,
+    "key": "7753379ae2541b80"
+   },
+   {
+    "path": "app/_components/top-bar.tsx",
+    "bytes": 3773,
+    "lang": "typescript",
+    "lines": 92,
+    "key": "0e7cf839a7a6f555"
+   },
+   {
+    "path": "app/_components/ui.tsx",
+    "bytes": 7857,
+    "lang": "typescript",
+    "lines": 288,
+    "key": "ee815fbd4a719879"
+   },
+   {
+    "path": "app/api/agent/run/route.ts",
+    "bytes": 6996,
+    "lang": "typescript",
+    "lines": 207,
+    "key": "a6ca0208c1294e1b"
+   },
+   {
+    "path": "app/api/razorpay/webhook/route.ts",
+    "bytes": 2443,
+    "lang": "typescript",
+    "lines": 76,
+    "key": "59d17f76e55c446a"
+   },
+   {
+    "path": "app/api/reveal/route.ts",
+    "bytes": 4353,
+    "lang": "typescript",
+    "lines": 129,
+    "key": "80e78c3916b6de6b"
+   },
+   {
+    "path": "app/api/step-up/[id]/route.ts",
+    "bytes": 1907,
+    "lang": "typescript",
+    "lines": 65,
+    "key": "c37b86f8ce94403b"
+   },
+   {
+    "path": "app/approvals/_components/step-up-card.tsx",
+    "bytes": 8213,
+    "lang": "typescript",
+    "lines": 223,
+    "key": "523b655ead530f77"
+   },
+   {
+    "path": "app/approvals/page.tsx",
+    "bytes": 5299,
+    "lang": "typescript",
+    "lines": 123,
+    "key": "12022b82f74bc741"
+   },
+   {
+    "path": "app/console/page.tsx",
+    "bytes": 787,
+    "lang": "typescript",
+    "lines": 25,
+    "key": "e48346ba50d7c9e9"
+   },
+   {
+    "path": "app/error.tsx",
+    "bytes": 2515,
+    "lang": "typescript",
+    "lines": 66,
+    "key": "c9f02fe82f121faf"
+   },
+   {
+    "path": "app/evidence/page.tsx",
+    "bytes": 8328,
+    "lang": "typescript",
+    "lines": 204,
+    "key": "299c5dde3e53e3cb"
+   },
+   {
+    "path": "app/globals.css",
+    "bytes": 11618,
+    "lang": "css",
+    "lines": 362,
+    "key": "4dfa49b133211615"
+   },
+   {
+    "path": "app/inbox/page.tsx",
+    "bytes": 370,
+    "lang": "typescript",
+    "lines": 12,
+    "key": "039330670048b772"
+   },
+   {
+    "path": "app/layout.tsx",
+    "bytes": 2408,
+    "lang": "typescript",
+    "lines": 57,
+    "key": "ee80c90a95b380fd"
+   },
+   {
+    "path": "app/page.tsx",
+    "bytes": 15367,
+    "lang": "typescript",
+    "lines": 380,
+    "key": "6f76c4f4dad83442"
+   },
+   {
+    "path": "app/privacy/page.tsx",
+    "bytes": 7839,
+    "lang": "typescript",
+    "lines": 190,
+    "key": "12e4d831c6083b27"
+   },
+   {
+    "path": "app/requests/[id]/page.tsx",
+    "bytes": 13476,
+    "lang": "typescript",
+    "lines": 320,
+    "key": "53b7f1b36dc548f2"
+   },
+   {
+    "path": "app/requests/_components/cart-panel.tsx",
+    "bytes": 7041,
+    "lang": "typescript",
+    "lines": 200,
+    "key": "097d3d16c74ecdf0"
+   },
+   {
+    "path": "app/requests/_components/diff-panel.tsx",
+    "bytes": 3636,
+    "lang": "typescript",
+    "lines": 104,
+    "key": "cb53ddc22ae8d080"
+   },
+   {
+    "path": "app/requests/_components/mandate-panel.tsx",
+    "bytes": 4918,
+    "lang": "typescript",
+    "lines": 140,
+    "key": "c6e76ac2d8f36e4d"
+   },
+   {
+    "path": "app/requests/_components/no-diff-panel.tsx",
+    "bytes": 2042,
+    "lang": "typescript",
+    "lines": 52,
+    "key": "968e7a3503a71a8f"
+   },
+   {
+    "path": "app/requests/_components/outcome-panel.tsx",
+    "bytes": 5460,
+    "lang": "typescript",
+    "lines": 148,
+    "key": "e50f8099783ef298"
+   },
+   {
+    "path": "app/requests/_components/request-list.tsx",
+    "bytes": 4701,
+    "lang": "typescript",
+    "lines": 127,
+    "key": "c0a666c0f2359206"
+   },
+   {
+    "path": "app/requests/_components/run-agent.tsx",
+    "bytes": 9387,
+    "lang": "typescript",
+    "lines": 276,
+    "key": "cce7fdb200948d7c"
+   },
+   {
+    "path": "app/requests/_components/short-circuit-panel.tsx",
+    "bytes": 2073,
+    "lang": "typescript",
+    "lines": 55,
+    "key": "c19adb7ba92eb87f"
+   },
+   {
+    "path": "app/requests/_components/stage-section.tsx",
+    "bytes": 3076,
+    "lang": "typescript",
+    "lines": 91,
+    "key": "2523af3e4bc957a0"
+   },
+   {
+    "path": "app/requests/_components/verification-checks.tsx",
+    "bytes": 1756,
+    "lang": "typescript",
+    "lines": 66,
+    "key": "d31e2612f794f74c"
+   },
+   {
+    "path": "app/requests/page.tsx",
+    "bytes": 5014,
+    "lang": "typescript",
+    "lines": 129,
+    "key": "2bf72a6baa48ffa4"
+   },
+   {
+    "path": "eslint.config.mjs",
+    "bytes": 465,
+    "lang": "javascript",
+    "lines": 18,
+    "key": "461c8d07f6daba9a"
+   },
+   {
+    "path": "eval/README.md",
+    "bytes": 2137,
+    "lang": "markdown",
+    "lines": 52,
+    "key": "8e6f000bf67089d6"
+   },
+   {
+    "path": "eval/credentials/generate.ts",
+    "bytes": 9847,
+    "lang": "typescript",
+    "lines": 298,
+    "key": "327c9fcbed7ffa3d"
+   },
+   {
+    "path": "eval/credentials/run.ts",
+    "bytes": 8664,
+    "lang": "typescript",
+    "lines": 224,
+    "key": "46afeb3b3d1b4f7a"
+   },
+   {
+    "path": "eval/dataset.ts",
+    "bytes": 11269,
+    "lang": "typescript",
+    "lines": 293,
+    "key": "b5c83d580ad32c76"
+   },
+   {
+    "path": "eval/run.ts",
+    "bytes": 12827,
+    "lang": "typescript",
+    "lines": 350,
+    "key": "507f6856d60b4e57"
+   },
+   {
+    "path": "eval/semantic/generate.ts",
+    "bytes": 13895,
+    "lang": "typescript",
+    "lines": 362,
+    "key": "2085b05783ee0438"
+   },
+   {
+    "path": "eval/semantic/run.ts",
+    "bytes": 16627,
+    "lang": "typescript",
+    "lines": 421,
+    "key": "4fb02520866d2832"
+   },
+   {
+    "path": "instrumentation.ts",
+    "bytes": 1923,
+    "lang": "typescript",
+    "lines": 47,
+    "key": "826e9a3284860438"
+   },
+   {
+    "path": "lib/agent/agent.test.ts",
+    "bytes": 10679,
+    "lang": "typescript",
+    "lines": 266,
+    "key": "5d19221fe5879e34"
+   },
+   {
+    "path": "lib/agent/anthropic.ts",
+    "bytes": 3222,
+    "lang": "typescript",
+    "lines": 111,
+    "key": "84b13d6696f18325"
+   },
+   {
+    "path": "lib/agent/contract.ts",
+    "bytes": 1329,
+    "lang": "typescript",
+    "lines": 54,
+    "key": "091935ad576e471e"
+   },
+   {
+    "path": "lib/agent/events.ts",
+    "bytes": 3833,
+    "lang": "typescript",
+    "lines": 107,
+    "key": "09a9702373bcb4e9"
+   },
+   {
+    "path": "lib/agent/index.ts",
+    "bytes": 423,
+    "lang": "typescript",
+    "lines": 14,
+    "key": "0c71a5c4c72ad674"
+   },
+   {
+    "path": "lib/agent/openai-compatible.ts",
+    "bytes": 4227,
+    "lang": "typescript",
+    "lines": 148,
+    "key": "7138cd4b48963910"
+   },
+   {
+    "path": "lib/agent/provider.test.ts",
+    "bytes": 1783,
+    "lang": "typescript",
+    "lines": 48,
+    "key": "35562d49c606eb79"
+   },
+   {
+    "path": "lib/agent/provider.ts",
+    "bytes": 2924,
+    "lang": "typescript",
+    "lines": 96,
+    "key": "d59627c2396efad8"
+   },
+   {
+    "path": "lib/agent/run.ts",
+    "bytes": 9823,
+    "lang": "typescript",
+    "lines": 318,
+    "key": "78e08e215ecaa3fd"
+   },
+   {
+    "path": "lib/agent/submit.ts",
+    "bytes": 11879,
+    "lang": "typescript",
+    "lines": 379,
+    "key": "03f536f38964644d"
+   },
+   {
+    "path": "lib/agent/tools.ts",
+    "bytes": 5949,
+    "lang": "typescript",
+    "lines": 185,
+    "key": "3ea51792a417bcb8"
+   },
+   {
+    "path": "lib/ai/anthropic.ts",
+    "bytes": 2582,
+    "lang": "typescript",
+    "lines": 85,
+    "key": "ae80a03a0b1cc560"
+   },
+   {
+    "path": "lib/ai/contract.ts",
+    "bytes": 2109,
+    "lang": "typescript",
+    "lines": 70,
+    "key": "374db8b610357716"
+   },
+   {
+    "path": "lib/ai/engine.test.ts",
+    "bytes": 8511,
+    "lang": "typescript",
+    "lines": 246,
+    "key": "79b7f53a8b641734"
+   },
+   {
+    "path": "lib/ai/engine.ts",
+    "bytes": 4801,
+    "lang": "typescript",
+    "lines": 163,
+    "key": "676b931035a30144"
+   },
+   {
+    "path": "lib/ai/index.ts",
+    "bytes": 388,
+    "lang": "typescript",
+    "lines": 13,
+    "key": "c2ea9f378372d3ce"
+   },
+   {
+    "path": "lib/ai/openai-compatible.test.ts",
+    "bytes": 7948,
+    "lang": "typescript",
+    "lines": 244,
+    "key": "1e8e55e60ea3fef0"
+   },
+   {
+    "path": "lib/ai/openai-compatible.ts",
+    "bytes": 4352,
+    "lang": "typescript",
+    "lines": 147,
+    "key": "19a5c45906e6623c"
+   },
+   {
+    "path": "lib/ai/pacing.test.ts",
+    "bytes": 4053,
+    "lang": "typescript",
+    "lines": 132,
+    "key": "9ce69e1d3aaa5ec6"
+   },
+   {
+    "path": "lib/ai/pacing.ts",
+    "bytes": 2665,
+    "lang": "typescript",
+    "lines": 80,
+    "key": "a05f9eef71cd59cc"
+   },
+   {
+    "path": "lib/ai/prompt.ts",
+    "bytes": 7548,
+    "lang": "typescript",
+    "lines": 141,
+    "key": "d1e25d2258a7262e"
+   },
+   {
+    "path": "lib/ai/provider.ts",
+    "bytes": 5874,
+    "lang": "typescript",
+    "lines": 178,
+    "key": "c6c711f6bc3f47c0"
+   },
+   {
+    "path": "lib/audit/chain.test.ts",
+    "bytes": 7603,
+    "lang": "typescript",
+    "lines": 236,
+    "key": "f6e07d4e7c83a698"
+   },
+   {
+    "path": "lib/audit/chain.ts",
+    "bytes": 8467,
+    "lang": "typescript",
+    "lines": 251,
+    "key": "10a2fff518535dff"
+   },
+   {
+    "path": "lib/audit/index.ts",
+    "bytes": 3734,
+    "lang": "typescript",
+    "lines": 125,
+    "key": "053cfc59b6df0b52"
+   },
+   {
+    "path": "lib/catalog/index.ts",
+    "bytes": 7022,
+    "lang": "typescript",
+    "lines": 198,
+    "key": "481117a6ff33ba26"
+   },
+   {
+    "path": "lib/config-check.test.ts",
+    "bytes": 8929,
+    "lang": "typescript",
+    "masked": true,
+    "lines": 244,
+    "key": "7cf79c2a14f0074d"
+   },
+   {
+    "path": "lib/config-check.ts",
+    "bytes": 8342,
+    "lang": "typescript",
+    "lines": 224,
+    "key": "212bf98650125111"
+   },
+   {
+    "path": "lib/db-reset.test.ts",
+    "bytes": 2439,
+    "lang": "typescript",
+    "lines": 69,
+    "key": "75cc0e6f324bd4f0"
+   },
+   {
+    "path": "lib/db-reset.ts",
+    "bytes": 3528,
+    "lang": "typescript",
+    "lines": 86,
+    "key": "be496a5f089304b2"
+   },
+   {
+    "path": "lib/db.ts",
+    "bytes": 1716,
+    "lang": "typescript",
+    "lines": 46,
+    "key": "e3746f45c99e3d9f"
+   },
+   {
+    "path": "lib/env-vars.test.ts",
+    "bytes": 3036,
+    "lang": "typescript",
+    "lines": 99,
+    "key": "4ee056d912a668dc"
+   },
+   {
+    "path": "lib/env-vars.ts",
+    "bytes": 2944,
+    "lang": "typescript",
+    "lines": 88,
+    "key": "f59e8b5ffcd56e1f"
+   },
+   {
+    "path": "lib/env.ts",
+    "bytes": 1473,
+    "lang": "typescript",
+    "lines": 41,
+    "key": "82e71c52c79b044e"
+   },
+   {
+    "path": "lib/evidence.ts",
+    "bytes": 14156,
+    "lang": "typescript",
+    "lines": 302,
+    "key": "3b01e0c5a0032dd0"
+   },
+   {
+    "path": "lib/extraction/evidence.ts",
+    "bytes": 3812,
+    "lang": "typescript",
+    "lines": 123,
+    "key": "6d3aeba9bc947b67"
+   },
+   {
+    "path": "lib/extraction/extraction.test.ts",
+    "bytes": 6714,
+    "lang": "typescript",
+    "lines": 176,
+    "key": "562572ee792a359e"
+   },
+   {
+    "path": "lib/extraction/index.ts",
+    "bytes": 356,
+    "lang": "typescript",
+    "lines": 10,
+    "key": "b6b90b138872d602"
+   },
+   {
+    "path": "lib/extraction/injection.ts",
+    "bytes": 3465,
+    "lang": "typescript",
+    "lines": 85,
+    "key": "39329221982817f1"
+   },
+   {
+    "path": "lib/extraction/taxonomy.ts",
+    "bytes": 2005,
+    "lang": "typescript",
+    "lines": 65,
+    "key": "5171e692ac1f77be"
+   },
+   {
+    "path": "lib/format.ts",
+    "bytes": 1530,
+    "lang": "typescript",
+    "lines": 46,
+    "key": "08b6b5b4bfb63f6f"
+   },
+   {
+    "path": "lib/load-env.ts",
+    "bytes": 362,
+    "lang": "typescript",
+    "lines": 9,
+    "key": "c328b358038fe0c7"
+   },
+   {
+    "path": "lib/mandate/canonical.ts",
+    "bytes": 1204,
+    "lang": "typescript",
+    "lines": 35,
+    "key": "68bc53cb7debb271"
+   },
+   {
+    "path": "lib/mandate/index.ts",
+    "bytes": 335,
+    "lang": "typescript",
+    "lines": 10,
+    "key": "782245f1c90746a1"
+   },
+   {
+    "path": "lib/mandate/keys.ts",
+    "bytes": 4032,
+    "lang": "typescript",
+    "lines": 132,
+    "key": "e5ff2da4117149cf"
+   },
+   {
+    "path": "lib/mandate/verify.test.ts",
+    "bytes": 7137,
+    "lang": "typescript",
+    "lines": 229,
+    "key": "a14b680e02254aa0"
+   },
+   {
+    "path": "lib/mandate/verify.ts",
+    "bytes": 6560,
+    "lang": "typescript",
+    "lines": 229,
+    "key": "cf2fc1053d630ddc"
+   },
+   {
+    "path": "lib/pipeline/evaluate.test.ts",
+    "bytes": 11864,
+    "lang": "typescript",
+    "lines": 376,
+    "key": "6b4831241d04285c"
+   },
+   {
+    "path": "lib/pipeline/evaluate.ts",
+    "bytes": 6739,
+    "lang": "typescript",
+    "lines": 197,
+    "key": "6ca1f9dded83bc96"
+   },
+   {
+    "path": "lib/pipeline/index.ts",
+    "bytes": 555,
+    "lang": "typescript",
+    "lines": 14,
+    "key": "53954a675c7480f0"
+   },
+   {
+    "path": "lib/pipeline/persist.ts",
+    "bytes": 4771,
+    "lang": "typescript",
+    "lines": 148,
+    "key": "ff29c729d3acfc10"
+   },
+   {
+    "path": "lib/policy/index.ts",
+    "bytes": 267,
+    "lang": "typescript",
+    "lines": 8,
+    "key": "aed971dff8515db5"
+   },
+   {
+    "path": "lib/policy/thresholds.test.ts",
+    "bytes": 5390,
+    "lang": "typescript",
+    "lines": 177,
+    "key": "24212b995ce5b04b"
+   },
+   {
+    "path": "lib/policy/thresholds.ts",
+    "bytes": 3971,
+    "lang": "typescript",
+    "lines": 105,
+    "key": "e031cee61576a947"
+   },
+   {
+    "path": "lib/privacy/at-rest.test.ts",
+    "bytes": 7509,
+    "lang": "typescript",
+    "lines": 210,
+    "key": "9a21ae729a3ebb40"
+   },
+   {
+    "path": "lib/privacy/at-rest.ts",
+    "bytes": 3644,
+    "lang": "typescript",
+    "lines": 94,
+    "key": "5dd20ca05a39549e"
+   },
+   {
+    "path": "lib/privacy/crypto.test.ts",
+    "bytes": 7639,
+    "lang": "typescript",
+    "lines": 201,
+    "key": "80513437bb475fda"
+   },
+   {
+    "path": "lib/privacy/crypto.ts",
+    "bytes": 7825,
+    "lang": "typescript",
+    "lines": 215,
+    "key": "8970fb8336f8f53f"
+   },
+   {
+    "path": "lib/privacy/disclosures.ts",
+    "bytes": 9751,
+    "lang": "typescript",
+    "lines": 134,
+    "key": "d332593bdc7c6e74"
+   },
+   {
+    "path": "lib/privacy/egress.test.ts",
+    "bytes": 7735,
+    "lang": "typescript",
+    "lines": 227,
+    "key": "da5f1284c45acb95"
+   },
+   {
+    "path": "lib/privacy/egress.ts",
+    "bytes": 5413,
+    "lang": "typescript",
+    "lines": 138,
+    "key": "93460ca4e13ad3ff"
+   },
+   {
+    "path": "lib/privacy/redact.test.ts",
+    "bytes": 3258,
+    "lang": "typescript",
+    "lines": 96,
+    "key": "29a2e9ac2ce3d659"
+   },
+   {
+    "path": "lib/privacy/redact.ts",
+    "bytes": 3887,
+    "lang": "typescript",
+    "lines": 96,
+    "key": "8827ce850ef23fb2"
+   },
+   {
+    "path": "lib/rate-limit.test.ts",
+    "bytes": 3364,
+    "lang": "typescript",
+    "lines": 107,
+    "key": "abddd5bef808df56"
+   },
+   {
+    "path": "lib/rate-limit.ts",
+    "bytes": 3944,
+    "lang": "typescript",
+    "lines": 113,
+    "key": "e6d4d6729bd1c3bd"
+   },
+   {
+    "path": "lib/razorpay/client.ts",
+    "bytes": 2166,
+    "lang": "typescript",
+    "lines": 84,
+    "key": "ac0e4578cdac7be4"
+   },
+   {
+    "path": "lib/razorpay/index.ts",
+    "bytes": 191,
+    "lang": "typescript",
+    "lines": 8,
+    "key": "724de61b13c90df2"
+   },
+   {
+    "path": "lib/razorpay/orders.ts",
+    "bytes": 5799,
+    "lang": "typescript",
+    "lines": 193,
+    "key": "a13403a715f009dc"
+   },
+   {
+    "path": "lib/razorpay/razorpay.test.ts",
+    "bytes": 9582,
+    "lang": "typescript",
+    "masked": true,
+    "lines": 290,
+    "key": "8fb67b85347152d7"
+   },
+   {
+    "path": "lib/razorpay/webhook.ts",
+    "bytes": 2694,
+    "lang": "typescript",
+    "lines": 91,
+    "key": "2a2b8485b1a87d40"
+   },
+   {
+    "path": "lib/scenario-label.test.ts",
+    "bytes": 7104,
+    "lang": "typescript",
+    "lines": 215,
+    "key": "d29b1985825d1728"
+   },
+   {
+    "path": "lib/scenario-label.ts",
+    "bytes": 8489,
+    "lang": "typescript",
+    "lines": 225,
+    "key": "096fdfc570355344"
+   },
+   {
+    "path": "lib/scenarios.ts",
+    "bytes": 8752,
+    "lang": "typescript",
+    "lines": 264,
+    "key": "d3392f521f7398d8"
+   },
+   {
+    "path": "lib/step-up.test.ts",
+    "bytes": 7292,
+    "lang": "typescript",
+    "lines": 221,
+    "key": "0dafe58202a954c5"
+   },
+   {
+    "path": "lib/step-up.ts",
+    "bytes": 3554,
+    "lang": "typescript",
+    "lines": 108,
+    "key": "ca28780c03fa33d6"
+   },
+   {
+    "path": "lib/test-support/temp-database.test.ts",
+    "bytes": 2320,
+    "lang": "typescript",
+    "lines": 73,
+    "key": "b7f59dfea1708598"
+   },
+   {
+    "path": "lib/test-support/temp-database.ts",
+    "bytes": 3066,
+    "lang": "typescript",
+    "lines": 88,
+    "key": "aad1bd9bbc1eed8d"
+   },
+   {
+    "path": "next.config.ts",
+    "bytes": 505,
+    "lang": "typescript",
+    "lines": 12,
+    "key": "a0c2fdd26b1bc645"
+   },
+   {
+    "path": "package.json",
+    "bytes": 1772,
+    "lang": "json",
+    "lines": 56,
+    "key": "7030d0b2f71b999f"
+   },
+   {
+    "path": "postcss.config.mjs",
+    "bytes": 94,
+    "lang": "javascript",
+    "lines": 7,
+    "key": "aaf1cf9fa3c8ee0e"
+   },
+   {
+    "path": "prisma.config.ts",
+    "bytes": 509,
+    "lang": "typescript",
+    "lines": 18,
+    "key": "be983bc7228bdcb9"
+   },
+   {
+    "path": "prisma/migrate.ts",
+    "bytes": 3714,
+    "lang": "typescript",
+    "lines": 113,
+    "key": "7cb239b2385c9873"
+   },
+   {
+    "path": "prisma/migrations/20260825000000_init/migration.sql",
+    "bytes": 6039,
+    "lang": "sql",
+    "lines": 157,
+    "key": "e3db5ea003cf19ff"
+   },
+   {
+    "path": "prisma/migrations/20260826090000_mandate_verification/migration.sql",
+    "bytes": 1992,
+    "lang": "sql",
+    "lines": 37,
+    "key": "90a37891b57ec799"
+   },
+   {
+    "path": "prisma/migrations/20260826120000_diff_provenance/migration.sql",
+    "bytes": 446,
+    "lang": "sql",
+    "lines": 9,
+    "key": "918691eb3a2da56c"
+   },
+   {
+    "path": "prisma/migrations/20260826140000_audit_chain/migration.sql",
+    "bytes": 1415,
+    "lang": "sql",
+    "lines": 24,
+    "key": "ed2a294f6fd2a16f"
+   },
+   {
+    "path": "prisma/migrations/20260827090000_razorpay_orders/migration.sql",
+    "bytes": 1119,
+    "lang": "sql",
+    "lines": 26,
+    "key": "95fbce6be1438fe7"
+   },
+   {
+    "path": "prisma/migrations/migration_lock.toml",
+    "bytes": 138,
+    "lang": "ini",
+    "lines": 4,
+    "key": "49d9a6f38d32f9c3"
+   },
+   {
+    "path": "prisma/schema.prisma",
+    "bytes": 8348,
+    "lang": "typescript",
+    "lines": 257,
+    "key": "187e4a6f168cf143"
+   },
+   {
+    "path": "prisma/seed.ts",
+    "bytes": 27079,
+    "lang": "typescript",
+    "lines": 811,
+    "key": "24cfb542de583800"
+   },
+   {
+    "path": "schemas/decision.ts",
+    "bytes": 2113,
+    "lang": "typescript",
+    "lines": 68,
+    "key": "5a41361607c02a94"
+   },
+   {
+    "path": "schemas/diff.ts",
+    "bytes": 2766,
+    "lang": "typescript",
+    "lines": 70,
+    "key": "92e96a063383d7dd"
+   },
+   {
+    "path": "schemas/identity.ts",
+    "bytes": 576,
+    "lang": "typescript",
+    "lines": 20,
+    "key": "ef275d5c7057cf9c"
+   },
+   {
+    "path": "schemas/index.ts",
+    "bytes": 487,
+    "lang": "typescript",
+    "lines": 14,
+    "key": "e506d1974924f2db"
+   },
+   {
+    "path": "schemas/mandate.ts",
+    "bytes": 924,
+    "lang": "typescript",
+    "lines": 27,
+    "key": "1b265b89c6903898"
+   },
+   {
+    "path": "schemas/primitives.ts",
+    "bytes": 1096,
+    "lang": "typescript",
+    "lines": 34,
+    "key": "d72b2107c4e01be4"
+   },
+   {
+    "path": "schemas/purchase.ts",
+    "bytes": 1260,
+    "lang": "typescript",
+    "lines": 38,
+    "key": "3c626556a207b3f6"
+   },
+   {
+    "path": "scripts/agent-run.ts",
+    "bytes": 7283,
+    "lang": "typescript",
+    "lines": 184,
+    "key": "5fba3bbe76f769ae"
+   },
+   {
+    "path": "scripts/db-reset.ts",
+    "bytes": 2201,
+    "lang": "typescript",
+    "lines": 67,
+    "key": "bb422b77ead1ac30"
+   },
+   {
+    "path": "scripts/engine-check.ts",
+    "bytes": 4463,
+    "lang": "typescript",
+    "lines": 136,
+    "key": "f00066057d3b10e2"
+   },
+   {
+    "path": "scripts/privacy-audit.ts",
+    "bytes": 6567,
+    "lang": "typescript",
+    "lines": 188,
+    "key": "dad6f02f0a011bbc"
+   },
+   {
+    "path": "scripts/privacy-keygen.ts",
+    "bytes": 1013,
+    "lang": "typescript",
+    "lines": 26,
+    "key": "12073fefb212f8df"
+   },
+   {
+    "path": "scripts/razorpay-verify.ts",
+    "bytes": 5148,
+    "lang": "typescript",
+    "lines": 131,
+    "key": "a4acc4a69b488cca"
+   },
+   {
+    "path": "tsconfig.json",
+    "bytes": 666,
+    "lang": "json",
+    "lines": 34,
+    "key": "61ebb9fd6e8cf908"
+   }
+  ]
+ },
+ "paypal-attribute": {
+  "repo": "sujal128005/paypal-attribute",
+  "branch": "main",
+  "files": [
+   {
+    "path": ".env.example",
+    "bytes": 1598,
+    "lang": "plaintext",
+    "lines": 28,
+    "key": "d4dae00d11854b35"
+   },
+   {
+    "path": ".gitignore",
+    "bytes": 110,
+    "lang": "plaintext",
+    "lines": 11,
+    "key": "a5cc2925ca8258af"
+   },
+   {
+    "path": "LICENSE",
+    "bytes": 1086,
+    "lang": "plaintext",
+    "lines": 21,
+    "key": "0398ccd0f49298b1"
+   },
+   {
+    "path": "README.md",
+    "bytes": 15428,
+    "lang": "markdown",
+    "lines": 248,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "docs/DEMO_SCRIPT.md",
+    "bytes": 2953,
+    "lang": "markdown",
+    "lines": 26,
+    "key": "1eb0abd885613a06"
+   },
+   {
+    "path": "mcp/server.mjs",
+    "bytes": 4016,
+    "lang": "javascript",
+    "lines": 105,
+    "key": "be04658e512d4fef"
+   },
+   {
+    "path": "next.config.ts",
+    "bytes": 229,
+    "lang": "typescript",
+    "lines": 10,
+    "key": "a0c2fdd26b1bc645"
+   },
+   {
+    "path": "package.json",
+    "bytes": 1268,
+    "lang": "json",
+    "lines": 47,
+    "key": "7030d0b2f71b999f"
+   },
+   {
+    "path": "postcss.config.mjs",
+    "bytes": 132,
+    "lang": "javascript",
+    "lines": 2,
+    "key": "aaf1cf9fa3c8ee0e"
+   },
+   {
+    "path": "public/icon.svg",
+    "bytes": 273,
+    "lang": "xml",
+    "lines": 1,
+    "key": "849965ea25237ddd"
+   },
+   {
+    "path": "render.yaml",
+    "bytes": 909,
+    "lang": "yaml",
+    "lines": 36,
+    "key": "1b8a9c728ebe242b"
+   },
+   {
+    "path": "src/app/api/agent/chat/route.ts",
+    "bytes": 1599,
+    "lang": "typescript",
+    "lines": 45,
+    "key": "3bc64575aaf30cc3"
+   },
+   {
+    "path": "src/app/api/ai/check/route.ts",
+    "bytes": 1082,
+    "lang": "typescript",
+    "lines": 23,
+    "key": "22ceeb384c766445"
+   },
+   {
+    "path": "src/app/api/apps/route.ts",
+    "bytes": 683,
+    "lang": "typescript",
+    "lines": 22,
+    "key": "9a589739ac064e6a"
+   },
+   {
+    "path": "src/app/api/auth/paypal/callback/route.ts",
+    "bytes": 1263,
+    "lang": "typescript",
+    "lines": 30,
+    "key": "6afb78d3d981ee77"
+   },
+   {
+    "path": "src/app/api/checkout/capture/route.ts",
+    "bytes": 1521,
+    "lang": "typescript",
+    "lines": 29,
+    "key": "a78e6b70aaae2571"
+   },
+   {
+    "path": "src/app/api/checkout/order/route.ts",
+    "bytes": 1448,
+    "lang": "typescript",
+    "lines": 36,
+    "key": "059a436ebcbe4348"
+   },
+   {
+    "path": "src/app/api/checkout/simulate/route.ts",
+    "bytes": 1211,
+    "lang": "typescript",
+    "lines": 31,
+    "key": "8bf9eef1cabdf467"
+   },
+   {
+    "path": "src/app/api/creators/[id]/connect/route.ts",
+    "bytes": 1232,
+    "lang": "typescript",
+    "lines": 28,
+    "key": "e4daa0d60b56555e"
+   },
+   {
+    "path": "src/app/api/creators/[id]/sources/route.ts",
+    "bytes": 839,
+    "lang": "typescript",
+    "lines": 25,
+    "key": "39072402f831a70f"
+   },
+   {
+    "path": "src/app/api/demo/reset/route.ts",
+    "bytes": 270,
+    "lang": "typescript",
+    "lines": 13,
+    "key": "a547795399c3d9a5"
+   },
+   {
+    "path": "src/app/api/health/route.ts",
+    "bytes": 160,
+    "lang": "typescript",
+    "lines": 7,
+    "key": "46de564be360efef"
+   },
+   {
+    "path": "src/app/api/merchants/[id]/insights/route.ts",
+    "bytes": 5135,
+    "lang": "typescript",
+    "lines": 85,
+    "key": "af534c13ae3a97a0"
+   },
+   {
+    "path": "src/app/api/merchants/[id]/route.ts",
+    "bytes": 1252,
+    "lang": "typescript",
+    "lines": 32,
+    "key": "f52a8ae1780bc4cc"
+   },
+   {
+    "path": "src/app/api/payouts/release/route.ts",
+    "bytes": 489,
+    "lang": "typescript",
+    "lines": 17,
+    "key": "d5b8cd4e994f4340"
+   },
+   {
+    "path": "src/app/api/paypal/webhook/route.ts",
+    "bytes": 3486,
+    "lang": "typescript",
+    "lines": 73,
+    "key": "f66d9bb37a4075e4"
+   },
+   {
+    "path": "src/app/api/risk/[id]/route.ts",
+    "bytes": 2451,
+    "lang": "typescript",
+    "lines": 48,
+    "key": "1507d78b32652c94"
+   },
+   {
+    "path": "src/app/api/sales/[id]/refund/route.ts",
+    "bytes": 952,
+    "lang": "typescript",
+    "lines": 24,
+    "key": "2b373d9a62c9297b"
+   },
+   {
+    "path": "src/app/api/sales/[id]/route.ts",
+    "bytes": 526,
+    "lang": "typescript",
+    "lines": 17,
+    "key": "eb04de2a67639e54"
+   },
+   {
+    "path": "src/app/api/status/route.ts",
+    "bytes": 707,
+    "lang": "typescript",
+    "lines": 14,
+    "key": "2b5cc728a1d4054f"
+   },
+   {
+    "path": "src/app/api/v1/attributions/[token]/route.ts",
+    "bytes": 890,
+    "lang": "typescript",
+    "lines": 23,
+    "key": "04e20088c910db99"
+   },
+   {
+    "path": "src/app/api/v1/attributions/route.ts",
+    "bytes": 2749,
+    "lang": "typescript",
+    "lines": 68,
+    "key": "2d54ab25159aa19c"
+   },
+   {
+    "path": "src/app/api/v1/creators/[id]/earnings/route.ts",
+    "bytes": 929,
+    "lang": "typescript",
+    "lines": 28,
+    "key": "810b9e7895d5fbbd"
+   },
+   {
+    "path": "src/app/api/v1/openapi.json/route.ts",
+    "bytes": 258,
+    "lang": "typescript",
+    "lines": 8,
+    "key": "daf95c8a500ad05b"
+   },
+   {
+    "path": "src/app/api/v1/postman.json/route.ts",
+    "bytes": 388,
+    "lang": "typescript",
+    "lines": 11,
+    "key": "48c500a6cf235fc4"
+   },
+   {
+    "path": "src/app/api/v1/sales/[id]/route.ts",
+    "bytes": 687,
+    "lang": "typescript",
+    "lines": 19,
+    "key": "61ea084c160237d2"
+   },
+   {
+    "path": "src/app/api/v1/sources/route.ts",
+    "bytes": 2239,
+    "lang": "typescript",
+    "lines": 55,
+    "key": "6206d5d98ae8df5c"
+   },
+   {
+    "path": "src/app/attribution/[id]/page.tsx",
+    "bytes": 707,
+    "lang": "typescript",
+    "lines": 17,
+    "key": "69c82c1a4a4df683"
+   },
+   {
+    "path": "src/app/attribution/[id]/trace-client.tsx",
+    "bytes": 18914,
+    "lang": "typescript",
+    "lines": 384,
+    "key": "bdc624146f0fcb35"
+   },
+   {
+    "path": "src/app/attribution/page.tsx",
+    "bytes": 4070,
+    "lang": "typescript",
+    "lines": 78,
+    "key": "e4086854abae465e"
+   },
+   {
+    "path": "src/app/creators/creator-client.tsx",
+    "bytes": 18121,
+    "lang": "typescript",
+    "lines": 305,
+    "key": "5fda8594a052f619"
+   },
+   {
+    "path": "src/app/creators/page.tsx",
+    "bytes": 2979,
+    "lang": "typescript",
+    "lines": 67,
+    "key": "c2a7c4e00e3fa6b2"
+   },
+   {
+    "path": "src/app/developers/dev-client.tsx",
+    "bytes": 20202,
+    "lang": "typescript",
+    "lines": 425,
+    "key": "1ff7c1bfd0d7c0d5"
+   },
+   {
+    "path": "src/app/developers/page.tsx",
+    "bytes": 1475,
+    "lang": "typescript",
+    "lines": 26,
+    "key": "d8788b1d6f7dbf92"
+   },
+   {
+    "path": "src/app/globals.css",
+    "bytes": 4386,
+    "lang": "css",
+    "lines": 182,
+    "key": "da1d6f21d01d0f36"
+   },
+   {
+    "path": "src/app/layout.tsx",
+    "bytes": 1328,
+    "lang": "typescript",
+    "lines": 31,
+    "key": "cfb47de6ae0cae62"
+   },
+   {
+    "path": "src/app/merchants/merchant-client.tsx",
+    "bytes": 14404,
+    "lang": "typescript",
+    "lines": 267,
+    "key": "51cffb90ac68f46d"
+   },
+   {
+    "path": "src/app/merchants/page.tsx",
+    "bytes": 3908,
+    "lang": "typescript",
+    "lines": 83,
+    "key": "57c8e497410137d4"
+   },
+   {
+    "path": "src/app/page.tsx",
+    "bytes": 14258,
+    "lang": "typescript",
+    "lines": 254,
+    "key": "3393394e21dbac76"
+   },
+   {
+    "path": "src/app/risk/page.tsx",
+    "bytes": 1238,
+    "lang": "typescript",
+    "lines": 19,
+    "key": "6915b6c9b5e57284"
+   },
+   {
+    "path": "src/app/risk/risk-client.tsx",
+    "bytes": 6707,
+    "lang": "typescript",
+    "lines": 112,
+    "key": "b387c13dca94fbda"
+   },
+   {
+    "path": "src/app/shop/page.tsx",
+    "bytes": 656,
+    "lang": "typescript",
+    "lines": 22,
+    "key": "6d9156a2bf35fdb1"
+   },
+   {
+    "path": "src/app/shop/shop-client.tsx",
+    "bytes": 22123,
+    "lang": "typescript",
+    "lines": 447,
+    "key": "437b1b8dfeacc6f3"
+   },
+   {
+    "path": "src/app/styles.css",
+    "bytes": 42850,
+    "lang": "css",
+    "lines": 2,
+    "key": "66c934afd324f152"
+   },
+   {
+    "path": "src/components/answer.tsx",
+    "bytes": 3678,
+    "lang": "typescript",
+    "lines": 97,
+    "key": "8ee2833627fe40c1"
+   },
+   {
+    "path": "src/components/grid.tsx",
+    "bytes": 2122,
+    "lang": "typescript",
+    "lines": 56,
+    "key": "5ffc8788593fcfed"
+   },
+   {
+    "path": "src/components/paypal-buttons.tsx",
+    "bytes": 3328,
+    "lang": "typescript",
+    "lines": 91,
+    "key": "bc36d3889a3c4075"
+   },
+   {
+    "path": "src/components/site-footer.tsx",
+    "bytes": 2145,
+    "lang": "typescript",
+    "lines": 45,
+    "key": "90532200b1c7e185"
+   },
+   {
+    "path": "src/components/site-header.tsx",
+    "bytes": 3273,
+    "lang": "typescript",
+    "lines": 83,
+    "key": "9825ece40fd7391d"
+   },
+   {
+    "path": "src/components/time.tsx",
+    "bytes": 722,
+    "lang": "typescript",
+    "lines": 21,
+    "key": "27ebc632c2811ce2"
+   },
+   {
+    "path": "src/components/ui.tsx",
+    "bytes": 7267,
+    "lang": "typescript",
+    "lines": 163,
+    "key": "821a79a61d21cbf0"
+   },
+   {
+    "path": "src/lib/agent.ts",
+    "bytes": 11282,
+    "lang": "typescript",
+    "lines": 228,
+    "key": "c8dcbbac91d1f7c7"
+   },
+   {
+    "path": "src/lib/ai.ts",
+    "bytes": 10452,
+    "lang": "typescript",
+    "lines": 187,
+    "key": "e79822a643c216e9"
+   },
+   {
+    "path": "src/lib/catalog.ts",
+    "bytes": 20514,
+    "lang": "typescript",
+    "lines": 86,
+    "key": "1344ca607898a171"
+   },
+   {
+    "path": "src/lib/channel3.ts",
+    "bytes": 3236,
+    "lang": "typescript",
+    "lines": 78,
+    "key": "07577844ec4a4802"
+   },
+   {
+    "path": "src/lib/engine.ts",
+    "bytes": 20649,
+    "lang": "typescript",
+    "lines": 383,
+    "key": "741d150a9617f73b"
+   },
+   {
+    "path": "src/lib/http.ts",
+    "bytes": 2233,
+    "lang": "typescript",
+    "lines": 46,
+    "key": "63a80782d37eda8a"
+   },
+   {
+    "path": "src/lib/openapi.ts",
+    "bytes": 12106,
+    "lang": "typescript",
+    "lines": 152,
+    "key": "cf6ea7746ca4656e"
+   },
+   {
+    "path": "src/lib/paypal.ts",
+    "bytes": 8740,
+    "lang": "typescript",
+    "lines": 205,
+    "key": "2bcbec90a32d221d"
+   },
+   {
+    "path": "src/lib/risk.ts",
+    "bytes": 5500,
+    "lang": "typescript",
+    "lines": 82,
+    "key": "f3fbf5d3d3845c6d"
+   },
+   {
+    "path": "src/lib/scoring.ts",
+    "bytes": 3747,
+    "lang": "typescript",
+    "lines": 82,
+    "key": "2e01bc31eecce84e"
+   },
+   {
+    "path": "src/lib/seed.ts",
+    "bytes": 9849,
+    "lang": "typescript",
+    "masked": true,
+    "lines": 174,
+    "key": "12aa7b668384ad58"
+   },
+   {
+    "path": "src/lib/split.ts",
+    "bytes": 3825,
+    "lang": "typescript",
+    "lines": 113,
+    "key": "164ca88132e4cddf"
+   },
+   {
+    "path": "src/lib/store.ts",
+    "bytes": 2295,
+    "lang": "typescript",
+    "lines": 72,
+    "key": "cbf3abbe7aace6bf"
+   },
+   {
+    "path": "src/lib/types.ts",
+    "bytes": 5904,
+    "lang": "typescript",
+    "lines": 270,
+    "key": "75c206c13d9f6ad2"
+   },
+   {
+    "path": "src/lib/util.ts",
+    "bytes": 2592,
+    "lang": "typescript",
+    "lines": 81,
+    "key": "d230fe97d07fe640"
+   },
+   {
+    "path": "src/lib/views.ts",
+    "bytes": 4267,
+    "lang": "typescript",
+    "lines": 91,
+    "key": "ab46323cb651f666"
+   },
+   {
+    "path": "tests/engine.test.ts",
+    "bytes": 3878,
+    "lang": "typescript",
+    "lines": 81,
+    "key": "c1153987e4f11fe9"
+   },
+   {
+    "path": "tests/payouts.test.ts",
+    "bytes": 3246,
+    "lang": "typescript",
+    "masked": true,
+    "lines": 69,
+    "key": "71d665b58b8db97f"
+   },
+   {
+    "path": "tests/split.test.ts",
+    "bytes": 2708,
+    "lang": "typescript",
+    "lines": 70,
+    "key": "9fd4bcc625ab1b7c"
+   },
+   {
+    "path": "tsconfig.json",
+    "bytes": 574,
+    "lang": "json",
+    "lines": 21,
+    "key": "61ebb9fd6e8cf908"
+   },
+   {
+    "path": "vitest.config.ts",
+    "bytes": 240,
+    "lang": "typescript",
+    "lines": 7,
+    "key": "e7b129ed54e5f3a6"
+   }
+  ]
+ },
+ "flexdrop": {
+  "repo": "sujal128005/FlexDrop",
+  "branch": "main",
+  "files": [
+   {
+    "path": ".env.example",
+    "bytes": 442,
+    "lang": "plaintext",
+    "masked": true,
+    "lines": 10,
+    "key": "d4dae00d11854b35"
+   },
+   {
+    "path": ".github/workflows/ci.yml",
+    "bytes": 1009,
+    "lang": "yaml",
+    "lines": 36,
+    "key": "899ce9c202bf7bb5"
+   },
+   {
+    "path": ".gitignore",
+    "bytes": 135,
+    "lang": "plaintext",
+    "lines": 14,
+    "key": "a5cc2925ca8258af"
+   },
+   {
+    "path": "Makefile",
+    "bytes": 1144,
+    "lang": "makefile",
+    "lines": 48,
+    "key": "836efb6e25a091dc"
+   },
+   {
+    "path": "README.md",
+    "bytes": 11725,
+    "lang": "markdown",
+    "lines": 185,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "alembic.ini",
+    "bytes": 677,
+    "lang": "ini",
+    "lines": 39,
+    "key": "d84513684d01938b"
+   },
+   {
+    "path": "constraints.txt",
+    "bytes": 609,
+    "lang": "plaintext",
+    "lines": 20,
+    "key": "36449ce8d6dc6044"
+   },
+   {
+    "path": "data/sample/campus_scenario.json",
+    "bytes": 480,
+    "lang": "json",
+    "lines": 37,
+    "key": "81ed70251e5a238d"
+   },
+   {
+    "path": "data/sample/city_scenario.json",
+    "bytes": 480,
+    "lang": "json",
+    "lines": 37,
+    "key": "dec812c3a708a839"
+   },
+   {
+    "path": "deploy/env.production.example",
+    "bytes": 773,
+    "lang": "plaintext",
+    "lines": 14,
+    "key": "4a1697d286ded471"
+   },
+   {
+    "path": "deploy/nginx/flexdrop.conf",
+    "bytes": 1203,
+    "lang": "nginx",
+    "lines": 43,
+    "key": "adefcef94f6fe3d2"
+   },
+   {
+    "path": "deploy/systemd/flexdrop-purge.service",
+    "bytes": 225,
+    "lang": "ini",
+    "lines": 10,
+    "key": "eeed2420b1495e8f"
+   },
+   {
+    "path": "deploy/systemd/flexdrop.service",
+    "bytes": 787,
+    "lang": "ini",
+    "lines": 31,
+    "key": "f411393c5f067384"
+   },
+   {
+    "path": "docs/algorithms.md",
+    "bytes": 7786,
+    "lang": "markdown",
+    "lines": 143,
+    "key": "fef981c61a5266bc"
+   },
+   {
+    "path": "docs/api.md",
+    "bytes": 8647,
+    "lang": "markdown",
+    "lines": 175,
+    "key": "3c90b152fe86524a"
+   },
+   {
+    "path": "docs/architecture.md",
+    "bytes": 6682,
+    "lang": "markdown",
+    "lines": 143,
+    "key": "f48b101bb900bd95"
+   },
+   {
+    "path": "docs/assumptions.md",
+    "bytes": 7208,
+    "lang": "markdown",
+    "lines": 76,
+    "key": "66c4dd760b926817"
+   },
+   {
+    "path": "docs/database.md",
+    "bytes": 4788,
+    "lang": "markdown",
+    "lines": 83,
+    "key": "c45133c7c8c02f85"
+   },
+   {
+    "path": "docs/deployment.md",
+    "bytes": 6784,
+    "lang": "markdown",
+    "lines": 147,
+    "key": "a1f6cda7d3c6057d"
+   },
+   {
+    "path": "docs/frontend.md",
+    "bytes": 12437,
+    "lang": "markdown",
+    "lines": 185,
+    "key": "4105539c21566ede"
+   },
+   {
+    "path": "docs/math_model.md",
+    "bytes": 8840,
+    "lang": "markdown",
+    "lines": 193,
+    "key": "bab88c2d005b6d1b"
+   },
+   {
+    "path": "docs/security.md",
+    "bytes": 2759,
+    "lang": "markdown",
+    "lines": 27,
+    "key": "cb8d0ac6ce38024a"
+   },
+   {
+    "path": "docs/setup.md",
+    "bytes": 7795,
+    "lang": "markdown",
+    "lines": 184,
+    "key": "25cf98988272a271"
+   },
+   {
+    "path": "docs/simulation.md",
+    "bytes": 8066,
+    "lang": "markdown",
+    "lines": 161,
+    "key": "5414869290da4425"
+   },
+   {
+    "path": "migrations/env.py",
+    "bytes": 1317,
+    "lang": "python",
+    "lines": 42,
+    "key": "1d5e98f855877457"
+   },
+   {
+    "path": "migrations/script.py.mako",
+    "bytes": 605,
+    "lang": "python",
+    "lines": 27,
+    "key": "2271d770709026da"
+   },
+   {
+    "path": "migrations/versions/0001_initial_schema.py",
+    "bytes": 19391,
+    "lang": "python",
+    "lines": 355,
+    "key": "01998ad7cd1757c2"
+   },
+   {
+    "path": "pyproject.toml",
+    "bytes": 1569,
+    "lang": "ini",
+    "lines": 65,
+    "key": "5d07e7d72637aa0d"
+   },
+   {
+    "path": "render.yaml",
+    "bytes": 494,
+    "lang": "yaml",
+    "lines": 14,
+    "key": "1b8a9c728ebe242b"
+   },
+   {
+    "path": "reports/ROBUSTNESS.md",
+    "bytes": 917,
+    "lang": "markdown",
+    "lines": 20,
+    "key": "4b6972d53d2dd687"
+   },
+   {
+    "path": "reports/SUMMARY.md",
+    "bytes": 4080,
+    "lang": "markdown",
+    "lines": 75,
+    "key": "18b5cf36c8b57cfd"
+   },
+   {
+    "path": "reports/campus_comparison.md",
+    "bytes": 1978,
+    "lang": "markdown",
+    "lines": 35,
+    "key": "73853e308f92000f"
+   },
+   {
+    "path": "reports/campus_metrics.json",
+    "bytes": 7523,
+    "lang": "json",
+    "lines": 237,
+    "key": "e19a8cd12cde0f8f"
+   },
+   {
+    "path": "reports/city_comparison.md",
+    "bytes": 1973,
+    "lang": "markdown",
+    "lines": 35,
+    "key": "bf145ca413495022"
+   },
+   {
+    "path": "reports/city_metrics.json",
+    "bytes": 7503,
+    "lang": "json",
+    "lines": 237,
+    "key": "929dbfd03f4d10f2"
+   },
+   {
+    "path": "reports/robustness.json",
+    "bytes": 4162,
+    "lang": "json",
+    "lines": 102,
+    "key": "f6bc33451a201637"
+   },
+   {
+    "path": "scripts/package.py",
+    "bytes": 1598,
+    "lang": "python",
+    "lines": 50,
+    "key": "23e08681237601c5"
+   },
+   {
+    "path": "scripts/run_all.ps1",
+    "bytes": 3212,
+    "lang": "powershell",
+    "lines": 60,
+    "key": "5a241abb92d9f8cf"
+   },
+   {
+    "path": "scripts/run_all.sh",
+    "bytes": 1982,
+    "lang": "bash",
+    "lines": 50,
+    "key": "123bff0fb3f24fd9"
+   },
+   {
+    "path": "scripts/smoke_test.sh",
+    "bytes": 1487,
+    "lang": "bash",
+    "lines": 22,
+    "key": "aaec7e56df0aa55f"
+   },
+   {
+    "path": "scripts/ui_smoke.js",
+    "bytes": 5687,
+    "lang": "javascript",
+    "lines": 113,
+    "key": "ae8ca67b7d8c0f93"
+   },
+   {
+    "path": "src/flexdrop/__init__.py",
+    "bytes": 328,
+    "lang": "python",
+    "lines": 8,
+    "key": "7ae31944d3b46a2f"
+   },
+   {
+    "path": "src/flexdrop/__main__.py",
+    "bytes": 145,
+    "lang": "python",
+    "lines": 6,
+    "key": "7ee6281a0e2df8ce"
+   },
+   {
+    "path": "src/flexdrop/api/__init__.py",
+    "bytes": 26,
+    "lang": "python",
+    "lines": 1,
+    "key": "609cb42f4db26c9e"
+   },
+   {
+    "path": "src/flexdrop/api/app.py",
+    "bytes": 3939,
+    "lang": "python",
+    "lines": 98,
+    "key": "baf749c039b0d174"
+   },
+   {
+    "path": "src/flexdrop/api/deps.py",
+    "bytes": 1271,
+    "lang": "python",
+    "lines": 39,
+    "key": "f109e695780a721c"
+   },
+   {
+    "path": "src/flexdrop/api/errors.py",
+    "bytes": 2299,
+    "lang": "python",
+    "lines": 52,
+    "key": "0b72a4378a9e81a9"
+   },
+   {
+    "path": "src/flexdrop/api/middleware.py",
+    "bytes": 4041,
+    "lang": "python",
+    "lines": 92,
+    "key": "59868b9ad757edce"
+   },
+   {
+    "path": "src/flexdrop/api/routers/__init__.py",
+    "bytes": 19,
+    "lang": "python",
+    "lines": 1,
+    "key": "a3777d3d3aa8f749"
+   },
+   {
+    "path": "src/flexdrop/api/routers/admin.py",
+    "bytes": 2851,
+    "lang": "python",
+    "lines": 67,
+    "key": "e98721ae02e3edbf"
+   },
+   {
+    "path": "src/flexdrop/api/routers/catalog.py",
+    "bytes": 2177,
+    "lang": "python",
+    "lines": 58,
+    "key": "b9c702fd784654a3"
+   },
+   {
+    "path": "src/flexdrop/api/routers/dispatch.py",
+    "bytes": 1940,
+    "lang": "python",
+    "lines": 53,
+    "key": "594097fc6f8ba0c1"
+   },
+   {
+    "path": "src/flexdrop/api/routers/health.py",
+    "bytes": 844,
+    "lang": "python",
+    "lines": 28,
+    "key": "d97f38e8913b4bc6"
+   },
+   {
+    "path": "src/flexdrop/api/routers/orders.py",
+    "bytes": 3694,
+    "lang": "python",
+    "lines": 102,
+    "key": "7bbc391b6afa30b4"
+   },
+   {
+    "path": "src/flexdrop/api/routers/views.py",
+    "bytes": 5779,
+    "lang": "python",
+    "lines": 147,
+    "key": "ca5ba984f178b9c8"
+   },
+   {
+    "path": "src/flexdrop/api/security.py",
+    "bytes": 3550,
+    "lang": "python",
+    "lines": 100,
+    "key": "abae893dd85edc37"
+   },
+   {
+    "path": "src/flexdrop/cli.py",
+    "bytes": 11019,
+    "lang": "python",
+    "lines": 300,
+    "key": "1092e88b32a96982"
+   },
+   {
+    "path": "src/flexdrop/clock.py",
+    "bytes": 977,
+    "lang": "python",
+    "lines": 36,
+    "key": "94cbe6b92f3ff857"
+   },
+   {
+    "path": "src/flexdrop/colab.py",
+    "bytes": 1866,
+    "lang": "python",
+    "lines": 57,
+    "key": "41e072fbff2ced27"
+   },
+   {
+    "path": "src/flexdrop/config.py",
+    "bytes": 9431,
+    "lang": "python",
+    "masked": true,
+    "lines": 219,
+    "key": "463c72b56ac08ad5"
+   },
+   {
+    "path": "src/flexdrop/db/__init__.py",
+    "bytes": 93,
+    "lang": "python",
+    "lines": 1,
+    "key": "2de5d317df8f4605"
+   },
+   {
+    "path": "src/flexdrop/db/base.py",
+    "bytes": 1482,
+    "lang": "python",
+    "lines": 46,
+    "key": "1ee8e103fcc48a84"
+   },
+   {
+    "path": "src/flexdrop/db/models.py",
+    "bytes": 14140,
+    "lang": "python",
+    "lines": 240,
+    "key": "b3fde9679f8d3b77"
+   },
+   {
+    "path": "src/flexdrop/db/session.py",
+    "bytes": 2082,
+    "lang": "python",
+    "lines": 67,
+    "key": "c2cb0d6241b02113"
+   },
+   {
+    "path": "src/flexdrop/demo.py",
+    "bytes": 9446,
+    "lang": "python",
+    "lines": 227,
+    "key": "1e1f5210a1f4db77"
+   },
+   {
+    "path": "src/flexdrop/domain/__init__.py",
+    "bytes": 82,
+    "lang": "python",
+    "lines": 1,
+    "key": "ac2a9ff9aa50bbed"
+   },
+   {
+    "path": "src/flexdrop/domain/models.py",
+    "bytes": 7123,
+    "lang": "python",
+    "lines": 269,
+    "key": "c4a0c081fca49424"
+   },
+   {
+    "path": "src/flexdrop/engines/__init__.py",
+    "bytes": 103,
+    "lang": "python",
+    "lines": 1,
+    "key": "e03f60acc0d3d5c9"
+   },
+   {
+    "path": "src/flexdrop/engines/compatibility.py",
+    "bytes": 6287,
+    "lang": "python",
+    "lines": 140,
+    "key": "09470f1966cccd17"
+   },
+   {
+    "path": "src/flexdrop/engines/cost.py",
+    "bytes": 2607,
+    "lang": "python",
+    "lines": 68,
+    "key": "4a00e5cb89fc17eb"
+   },
+   {
+    "path": "src/flexdrop/engines/flexibility.py",
+    "bytes": 3636,
+    "lang": "python",
+    "lines": 85,
+    "key": "9e5e607bcd5122ef"
+   },
+   {
+    "path": "src/flexdrop/engines/incentive.py",
+    "bytes": 5885,
+    "lang": "python",
+    "lines": 149,
+    "key": "11f4c38cbed19c2a"
+   },
+   {
+    "path": "src/flexdrop/engines/optimizer.py",
+    "bytes": 19597,
+    "lang": "python",
+    "lines": 461,
+    "key": "0d0763706fcb494c"
+   },
+   {
+    "path": "src/flexdrop/engines/promise.py",
+    "bytes": 1463,
+    "lang": "python",
+    "lines": 43,
+    "key": "9efc7f6323f2a167"
+   },
+   {
+    "path": "src/flexdrop/engines/reoptimizer.py",
+    "bytes": 6216,
+    "lang": "python",
+    "lines": 130,
+    "key": "97ae7840f01098ad"
+   },
+   {
+    "path": "src/flexdrop/engines/routing.py",
+    "bytes": 13386,
+    "lang": "python",
+    "lines": 304,
+    "key": "cd9f28b8867aaa3d"
+   },
+   {
+    "path": "src/flexdrop/engines/travel.py",
+    "bytes": 2622,
+    "lang": "python",
+    "lines": 66,
+    "key": "efb6c8e4075dc2a7"
+   },
+   {
+    "path": "src/flexdrop/errors.py",
+    "bytes": 1045,
+    "lang": "python",
+    "lines": 50,
+    "key": "ba7af7b8866d60e5"
+   },
+   {
+    "path": "src/flexdrop/geo.py",
+    "bytes": 1954,
+    "lang": "python",
+    "lines": 53,
+    "key": "ecd0e4da772ee795"
+   },
+   {
+    "path": "src/flexdrop/logging_config.py",
+    "bytes": 1847,
+    "lang": "python",
+    "lines": 51,
+    "key": "518d01e67c5155f5"
+   },
+   {
+    "path": "src/flexdrop/ml/__init__.py",
+    "bytes": 99,
+    "lang": "python",
+    "lines": 1,
+    "key": "7a1589e3bed35d89"
+   },
+   {
+    "path": "src/flexdrop/ml/features.py",
+    "bytes": 2540,
+    "lang": "python",
+    "lines": 78,
+    "key": "746e5b19c5729a74"
+   },
+   {
+    "path": "src/flexdrop/ml/models.py",
+    "bytes": 7945,
+    "lang": "python",
+    "lines": 227,
+    "key": "9210466746123fef"
+   },
+   {
+    "path": "src/flexdrop/ml/registry.py",
+    "bytes": 5296,
+    "lang": "python",
+    "lines": 154,
+    "key": "43ccbe4eb08bb6d8"
+   },
+   {
+    "path": "src/flexdrop/ml/training.py",
+    "bytes": 8815,
+    "lang": "python",
+    "lines": 244,
+    "key": "240cb6ddea516de1"
+   },
+   {
+    "path": "src/flexdrop/schemas.py",
+    "bytes": 6279,
+    "lang": "python",
+    "lines": 245,
+    "key": "0f7858470cdef618"
+   },
+   {
+    "path": "src/flexdrop/services/__init__.py",
+    "bytes": 85,
+    "lang": "python",
+    "lines": 1,
+    "key": "8045f0ac906d166f"
+   },
+   {
+    "path": "src/flexdrop/services/catalog.py",
+    "bytes": 3699,
+    "lang": "python",
+    "lines": 99,
+    "key": "3f1c5e2cfd582537"
+   },
+   {
+    "path": "src/flexdrop/services/common.py",
+    "bytes": 9019,
+    "lang": "python",
+    "lines": 265,
+    "key": "a96e923bfd097af3"
+   },
+   {
+    "path": "src/flexdrop/services/context.py",
+    "bytes": 1064,
+    "lang": "python",
+    "lines": 29,
+    "key": "cd07a87587c826e3"
+   },
+   {
+    "path": "src/flexdrop/services/dispatch.py",
+    "bytes": 20923,
+    "lang": "python",
+    "lines": 461,
+    "key": "84fb063e96984824"
+   },
+   {
+    "path": "src/flexdrop/services/idempotency.py",
+    "bytes": 2339,
+    "lang": "python",
+    "lines": 68,
+    "key": "cf8e441fa420f14c"
+   },
+   {
+    "path": "src/flexdrop/services/metrics.py",
+    "bytes": 4168,
+    "lang": "python",
+    "lines": 80,
+    "key": "56163ca48b4c45f3"
+   },
+   {
+    "path": "src/flexdrop/services/orders.py",
+    "bytes": 12849,
+    "lang": "python",
+    "lines": 299,
+    "key": "22bcd1a452587d8c"
+   },
+   {
+    "path": "src/flexdrop/services/privacy.py",
+    "bytes": 3021,
+    "lang": "python",
+    "lines": 74,
+    "key": "7ca801598d4aadbd"
+   },
+   {
+    "path": "src/flexdrop/simulation/__init__.py",
+    "bytes": 84,
+    "lang": "python",
+    "lines": 1,
+    "key": "f0853fa03b2f9bf7"
+   },
+   {
+    "path": "src/flexdrop/simulation/export.py",
+    "bytes": 4290,
+    "lang": "python",
+    "lines": 117,
+    "key": "981ddd54b93fbf96"
+   },
+   {
+    "path": "src/flexdrop/simulation/history.py",
+    "bytes": 3288,
+    "lang": "python",
+    "lines": 85,
+    "key": "0073cc7793c74a57"
+   },
+   {
+    "path": "src/flexdrop/simulation/metrics.py",
+    "bytes": 4929,
+    "lang": "python",
+    "lines": 99,
+    "key": "058f5b654c013bd6"
+   },
+   {
+    "path": "src/flexdrop/simulation/policies.py",
+    "bytes": 3138,
+    "lang": "python",
+    "lines": 87,
+    "key": "c11c4ec13d11707f"
+   },
+   {
+    "path": "src/flexdrop/simulation/runner.py",
+    "bytes": 11082,
+    "lang": "python",
+    "lines": 245,
+    "key": "b2139070b67eba55"
+   },
+   {
+    "path": "src/flexdrop/simulation/scenario.py",
+    "bytes": 14335,
+    "lang": "python",
+    "lines": 406,
+    "key": "0b08c451e265cf25"
+   },
+   {
+    "path": "src/flexdrop/simulation/simulator.py",
+    "bytes": 26895,
+    "lang": "python",
+    "lines": 632,
+    "key": "1c7cb45537260916"
+   },
+   {
+    "path": "src/flexdrop/studio.py",
+    "bytes": 18394,
+    "lang": "python",
+    "lines": 421,
+    "key": "fd4c2d118db8817d"
+   },
+   {
+    "path": "src/flexdrop/web/css/app.css",
+    "bytes": 18011,
+    "lang": "css",
+    "lines": 267,
+    "key": "b8eb0855af2c244b"
+   },
+   {
+    "path": "src/flexdrop/web/index.html",
+    "bytes": 8304,
+    "lang": "xml",
+    "lines": 153,
+    "key": "e94f05be2e7b072d"
+   },
+   {
+    "path": "src/flexdrop/web/js/api.js",
+    "bytes": 1296,
+    "lang": "javascript",
+    "lines": 43,
+    "key": "e66cd41f4b0afaa3"
+   },
+   {
+    "path": "src/flexdrop/web/js/campus3d.js",
+    "bytes": 137943,
+    "lang": "javascript",
+    "lines": 2966,
+    "key": "716ed4dc09127b53"
+   },
+   {
+    "path": "src/flexdrop/web/js/checkout.js",
+    "bytes": 15981,
+    "lang": "javascript",
+    "lines": 343,
+    "key": "3261ff8191572cc2"
+   },
+   {
+    "path": "src/flexdrop/web/js/engine.js",
+    "bytes": 14229,
+    "lang": "javascript",
+    "lines": 358,
+    "key": "f2f57f290fdc4161"
+   },
+   {
+    "path": "src/flexdrop/web/js/main.js",
+    "bytes": 10188,
+    "lang": "javascript",
+    "lines": 276,
+    "key": "7cd6c5fa1f172b2e"
+   },
+   {
+    "path": "src/flexdrop/web/js/map.js",
+    "bytes": 5583,
+    "lang": "javascript",
+    "lines": 142,
+    "key": "55045a3440f73e6e"
+   },
+   {
+    "path": "src/flexdrop/web/js/ops.js",
+    "bytes": 4716,
+    "lang": "javascript",
+    "lines": 99,
+    "key": "b1444336c4e8b375"
+   },
+   {
+    "path": "src/flexdrop/web/js/results.js",
+    "bytes": 7127,
+    "lang": "javascript",
+    "lines": 120,
+    "key": "207da13c1d0cb5be"
+   },
+   {
+    "path": "src/flexdrop/web/js/scene_textures.js",
+    "bytes": 23482,
+    "lang": "javascript",
+    "lines": 736,
+    "key": "3dddc679ccd48883"
+   },
+   {
+    "path": "src/flexdrop/web/js/util.js",
+    "bytes": 3993,
+    "lang": "javascript",
+    "lines": 114,
+    "key": "df99ec610d429677"
+   },
+   {
+    "path": "tests/__init__.py",
+    "bytes": 0,
+    "lang": "python",
+    "lines": 1,
+    "key": "8e911f6351f3fa0c"
+   },
+   {
+    "path": "tests/conftest.py",
+    "bytes": 4193,
+    "lang": "python",
+    "lines": 143,
+    "key": "626af34e8204774e"
+   },
+   {
+    "path": "tests/integration/__init__.py",
+    "bytes": 0,
+    "lang": "python",
+    "lines": 1,
+    "key": "44f3714d0efefecb"
+   },
+   {
+    "path": "tests/integration/test_api.py",
+    "bytes": 20378,
+    "lang": "python",
+    "lines": 450,
+    "key": "596674adb5a62d68"
+   },
+   {
+    "path": "tests/integration/test_cli_db.py",
+    "bytes": 6259,
+    "lang": "python",
+    "lines": 173,
+    "key": "29fbb2dc8d84bf80"
+   },
+   {
+    "path": "tests/integration/test_studio_ui.py",
+    "bytes": 8242,
+    "lang": "python",
+    "lines": 178,
+    "key": "a39c8bad7b50099b"
+   },
+   {
+    "path": "tests/optimization/__init__.py",
+    "bytes": 0,
+    "lang": "python",
+    "lines": 1,
+    "key": "82ce4de5fe619860"
+   },
+   {
+    "path": "tests/optimization/test_optimizer.py",
+    "bytes": 9118,
+    "lang": "python",
+    "lines": 191,
+    "key": "95533c16e3d78843"
+   },
+   {
+    "path": "tests/optimization/test_reoptimizer.py",
+    "bytes": 2988,
+    "lang": "python",
+    "lines": 58,
+    "key": "02518c77b0b61e74"
+   },
+   {
+    "path": "tests/optimization/test_simulation.py",
+    "bytes": 4971,
+    "lang": "python",
+    "lines": 116,
+    "key": "ab752f93aeb9018c"
+   },
+   {
+    "path": "tests/unit/__init__.py",
+    "bytes": 0,
+    "lang": "python",
+    "lines": 1,
+    "key": "0612b577e6416a3d"
+   },
+   {
+    "path": "tests/unit/test_cost_compatibility.py",
+    "bytes": 5012,
+    "lang": "python",
+    "lines": 106,
+    "key": "cac7906831dd6704"
+   },
+   {
+    "path": "tests/unit/test_geo_clock_config.py",
+    "bytes": 3839,
+    "lang": "python",
+    "lines": 97,
+    "key": "a73ad4f239704b0e"
+   },
+   {
+    "path": "tests/unit/test_incentive_ml.py",
+    "bytes": 8105,
+    "lang": "python",
+    "lines": 182,
+    "key": "f012ba4e63c336f4"
+   },
+   {
+    "path": "tests/unit/test_routing_flexibility.py",
+    "bytes": 6614,
+    "lang": "python",
+    "lines": 157,
+    "key": "538080529f9600a7"
+   }
+  ]
+ },
+ "pixelproof": {
+  "repo": "sujal128005/Qwen",
+  "branch": "main",
+  "files": [
+   {
+    "path": ".gitignore",
+    "bytes": 102,
+    "lang": "plaintext",
+    "lines": 8,
+    "key": "a5cc2925ca8258af"
+   },
+   {
+    "path": "LICENSE",
+    "bytes": 1080,
+    "lang": "plaintext",
+    "lines": 16,
+    "key": "0398ccd0f49298b1"
+   },
+   {
+    "path": "README.md",
+    "bytes": 8625,
+    "lang": "markdown",
+    "lines": 164,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "data/demo/manifest.json",
+    "bytes": 5091,
+    "lang": "json",
+    "lines": 176,
+    "key": "dd6edf45fa955721"
+   },
+   {
+    "path": "data/demo/report.html",
+    "bytes": 268375,
+    "lang": "xml",
+    "large": true
+   },
+   {
+    "path": "deck/PixelProof_deck.html",
+    "bytes": 587576,
+    "lang": "xml",
+    "large": true
+   },
+   {
+    "path": "deck/build_deck.py",
+    "bytes": 31578,
+    "lang": "python",
+    "lines": 447,
+    "key": "89b233d82d3f27a0"
+   },
+   {
+    "path": "demo/desktop.html",
+    "bytes": 6722,
+    "lang": "xml",
+    "lines": 76,
+    "key": "e536073a49153825"
+   },
+   {
+    "path": "demo/record.js",
+    "bytes": 7861,
+    "lang": "javascript",
+    "lines": 164,
+    "key": "d1ce593965448132"
+   },
+   {
+    "path": "index.html",
+    "bytes": 362,
+    "lang": "xml",
+    "lines": 12,
+    "key": "f6013a00b362253c"
+   },
+   {
+    "path": "pixelproof/__init__.py",
+    "bytes": 184,
+    "lang": "python",
+    "lines": 3,
+    "key": "8089b9893feec28a"
+   },
+   {
+    "path": "pixelproof/__main__.py",
+    "bytes": 52,
+    "lang": "python",
+    "lines": 5,
+    "key": "dc6eb051afc2fede"
+   },
+   {
+    "path": "pixelproof/cli.py",
+    "bytes": 5188,
+    "lang": "python",
+    "lines": 124,
+    "key": "5fc6a25c4710d40d"
+   },
+   {
+    "path": "pixelproof/core.py",
+    "bytes": 12654,
+    "lang": "python",
+    "lines": 382,
+    "key": "d2d1a9e9d9cb84dc"
+   },
+   {
+    "path": "pixelproof/families/__init__.py",
+    "bytes": 137,
+    "lang": "python",
+    "lines": 2,
+    "key": "bdf338d0b5f4f60c"
+   },
+   {
+    "path": "pixelproof/families/chart.py",
+    "bytes": 10307,
+    "lang": "python",
+    "lines": 237,
+    "key": "071476fe4e2fdd8d"
+   },
+   {
+    "path": "pixelproof/families/count.py",
+    "bytes": 6960,
+    "lang": "python",
+    "lines": 155,
+    "key": "17752e58385d142b"
+   },
+   {
+    "path": "pixelproof/families/gauge.py",
+    "bytes": 8611,
+    "lang": "python",
+    "lines": 204,
+    "key": "957db35a5b49571a"
+   },
+   {
+    "path": "pixelproof/families/maze.py",
+    "bytes": 6591,
+    "lang": "python",
+    "lines": 176,
+    "key": "7e22758d1faee493"
+   },
+   {
+    "path": "pixelproof/families/spatial.py",
+    "bytes": 8848,
+    "lang": "python",
+    "lines": 202,
+    "key": "1b8419e209cc52e5"
+   },
+   {
+    "path": "pixelproof/families/wires.py",
+    "bytes": 9954,
+    "lang": "python",
+    "lines": 233,
+    "key": "50abd341571742d6"
+   },
+   {
+    "path": "pixelproof/frontier.py",
+    "bytes": 2814,
+    "lang": "python",
+    "lines": 55,
+    "key": "75adb3ecab48b53f"
+   },
+   {
+    "path": "pixelproof/models.py",
+    "bytes": 10493,
+    "lang": "python",
+    "lines": 236,
+    "key": "3da7479f2d11bb9a"
+   },
+   {
+    "path": "pixelproof/pipeline.py",
+    "bytes": 7042,
+    "lang": "python",
+    "lines": 161,
+    "key": "8fcd7c6326ae70fa"
+   },
+   {
+    "path": "pixelproof/report.py",
+    "bytes": 15822,
+    "lang": "python",
+    "lines": 260,
+    "key": "4b6bc56757810593"
+   },
+   {
+    "path": "pixelproof/scoring.py",
+    "bytes": 8115,
+    "lang": "python",
+    "lines": 186,
+    "key": "477e28fda6a7db4e"
+   },
+   {
+    "path": "pixelproof/studio.py",
+    "bytes": 20379,
+    "lang": "python",
+    "lines": 332,
+    "key": "8c975e9f0b9563c6"
+   },
+   {
+    "path": "pyproject.toml",
+    "bytes": 525,
+    "lang": "ini",
+    "lines": 18,
+    "key": "5d07e7d72637aa0d"
+   },
+   {
+    "path": "run_local.bat",
+    "bytes": 886,
+    "lang": "dos",
+    "lines": 26,
+    "key": "b4f2ca204dc09db2"
+   },
+   {
+    "path": "run_local.sh",
+    "bytes": 938,
+    "lang": "bash",
+    "lines": 24,
+    "key": "f5b7e36c3cfe0622"
+   },
+   {
+    "path": "tests/test_factory.py",
+    "bytes": 3127,
+    "lang": "python",
+    "lines": 71,
+    "key": "b12e5e3afca389a3"
+   }
+  ]
+ },
+ "arthanetra": {
+  "repo": "sujal128005/ArthaNetra",
+  "branch": "main",
+  "files": [
+   {
+    "path": ".env.example",
+    "bytes": 394,
+    "lang": "plaintext",
+    "lines": 10,
+    "key": "d4dae00d11854b35"
+   },
+   {
+    "path": ".github/workflows/ci.yml",
+    "bytes": 336,
+    "lang": "yaml",
+    "lines": 12,
+    "key": "899ce9c202bf7bb5"
+   },
+   {
+    "path": ".gitignore",
+    "bytes": 74,
+    "lang": "plaintext",
+    "lines": 9,
+    "key": "a5cc2925ca8258af"
+   },
+   {
+    "path": "Dockerfile",
+    "bytes": 311,
+    "lang": "dockerfile",
+    "lines": 10,
+    "key": "6651ddff6eb82c84"
+   },
+   {
+    "path": "LICENSE",
+    "bytes": 756,
+    "lang": "plaintext",
+    "lines": 14,
+    "key": "0398ccd0f49298b1"
+   },
+   {
+    "path": "README.md",
+    "bytes": 10356,
+    "lang": "markdown",
+    "lines": 203,
+    "key": "8ec9a00bfd09b319"
+   },
+   {
+    "path": "SECURITY.md",
+    "bytes": 3614,
+    "lang": "markdown",
+    "lines": 42,
+    "key": "7c875fef54268bc4"
+   },
+   {
+    "path": "backend/app/__init__.py",
+    "bytes": 22,
+    "lang": "python",
+    "lines": 1,
+    "key": "1187ca279b51f65f"
+   },
+   {
+    "path": "backend/app/engine/__init__.py",
+    "bytes": 0,
+    "lang": "python",
+    "lines": 1,
+    "key": "6b8a3d238fada2e4"
+   },
+   {
+    "path": "backend/app/engine/cashflow.py",
+    "bytes": 18367,
+    "lang": "python",
+    "lines": 447,
+    "key": "fb74fa411920c923"
+   },
+   {
+    "path": "backend/app/engine/patterns.py",
+    "bytes": 3585,
+    "lang": "python",
+    "lines": 61,
+    "key": "eb1d0d3b123f3f70"
+   },
+   {
+    "path": "backend/app/engine/rules.py",
+    "bytes": 13719,
+    "lang": "python",
+    "lines": 299,
+    "key": "f91a63d1bcfa2c02"
+   },
+   {
+    "path": "backend/app/engine/score.py",
+    "bytes": 4659,
+    "lang": "python",
+    "lines": 109,
+    "key": "1cf8552c7127f9f8"
+   },
+   {
+    "path": "backend/app/explain.py",
+    "bytes": 17590,
+    "lang": "python",
+    "lines": 358,
+    "key": "e04262b8b84d898c"
+   },
+   {
+    "path": "backend/app/extractor.py",
+    "bytes": 20134,
+    "lang": "python",
+    "lines": 392,
+    "key": "4a417d9a0636f4e3"
+   },
+   {
+    "path": "backend/app/heuristic.py",
+    "bytes": 13522,
+    "lang": "python",
+    "lines": 293,
+    "key": "349f570f9a17586e"
+   },
+   {
+    "path": "backend/app/i18n/__init__.py",
+    "bytes": 2243,
+    "lang": "python",
+    "lines": 72,
+    "key": "e4785cc66a701bde"
+   },
+   {
+    "path": "backend/app/i18n/bn.json",
+    "bytes": 55745,
+    "lang": "json",
+    "lines": 448,
+    "key": "e3c66805c708cbda"
+   },
+   {
+    "path": "backend/app/i18n/en.json",
+    "bytes": 29514,
+    "lang": "json",
+    "lines": 448,
+    "key": "2bfc69634869bca7"
+   },
+   {
+    "path": "backend/app/i18n/gu.json",
+    "bytes": 56460,
+    "lang": "json",
+    "lines": 448,
+    "key": "d13ecb109b53be67"
+   },
+   {
+    "path": "backend/app/i18n/hi.json",
+    "bytes": 57801,
+    "lang": "json",
+    "lines": 448,
+    "key": "6a4d013df0628e2c"
+   },
+   {
+    "path": "backend/app/i18n/hinglish.json",
+    "bytes": 30892,
+    "lang": "json",
+    "lines": 448,
+    "key": "18e8d692a736f9ed"
+   },
+   {
+    "path": "backend/app/i18n/kn.json",
+    "bytes": 64026,
+    "lang": "json",
+    "lines": 448,
+    "key": "83e6f2eea0fc6944"
+   },
+   {
+    "path": "backend/app/i18n/ml.json",
+    "bytes": 67252,
+    "lang": "json",
+    "lines": 448,
+    "key": "f30d20939b41462a"
+   },
+   {
+    "path": "backend/app/i18n/mr.json",
+    "bytes": 56121,
+    "lang": "json",
+    "lines": 448,
+    "key": "86839f941d9ee668"
+   },
+   {
+    "path": "backend/app/i18n/or.json",
+    "bytes": 54907,
+    "lang": "json",
+    "lines": 448,
+    "key": "94de3e8544ef6b96"
+   },
+   {
+    "path": "backend/app/i18n/pa.json",
+    "bytes": 56661,
+    "lang": "json",
+    "lines": 448,
+    "key": "a3d51a796b7c58ae"
+   },
+   {
+    "path": "backend/app/i18n/ta.json",
+    "bytes": 70248,
+    "lang": "json",
+    "lines": 448,
+    "key": "b385c9fc1ed4c67f"
+   },
+   {
+    "path": "backend/app/i18n/te.json",
+    "bytes": 60921,
+    "lang": "json",
+    "lines": 448,
+    "key": "8995375d4d110378"
+   },
+   {
+    "path": "backend/app/ingest.py",
+    "bytes": 1916,
+    "lang": "python",
+    "lines": 51,
+    "key": "4a45ff98144a3845"
+   },
+   {
+    "path": "backend/app/llm.py",
+    "bytes": 8931,
+    "lang": "python",
+    "lines": 213,
+    "key": "90dfd8a70e9a29c0"
+   },
+   {
+    "path": "backend/app/main.py",
+    "bytes": 6960,
+    "lang": "python",
+    "lines": 190,
+    "key": "7e270cd9eb9465fe"
+   },
+   {
+    "path": "backend/app/pipeline.py",
+    "bytes": 6244,
+    "lang": "python",
+    "lines": 135,
+    "key": "3f439dbea8379952"
+   },
+   {
+    "path": "backend/app/security.py",
+    "bytes": 9789,
+    "lang": "python",
+    "lines": 216,
+    "key": "438cfd098fe3c860"
+   },
+   {
+    "path": "backend/pytest.ini",
+    "bytes": 71,
+    "lang": "ini",
+    "lines": 3,
+    "key": "044daa800b384d3e"
+   },
+   {
+    "path": "backend/requirements.txt",
+    "bytes": 112,
+    "lang": "plaintext",
+    "lines": 7,
+    "key": "7467689207bc56c9"
+   },
+   {
+    "path": "backend/samples/01_instant_loan_app.txt",
+    "bytes": 776,
+    "lang": "plaintext",
+    "lines": 21,
+    "key": "9108d25e21ead588"
+   },
+   {
+    "path": "backend/samples/02_no_cost_emi.txt",
+    "bytes": 813,
+    "lang": "plaintext",
+    "lines": 16,
+    "key": "dacd7966d6fb9341"
+   },
+   {
+    "path": "backend/samples/03_credit_card.txt",
+    "bytes": 655,
+    "lang": "plaintext",
+    "lines": 11,
+    "key": "4a55e2fcf1cb3b61"
+   },
+   {
+    "path": "backend/samples/04_insurance_pitch.txt",
+    "bytes": 654,
+    "lang": "plaintext",
+    "lines": 13,
+    "key": "fd2a8b8f9c5d9e93"
+   },
+   {
+    "path": "backend/samples/05_home_loan_kfs.txt",
+    "bytes": 735,
+    "lang": "plaintext",
+    "lines": 13,
+    "key": "374473d186db6d3a"
+   },
+   {
+    "path": "backend/samples/06_vehicle_flat_rate.txt",
+    "bytes": 397,
+    "lang": "plaintext",
+    "lines": 10,
+    "key": "937b91ecad5b2f84"
+   },
+   {
+    "path": "backend/samples/07_fair_personal_loan.txt",
+    "bytes": 708,
+    "lang": "plaintext",
+    "lines": 13,
+    "key": "83465c7371107124"
+   },
+   {
+    "path": "backend/samples/index.json",
+    "bytes": 1170,
+    "lang": "json",
+    "lines": 51,
+    "key": "1789f58996063e8e"
+   },
+   {
+    "path": "backend/tests/__init__.py",
+    "bytes": 0,
+    "lang": "python",
+    "lines": 1,
+    "key": "abe1d93f22a5c128"
+   },
+   {
+    "path": "backend/tests/conftest.py",
+    "bytes": 224,
+    "lang": "python",
+    "lines": 6,
+    "key": "516a9fbf3b3657db"
+   },
+   {
+    "path": "backend/tests/test_api.py",
+    "bytes": 1430,
+    "lang": "python",
+    "lines": 42,
+    "key": "4594446abffc1aea"
+   },
+   {
+    "path": "backend/tests/test_engine.py",
+    "bytes": 3456,
+    "lang": "python",
+    "lines": 84,
+    "key": "dd8332d9ed1963d4"
+   },
+   {
+    "path": "backend/tests/test_i18n.py",
+    "bytes": 4644,
+    "lang": "python",
+    "lines": 105,
+    "key": "e662fde7b9dbd61e"
+   },
+   {
+    "path": "backend/tests/test_pipeline.py",
+    "bytes": 3469,
+    "lang": "python",
+    "lines": 105,
+    "key": "ac7784c3d5d33323"
+   },
+   {
+    "path": "backend/tests/test_security.py",
+    "bytes": 3796,
+    "lang": "python",
+    "masked": true,
+    "lines": 92,
+    "key": "c65a744625907744"
+   },
+   {
+    "path": "backend/tools/translate.py",
+    "bytes": 4683,
+    "lang": "python",
+    "lines": 87,
+    "key": "c0e56f38579c3db7"
+   },
+   {
+    "path": "docs/ARCHITECTURE.md",
+    "bytes": 4713,
+    "lang": "markdown",
+    "lines": 81,
+    "key": "fd45fecaceb5ca26"
+   },
+   {
+    "path": "docs/DEMO_VIDEO_SCRIPT.md",
+    "bytes": 6289,
+    "lang": "markdown",
+    "lines": 54,
+    "key": "118f33759f6abb12"
+   },
+   {
+    "path": "docs/IPR.md",
+    "bytes": 14103,
+    "lang": "markdown",
+    "lines": 165,
+    "key": "0f5c7bb26b247611"
+   },
+   {
+    "path": "docs/PITCH.md",
+    "bytes": 2492,
+    "lang": "markdown",
+    "lines": 38,
+    "key": "458382a1da3faff7"
+   },
+   {
+    "path": "docs/SUBMISSION_CHECKLIST.md",
+    "bytes": 2094,
+    "lang": "markdown",
+    "lines": 50,
+    "key": "51af76ab3bc93c12"
+   },
+   {
+    "path": "frontend/app.js",
+    "bytes": 33887,
+    "lang": "javascript",
+    "lines": 544,
+    "key": "57aad9a23b4d5789"
+   },
+   {
+    "path": "frontend/favicon.svg",
+    "bytes": 321,
+    "lang": "xml",
+    "lines": 1,
+    "key": "a798e440a5a124a2"
+   },
+   {
+    "path": "frontend/index.html",
+    "bytes": 16420,
+    "lang": "xml",
+    "lines": 295,
+    "key": "a12b0e66474192f8"
+   },
+   {
+    "path": "frontend/styles.css",
+    "bytes": 24873,
+    "lang": "css",
+    "lines": 362,
+    "key": "9e61c6d01b75ff71"
+   },
+   {
+    "path": "render.yaml",
+    "bytes": 304,
+    "lang": "yaml",
+    "lines": 12,
+    "key": "1b8a9c728ebe242b"
+   },
+   {
+    "path": "run.bat",
+    "bytes": 402,
+    "lang": "dos",
+    "lines": 10,
+    "key": "d62d1a3820f518e5"
+   },
+   {
+    "path": "run.sh",
+    "bytes": 432,
+    "lang": "bash",
+    "lines": 11,
+    "key": "324fcb49f1cf313e"
+   }
+  ]
+ }
+}

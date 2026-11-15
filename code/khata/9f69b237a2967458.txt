@@ -1,0 +1,555 @@
+/**
+ * Call review at /calls/[callId].
+ *
+ * Read-only. It reads an existing khata and adds no capture of any kind:
+ * no microphone, no extraction, no adjudication. Everything on this page
+ * was decided during the call and is being reproduced, not recomputed.
+ *
+ * WHAT A KHATA DOES NOT CONTAIN. It stores claims, verdicts and customer
+ * signals — not raw utterances. So the transcript below is reconstructed
+ * from the utterance ids the claims and signals carry, which means a
+ * finalised utterance that produced no claim leaves no text behind. That
+ * gap is stated on the page rather than papered over: a reviewer must be
+ * able to tell "nothing was flagged" from "nothing was checked", which is
+ * the entire reason CallCoverage exists.
+ */
+
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import { AppHeader } from "@/app/header";
+import { TABLE, TD, TD_META, TD_NUM, TH, THEAD_ROW, TR } from "@/app/table";
+import { canReviewOtherReps } from "@/lib/access";
+import { coverageGuard, readApproval, readKhata, verifyKhata } from "@/lib/closer";
+import { getCallForUser, getCustomer, getUser, isInitialised } from "@/lib/db";
+import { currentSession } from "@/lib/session";
+import type { Claim, CustomerSignal, KhataRecord, Verdict } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+
+const LABEL = "font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40";
+const NO_DATA = "insufficient data";
+
+function shortDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function clockTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function duration(startedAt: string, endedAt: string | null): string {
+  if (!endedAt) return "still open";
+  const ms = Date.parse(endedAt) - Date.parse(startedAt);
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const total = Math.round(ms / 1000);
+  return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, "0")}s`;
+}
+
+function rupees(n: number): string {
+  return "₹" + n.toFixed(2);
+}
+
+function stringify(v: number | string | null): string {
+  return v === null ? "—" : String(v);
+}
+
+/**
+ * Signal red is spent here and nowhere else on this page: a claim that
+ * contradicts the product terms. STALE and UNSUPPORTED are ink, because
+ * they are not the rep being wrong.
+ */
+function StatusTag({ status }: { status: Verdict["status"] }) {
+  const wrong = status === "WRONG";
+  return (
+    <span
+      className={`border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] ${
+        wrong ? "border-signal text-signal" : "border-hairline text-ink/60"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+type Row =
+  | { kind: "rep"; at: string; utteranceId: string; claims: Claim[] }
+  | { kind: "customer"; at: string; signal: CustomerSignal };
+
+/**
+ * Order the call by the timestamps that survive in the khata. Claims
+ * carry extractedAt and signals carry at; both are set as the line was
+ * processed, so the sequence is the call's sequence.
+ */
+function buildRows(khata: KhataRecord): Row[] {
+  const byUtterance = new Map<string, Claim[]>();
+  for (const claim of khata.claims) {
+    const bucket = byUtterance.get(claim.utteranceId);
+    if (bucket) bucket.push(claim);
+    else byUtterance.set(claim.utteranceId, [claim]);
+  }
+
+  const rows: Row[] = [];
+  for (const [utteranceId, claims] of byUtterance) {
+    rows.push({ kind: "rep", at: claims[0].extractedAt, utteranceId, claims });
+  }
+  for (const signal of khata.customerSignals) {
+    rows.push({ kind: "customer", at: signal.at, signal });
+  }
+  return rows.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-10 bg-paper px-8 py-12">
+      {children}
+    </main>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-t border-hairline pt-3">
+      <span className={LABEL}>{label}</span>
+      <p className="mt-1.5 font-mono text-sm text-ink">{value}</p>
+    </div>
+  );
+}
+
+export default async function CallReviewPage({
+  params,
+}: {
+  params: Promise<{ callId: string }>;
+}) {
+  const { callId } = await params;
+
+  if (!isInitialised()) {
+    return (
+      <Shell>
+        <p className="font-sans text-sm text-ink/70">
+          The database has not been initialised.
+        </p>
+      </Shell>
+    );
+  }
+
+  const session = await currentSession();
+  if (!session) {
+    return (
+      <Shell>
+        <p className="font-sans text-sm text-ink/70">Not signed in.</p>
+      </Shell>
+    );
+  }
+
+  // Scope in the WHERE clause. A rep asking for a colleague's call gets
+  // the same answer as a rep asking for a call id that does not exist,
+  // and the khata behind it is never decrypted.
+  const call = getCallForUser(callId, session.uid, session.role);
+  if (!call) notFound();
+
+  const khata = await readKhata(callId);
+  const approval = await readApproval(callId);
+  const customer = getCustomer(call.customer_id);
+  const rep = getUser(call.user_id);
+
+  const header = (
+    <AppHeader
+      role={session.role}
+      name={session.name}
+      page="call review"
+      current=""
+    />
+  );
+
+  if (!khata) {
+    return (
+      <Shell>
+        {header}
+        <section className="max-w-2xl">
+          <h2 className="font-sans text-lg font-medium text-ink">
+            No khata was written for this call
+          </h2>
+          <p className="mt-2 font-sans text-sm leading-relaxed text-ink/70">
+            The call has a row in the calls table, so it happened — but it
+            was started and abandoned before close, and the khata is written
+            at close. There is no transcript, no verdict and no CRM proposal
+            to review, only the counters on the call row.
+          </p>
+          <p className="mt-3 font-sans text-sm leading-relaxed text-ink/60">
+            A full review page appears for any call closed with Close &amp;
+            write khata, or by ending a live or replayed call.
+          </p>
+        </section>
+        <Link
+          href="/dashboard"
+          className="self-start font-mono text-xs text-ink underline underline-offset-4"
+        >
+          Back to dashboard
+        </Link>
+      </Shell>
+    );
+  }
+
+  const rows = buildRows(khata);
+  const verdictByClaim = new Map(khata.verdicts.map((v) => [v.claimId, v]));
+  const cost = khata.costs.reduce((sum, c) => sum + c.inr, 0);
+  const guard = coverageGuard(khata.coverage);
+  const chainIntact = verifyKhata(khata);
+
+  const reproduced = rows.length;
+  const captured = khata.coverage?.utterances ?? 0;
+  const checked = khata.coverage?.checked ?? 0;
+  const unchecked = khata.coverage?.unchecked ?? 0;
+  // Captured, processed, but no claim came out — so no text survives.
+  const silentlyChecked = Math.max(0, captured - unchecked - reproduced);
+
+  return (
+    <Shell>
+      {header}
+
+      <section>
+        <div className="flex flex-wrap items-baseline gap-x-4">
+          <h2 className="font-sans text-xl font-semibold tracking-tight text-ink">
+            {customer?.name ?? call.customer_id}
+          </h2>
+          <p className="font-sans text-sm text-ink/60">
+            called by{" "}
+            {canReviewOtherReps(session.role) ? (
+              <Link
+                href={`/reps/${call.user_id}`}
+                className="underline underline-offset-4"
+              >
+                {rep?.name ?? call.user_id}
+              </Link>
+            ) : (
+              <span className="text-ink">{rep?.name ?? call.user_id}</span>
+            )}
+          </p>
+          <span className="ml-auto font-mono text-xs text-ink/40">{callId}</span>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-x-10 gap-y-6 md:grid-cols-4">
+          <Fact label="Started" value={shortDateTime(khata.startedAt)} />
+          <Fact label="Ended" value={shortDateTime(khata.endedAt)} />
+          <Fact
+            label="Duration"
+            value={duration(khata.startedAt, khata.endedAt)}
+          />
+          <Fact
+            label="Consent recorded"
+            value={khata.consentAt ? shortDateTime(khata.consentAt) : "not recorded"}
+          />
+          <Fact label="Coverage" value={`${checked}/${captured} utterances`} />
+          <Fact label="Claims" value={String(khata.claims.length)} />
+          <Fact label="Model cost" value={rupees(cost)} />
+          <Fact
+            label="Hash chain"
+            value={chainIntact ? "intact" : "does not verify"}
+          />
+        </div>
+
+        {khata.consentAt === null && (
+          <p className="mt-6 max-w-3xl border-l-2 border-ink pl-4 font-sans text-sm leading-relaxed text-ink">
+            No consent timestamp is recorded on this call. The khata was
+            still written, because refusing to record what happened would
+            not undo it, but the call should not have been adjudicated
+            without consent.
+          </p>
+        )}
+      </section>
+
+      {/* The distinction the whole coverage field exists to preserve. */}
+      <section className="border-t border-hairline pt-8">
+        <h2 className={LABEL}>What was and was not checked</h2>
+        {unchecked > 0 ? (
+          <p className="mt-3 max-w-3xl font-sans text-sm leading-relaxed text-ink">
+            <span className="font-mono">{unchecked}</span> of{" "}
+            <span className="font-mono">{captured}</span> utterances on this
+            call went unchecked — they errored, stalled or were still in
+            flight when the call closed. Nothing below rules out a misquote
+            in those lines. This call is not evidence of a clean call.
+          </p>
+        ) : (
+          <p className="mt-3 max-w-3xl font-sans text-sm leading-relaxed text-ink/70">
+            All <span className="font-mono">{captured}</span> captured
+            utterances completed checking. A verdict was reached or ruled
+            out on every line the microphone finalised.
+          </p>
+        )}
+        {silentlyChecked > 0 && (
+          <p className="mt-3 max-w-3xl font-sans text-sm leading-relaxed text-ink/60">
+            <span className="font-mono">{silentlyChecked}</span> further
+            utterance{silentlyChecked === 1 ? " was" : "s were"} checked and
+            produced no claim, so no text survives for{" "}
+            {silentlyChecked === 1 ? "it" : "them"}. A khata stores claims and
+            verdicts, not the transcript. That is a deliberate limit on what
+            is kept, and it means the lines below are the checkable part of
+            the call rather than all of it.
+          </p>
+        )}
+        {guard.note && (
+          <p className="mt-3 max-w-3xl font-sans text-sm leading-relaxed text-ink/60">
+            {guard.note}
+          </p>
+        )}
+      </section>
+
+      <section className="border-t border-hairline pt-8">
+        <h2 className={LABEL}>The call, in order</h2>
+
+        {rows.length === 0 ? (
+          <p className="mt-3 max-w-3xl font-sans text-sm leading-relaxed text-ink/60">
+            No claims were extracted and no customer lines were recorded, so
+            there is nothing to reproduce. Read that together with the
+            coverage above: it means either the rep said nothing checkable,
+            or nothing was checked.
+          </p>
+        ) : (
+          <ol className="mt-5 flex flex-col gap-7">
+            {rows.map((row) =>
+              row.kind === "customer" ? (
+                <li
+                  key={row.signal.utteranceId}
+                  className="border-l-2 border-dashed border-hairline pl-4"
+                >
+                  <div className="flex flex-wrap items-baseline gap-x-3">
+                    <span className={LABEL}>customer</span>
+                    <span className="border border-[#A9761B] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[#A9761B]">
+                      simulated
+                    </span>
+                    <span className="font-mono text-[11px] text-ink/35">
+                      {clockTime(row.at)}
+                    </span>
+                  </div>
+                  <p className="mt-2 font-sans text-sm leading-relaxed text-ink/70">
+                    {row.signal.redactedText}
+                  </p>
+                  <p className="mt-1.5 font-mono text-[11px] text-ink/40">
+                    {row.signal.intent} · {row.signal.sentiment} ·{" "}
+                    {row.signal.source}
+                    <span className="ml-2 text-ink/35">
+                      no verdict — a customer line is not a claim about the
+                      product
+                    </span>
+                  </p>
+                </li>
+              ) : (
+                <li key={row.utteranceId} className="border-l-2 border-ink pl-4">
+                  <div className="flex flex-wrap items-baseline gap-x-3">
+                    <span className={LABEL}>rep</span>
+                    <span className="font-mono text-[11px] text-ink/35">
+                      {clockTime(row.at)}
+                    </span>
+                  </div>
+                  <p className="mt-2 font-sans text-sm leading-relaxed text-ink">
+                    {row.claims[0].redactedText}
+                  </p>
+
+                  <div className="mt-4 flex flex-col gap-4">
+                    {row.claims.map((claim) => {
+                      const verdict = verdictByClaim.get(claim.id);
+                      return (
+                        <div
+                          key={claim.id}
+                          className="border-t border-hairline pt-3"
+                        >
+                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
+                            {verdict ? (
+                              <StatusTag status={verdict.status} />
+                            ) : (
+                              <span className="border border-hairline px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                                no verdict
+                              </span>
+                            )}
+                            <span className="font-mono text-[11px] text-ink/50">
+                              {claim.type}
+                              {claim.tenureMonths
+                                ? ` · ${claim.tenureMonths}-month`
+                                : ""}
+                              {" · parsed by "}
+                              {claim.source}
+                            </span>
+                          </div>
+
+                          <div className="mt-2 grid grid-cols-1 gap-x-10 gap-y-2 md:grid-cols-2">
+                            <p className="font-mono text-xs text-ink/60">
+                              said{" "}
+                              <span className="text-ink">
+                                {stringify(claim.value)}
+                                {claim.unit ? ` ${claim.unit}` : ""}
+                              </span>
+                            </p>
+                            <p className="font-mono text-xs text-ink/60">
+                              truth{" "}
+                              <span className="text-ink">
+                                {verdict ? stringify(verdict.expected) : "—"}
+                              </span>
+                            </p>
+                          </div>
+
+                          {verdict && (
+                            <>
+                              <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+                                {verdict.explanation}
+                              </p>
+                              <p className="mt-1.5 font-mono text-[11px] text-ink/40">
+                                {verdict.sourceField} · v{verdict.sourceVersion} ·
+                                effective {verdict.sourceEffectiveFrom} ·{" "}
+                                {verdict.latencyMs}ms
+                              </p>
+                              {verdict.correction && (
+                                <div className="mt-3 border-l border-hairline pl-3">
+                                  <span className={LABEL}>
+                                    correction offered
+                                  </span>
+                                  <p className="mt-1.5 max-w-2xl font-sans text-sm leading-relaxed text-ink">
+                                    “{verdict.correction}”
+                                  </p>
+                                  <p className="mt-1 font-mono text-[11px] text-ink/40">
+                                    {verdict.correctionSelfChecked
+                                      ? "re-parsed and re-adjudicated before it was shown"
+                                      : "shown without passing the self-check"}
+                                  </p>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </li>
+              )
+            )}
+          </ol>
+        )}
+      </section>
+
+      <section className="border-t border-hairline pt-8">
+        <h2 className={LABEL}>CRM proposal</h2>
+
+        {approval === null ? (
+          <p className="mt-3 max-w-3xl font-sans text-sm leading-relaxed text-ink/70">
+            Nobody approved this call, so nothing was written to the CRM. The
+            proposal is not retained when it is not approved — the record of
+            an unapproved suggestion is not evidence of anything.
+          </p>
+        ) : (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-x-10 gap-y-6 md:grid-cols-4">
+              <Fact label="Approved by" value={approval.approvedBy} />
+              <Fact
+                label="Approved at"
+                value={shortDateTime(approval.approvedAt)}
+              />
+              <Fact
+                label="Khata hash"
+                value={approval.khataHash.slice(0, 12) + "…"}
+              />
+              <Fact
+                label="Follow-up"
+                value={approval.followUpSent ? "sent" : "not sent"}
+              />
+            </div>
+
+            {approval.khataHash !== khata.hash && (
+              // Deliberately not signal red. Red means a rep misquoted the
+              // product, and nothing else in the app; a tampering warning
+              // that borrows it would blunt the one colour that matters.
+              <p className="mt-5 max-w-3xl border-l-2 border-ink pl-4 font-sans text-sm font-medium leading-relaxed text-ink">
+                The approval cites a different khata hash than the record on
+                this page. What was approved is not what is stored here.
+              </p>
+            )}
+
+            <h3 className="mt-7 font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Fields written
+            </h3>
+            {approval.appliedDiff.length === 0 ? (
+              <p className="mt-2 font-sans text-sm text-ink/60">
+                None. The approval carried an empty diff.
+              </p>
+            ) : (
+              <table className={TABLE}>
+                <thead>
+                  <tr className={THEAD_ROW}>
+                    {["Field", "From", "To", "Reason"].map((h) => (
+                      <th key={h} className={TH}>
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {approval.appliedDiff.map((d) => (
+                    <tr key={d.field} className={TR}>
+                      <td className={TD_NUM.replace("text-right", "text-left")}>
+                        {d.field}
+                      </td>
+                      <td className={TD_META}>{stringify(d.from)}</td>
+                      <td className={TD_NUM.replace("text-right", "text-left")}>
+                        {stringify(d.to)}
+                      </td>
+                      <td className={`${TD} text-ink/60`}>{d.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <h3 className="mt-7 font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Fields withheld
+            </h3>
+            {guard.blockedFields.length === 0 ? (
+              <p className="mt-2 font-sans text-sm text-ink/60">
+                None. Coverage was complete, so no field was blocked on the
+                grounds that the call had not been checked.
+              </p>
+            ) : (
+              <ul className="mt-2 flex flex-col gap-1">
+                {guard.blockedFields.map((field) => (
+                  <li key={field} className="font-mono text-xs text-ink">
+                    {field}
+                    <span className="ml-3 font-sans text-sm text-ink/60">
+                      withheld — this field asserts a conclusion about the
+                      call, and part of the call was not checked
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 max-w-3xl font-mono text-[11px] leading-relaxed text-ink/40">
+              Recomputed from the coverage stored in this khata, not read
+              back from the proposal. Fields the model asked for that failed
+              the whitelist or value validation are not retained after
+              close, so they cannot be listed here — {NO_DATA} for those.
+            </p>
+          </>
+        )}
+      </section>
+
+      <Link
+        href={
+          canReviewOtherReps(session.role)
+            ? `/reps/${call.user_id}`
+            : "/dashboard"
+        }
+        className="self-start font-mono text-xs text-ink underline underline-offset-4"
+      >
+        {canReviewOtherReps(session.role)
+          ? `All calls by ${rep?.name ?? call.user_id}`
+          : "Back to my dashboard"}
+      </Link>
+    </Shell>
+  );
+}

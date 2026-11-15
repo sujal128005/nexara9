@@ -1,0 +1,176 @@
+{
+  "version": "1.0.0",
+  "seed": 7,
+  "families": [
+    "chart",
+    "count",
+    "gauge",
+    "maze",
+    "spatial",
+    "wires"
+  ],
+  "levels": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "pairs_per_level": 4,
+  "tasks": 240,
+  "seconds": 34.4,
+  "stages": [
+    [
+      "G1_evidence",
+      "Image carries sufficient evidence (sizes, margins, no ambiguous overlaps)"
+    ],
+    [
+      "G2_verifier",
+      "Independent pixel-level verifier recomputes the same answer from the rendered image"
+    ],
+    [
+      "G3_twin",
+      "A minimal counterfactual twin exists: same question, different answer, also verified"
+    ],
+    [
+      "G4_dedup",
+      "Not a near-duplicate of an accepted image (perceptual hash)"
+    ]
+  ],
+  "funnel": {
+    "chart": {
+      "candidates": 30,
+      "accepted_pairs": 20,
+      "G1_evidence": 10
+    },
+    "count": {
+      "candidates": 20,
+      "accepted_pairs": 20
+    },
+    "gauge": {
+      "candidates": 33,
+      "accepted_pairs": 20,
+      "G4_dedup": 13
+    },
+    "maze": {
+      "candidates": 23,
+      "accepted_pairs": 20,
+      "G3_twin": 3
+    },
+    "spatial": {
+      "candidates": 43,
+      "G1_evidence": 19,
+      "G3_twin": 4,
+      "accepted_pairs": 20
+    },
+    "wires": {
+      "candidates": 48,
+      "accepted_pairs": 20,
+      "G1_evidence": 26,
+      "G3_twin": 2
+    }
+  },
+  "funnel_total": {
+    "candidates": 197,
+    "accepted_pairs": 120,
+    "G1_evidence": 55,
+    "G4_dedup": 13,
+    "G3_twin": 9
+  },
+  "family_info": {
+    "chart": {
+      "title": "Report chart reading",
+      "application": "Extracting numbers from charts in PDFs, dashboards and scanned reports.",
+      "skill": "Reading values against axis gridlines, ranking near-equal bars, arithmetic over read values",
+      "qtypes": [
+        "read",
+        "rank",
+        "diff"
+      ],
+      "knobs": {
+        "n_cats": "number of categories",
+        "series": "1 = simple, 2 = grouped bars with legend",
+        "sub": "value resolution relative to gridline step (1, 1/2, 1/4)",
+        "label_every": "label every k-th gridline",
+        "min_gap_px": "smallest gap between ranked bars"
+      }
+    },
+    "count": {
+      "title": "Conjunction counting",
+      "application": "Counting parts on trays, items on shelves, defects on boards (inventory & QC).",
+      "skill": "Exact enumeration under clutter; binding colour+shape (conjunction search)",
+      "qtypes": [
+        "count"
+      ],
+      "knobs": {
+        "targets": "number of target objects",
+        "distractors": "number of distractors",
+        "conjunction": "distractors share colour OR shape with target",
+        "size": "object radius range",
+        "overlap": "background distractors may overlap",
+        "grid": "background clutter grid"
+      }
+    },
+    "gauge": {
+      "title": "Analog gauge reading",
+      "application": "Reading plant instruments from site photos / CCTV (pressure, temperature, flow).",
+      "skill": "Fine angular estimation + interpolation between tick marks + scale arithmetic",
+      "qtypes": [
+        "read"
+      ],
+      "knobs": {
+        "n_major": "number of labelled major intervals",
+        "minor": "minor ticks per major interval (1 = none)",
+        "half_steps": "value may sit half-way between minor ticks",
+        "setpoint": "red set-point needle as distractor",
+        "sparse_labels": "label only every other major tick",
+        "offset_zero": "scale starts below zero",
+        "noise": "sensor noise sigma",
+        "needle_w": "needle width (px)"
+      }
+    },
+    "maze": {
+      "title": "Route planning",
+      "application": "Floor-plan / warehouse navigation: shortest route between two marked locations.",
+      "skill": "Multi-step spatial planning with global constraints (walls), path length counting",
+      "qtypes": [
+        "shortest"
+      ],
+      "knobs": {
+        "grid": "maze size n x n",
+        "loops": "fraction of extra openings (multiple routes)",
+        "min_dist": "minimum shortest-path length"
+      }
+    },
+    "spatial": {
+      "title": "Spatial relations",
+      "application": "Layout checks: planogram compliance, site-plan / floor-plan questions, robot pick targets.",
+      "skill": "Metric distance comparison, relational counting and ordering by position",
+      "qtypes": [
+        "nearest",
+        "count_rel",
+        "order"
+      ],
+      "knobs": {
+        "n_objects": "objects in scene",
+        "ratio": "2nd-nearest / nearest distance ratio",
+        "margin_px": "min clearance from decision boundaries",
+        "radius": "object size"
+      }
+    },
+    "wires": {
+      "title": "Wire tracing",
+      "application": "Verifying wiring / piping diagrams, patch panels and control-cabinet photos.",
+      "skill": "Continuous contour following through crossings (a known weak spot of patch-based vision)",
+      "qtypes": [
+        "trace"
+      ],
+      "knobs": {
+        "n_wires": "number of wires",
+        "waypoints": "bends per wire",
+        "coloring": "distinct / paired / mono",
+        "width": "wire thickness (px)"
+      }
+    }
+  }
+}

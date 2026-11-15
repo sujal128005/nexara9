@@ -1,0 +1,310 @@
+"use client";
+
+/**
+ * lib/useListener.ts — the rep's microphone.
+ *
+ * Browser Web Speech API only (Chrome's `webkitSpeechRecognition`).
+ * No WebRTC, no LiveKit, no Deepgram, no server. The browser does the
+ * recognition; we just collect the results and shape them into
+ * `Utterance` objects exactly as lib/types.ts defines them.
+ *
+ * THE ONE THING THAT MATTERS: Chrome silently ends a recognition
+ * session after a few seconds of silence. It does not error — it fires
+ * `onend` and stops listening. Without the restart loop below, the demo
+ * dies mid-sentence and looks like a crash. See `onend`.
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Utterance } from "./types";
+
+/*
+ * Vendor typings.                                                     *
+ * TypeScript's lib.dom has no SpeechRecognition at all, so we declare  *
+ * the slice of the API we actually touch. Suffixed "Web" so that if a  *
+ * future lib.dom adds the real names, nothing collides.               *
+ */
+
+interface SpeechRecognitionAlternativeWeb {
+  readonly transcript: string;
+  readonly confidence: number;
+}
+
+interface SpeechRecognitionResultWeb {
+  readonly length: number;
+  readonly isFinal: boolean;
+  readonly [index: number]: SpeechRecognitionAlternativeWeb;
+}
+
+interface SpeechRecognitionResultListWeb {
+  readonly length: number;
+  readonly [index: number]: SpeechRecognitionResultWeb;
+}
+
+interface SpeechRecognitionEventWeb extends Event {
+  readonly resultIndex: number;
+  readonly results: SpeechRecognitionResultListWeb;
+}
+
+interface SpeechRecognitionErrorEventWeb extends Event {
+  /** "not-allowed" | "no-speech" | "network" | "audio-capture" | "aborted" | ... */
+  readonly error: string;
+  readonly message: string;
+}
+
+interface SpeechRecognitionWeb extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onstart: ((event: Event) => void) | null;
+  onend: ((event: Event) => void) | null;
+  onresult: ((event: SpeechRecognitionEventWeb) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventWeb) => void) | null;
+}
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionWeb;
+
+declare global {
+  interface Window {
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  }
+}
+
+export interface ListenerHandle {
+  /** Finalised utterances, oldest first. `redactedText` is "" — Task 3 fills it. */
+  utterances: Utterance[];
+  /** The sentence currently being revised. Not yet an Utterance. */
+  interim: string;
+  isListening: boolean;
+  /** False on Firefox, Safari, and during SSR. */
+  isSupported: boolean;
+  start: () => void;
+  stop: () => void;
+  /** Human-readable, or null. Non-fatal problems clear themselves. */
+  error: string | null;
+}
+
+function newId(prefix: string): string {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === "function") return `${prefix}_${c.randomUUID()}`;
+  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** How long to wait before restarting after Chrome ends the session. */
+const RESTART_DELAY_MS = 250;
+/** If we restart this many times without hearing anything, something is
+ *  structurally broken — stop spinning and tell the human. */
+const MAX_BLIND_RESTARTS = 25;
+
+export function useListener(): ListenerHandle {
+  const [utterances, setUtterances] = useState<Utterance[]>([]);
+  const [interim, setInterim] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const recognitionRef = useRef<SpeechRecognitionWeb | null>(null);
+  /** True only while the USER wants us listening. The `onend` restart
+   *  loop reads this — it is the guard that stops us resurrecting the
+   *  mic after an intentional stop(). */
+  const wantListeningRef = useRef(false);
+  const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blindRestartsRef = useRef(0);
+  /** Lets `onend` call back into `begin` without a circular dependency. */
+  const beginRef = useRef<() => void>(() => {});
+
+  // SSR-safe: `window` is touched only after mount, never at module scope.
+  useEffect(() => {
+    setIsSupported(typeof window !== "undefined" && !!window.webkitSpeechRecognition);
+  }, []);
+
+  const begin = useCallback(() => {
+    const Ctor = typeof window === "undefined" ? undefined : window.webkitSpeechRecognition;
+    if (!Ctor) {
+      setError(
+        "This browser has no Web Speech API. Use desktop Chrome, Edge, or Brave."
+      );
+      return;
+    }
+
+    // Always build a fresh instance. Reusing one after an error or an
+    // auto-end throws InvalidStateError roughly half the time, and a
+    // dead instance never recovers.
+    const recognition = new Ctor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-IN";
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      blindRestartsRef.current = 0; // we heard something; loop is healthy
+      let pendingInterim = "";
+      const finalised: Utterance[] = [];
+
+      // `results` is cumulative across the session, so only walk the
+      // slice Chrome says is new.
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const transcript = result[0] ? result[0].transcript : "";
+        if (result.isFinal) {
+          const text = transcript.trim();
+          if (text.length > 0) {
+            finalised.push({
+              id: newId("utt"),
+              speaker: "rep",
+              text,
+              redactedText: "", // Task 3 (lib/redact.ts) owns this
+              isFinal: true,
+              at: new Date().toISOString(),
+            });
+          }
+        } else {
+          pendingInterim += transcript;
+        }
+      }
+
+      setInterim(pendingInterim.trim());
+      if (finalised.length > 0) {
+        setUtterances((prev) => [...prev, ...finalised]);
+        setError((prev) =>
+          // A "no-speech" warning is stale the moment speech arrives.
+          prev && prev.startsWith("Heard nothing") ? null : prev
+        );
+      }
+    };
+
+    recognition.onerror = (event) => {
+      switch (event.error) {
+        case "not-allowed":
+        case "service-not-allowed":
+          // Fatal. Do not restart — you'd re-prompt in a loop.
+          wantListeningRef.current = false;
+          setError(
+            "Microphone permission was denied. Click the icon at the left of Chrome's address bar, set Microphone to Allow, then reload the page."
+          );
+          break;
+
+        case "audio-capture":
+          wantListeningRef.current = false;
+          setError(
+            "No microphone found. Check that one is plugged in and selected in your OS sound settings, then reload."
+          );
+          break;
+
+        case "network":
+          // Chrome ships audio to Google's servers to transcribe it.
+          wantListeningRef.current = false;
+          setError(
+            "Chrome could not reach its speech service. Web Speech needs a live internet connection — this will not work offline or behind a blocking proxy."
+          );
+          break;
+
+        case "no-speech":
+          // Routine. Chrome heard silence and gave up on this session;
+          // onend fires next and the restart loop picks it back up.
+          setError("Heard nothing for a few seconds — still listening.");
+          break;
+
+        case "aborted":
+          // We caused this by calling stop()/abort(). Not worth surfacing.
+          break;
+
+        default:
+          setError(`Speech recognition error: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      recognitionRef.current = null;
+
+      // THE RESTART LOOP. Chrome ends the session on its own after a
+      // few seconds of silence, with no error. If the user still wants
+      // to listen, stand a new session back up.
+      if (!wantListeningRef.current) {
+        setIsListening(false);
+        setInterim("");
+        return;
+      }
+
+      blindRestartsRef.current += 1;
+      if (blindRestartsRef.current > MAX_BLIND_RESTARTS) {
+        wantListeningRef.current = false;
+        setIsListening(false);
+        setError(
+          "Speech recognition kept restarting without hearing anything. Check the mic is not muted at the OS level, then press Start again."
+        );
+        return;
+      }
+
+      restartTimerRef.current = setTimeout(() => {
+        if (wantListeningRef.current) beginRef.current();
+      }, RESTART_DELAY_MS);
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+    } catch {
+      // InvalidStateError if a session is somehow still alive. Let onend
+      // drive the retry rather than fighting it here.
+      setIsListening(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    beginRef.current = begin;
+  }, [begin]);
+
+  const start = useCallback(() => {
+    if (wantListeningRef.current) return;
+    wantListeningRef.current = true;
+    blindRestartsRef.current = 0;
+    setError(null);
+    setInterim("");
+    beginRef.current();
+  }, []);
+
+  const stop = useCallback(() => {
+    wantListeningRef.current = false; // guard: onend must not restart
+    if (restartTimerRef.current !== null) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    const recognition = recognitionRef.current;
+    if (recognition) {
+      try {
+        recognition.stop();
+      } catch {
+        // Already stopped. Nothing to do.
+      }
+    }
+    setIsListening(false);
+    setInterim("");
+  }, []);
+
+  // Unmount: kill the loop before React tears the component down, or a
+  // stray timer resurrects the mic on a dead component.
+  useEffect(() => {
+    return () => {
+      wantListeningRef.current = false;
+      if (restartTimerRef.current !== null) clearTimeout(restartTimerRef.current);
+      const recognition = recognitionRef.current;
+      if (recognition) {
+        try {
+          recognition.abort();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
+  return { utterances, interim, isListening, isSupported, start, stop, error };
+}

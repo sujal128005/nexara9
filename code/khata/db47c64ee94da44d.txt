@@ -1,0 +1,808 @@
+/**
+ * End of call. Two jobs, kept separate on purpose.
+ *
+ * The khata is an audit record: written unconditionally, hash-chained to
+ * the previous one, never modified once on disk.
+ *
+ * The proposal is a suggestion. Nothing writes to crm.json until a human
+ * approves. The approval goes in its own file rather than being appended
+ * to the khata, because appending would invalidate the hash the khata's
+ * integrity rests on.
+ *
+ * Server-only, touches the filesystem.
+ */
+
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
+import {
+  assertInitialised,
+  getDeal,
+  getKhataRow,
+  insertKhataRow,
+  latestKhataHash,
+  listDeals,
+  listKhataRows,
+  ownerOf,
+  updateDealFields,
+} from "./db";
+
+import type {
+  CallCoverage,
+  Claim,
+  CostEntry,
+  CustomerSignal,
+  KhataRecord,
+  Verdict,
+} from "./types";
+
+const DATA_DIR = join(process.cwd(), "data");
+const KHATAS_DIR = join(DATA_DIR, "khatas");
+
+// hash chain
+
+/** Key-sorted JSON, so the same record always hashes the same. */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries
+    .map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`)
+    .join(",")}}`;
+}
+
+/** SHA-256 over everything in the record except the hash field itself. */
+export function hashRecord(record: Omit<KhataRecord, "hash">): string {
+  return createHash("sha256").update(stableStringify(record)).digest("hex");
+}
+
+/** Recompute and compare — proves a khata on disk has not been edited. */
+export function verifyKhata(record: KhataRecord): boolean {
+  const { hash, ...rest } = record;
+  return hashRecord(rest) === hash;
+}
+
+// encryption at rest
+
+/**
+ * Khatas hold claims derived from a real conversation and a customer id,
+ * so they are encrypted on disk with AES-256-GCM.
+ *
+ * ORDER MATTERS AND IS NOT NEGOTIABLE: the hash chain is computed over
+ * the PLAINTEXT record, in buildKhata(), before anything is encrypted.
+ * Hashing the ciphertext instead would tie the chain to a random IV, so
+ * the same record would hash differently every write and verifyKhata()
+ * would be meaningless. Encryption protects confidentiality; the hash
+ * protects integrity; they are separate properties and the hash goes first.
+ */
+export interface EncryptedKhataFile {
+  khataEncryption: "aes-256-gcm";
+  /** 96-bit nonce, freshly generated per file. Never reused. */
+  iv: string;
+  /** GCM authentication tag. This is what makes tampering detectable. */
+  tag: string;
+  ciphertext: string;
+}
+
+let warnedNoKey = false;
+let warnedBadKey = false;
+
+/** 32 bytes of hex from KHATA_ENCRYPTION_KEY, or null to write plaintext. */
+function encryptionKey(): Buffer | null {
+  const hex = (process.env.KHATA_ENCRYPTION_KEY ?? "").trim();
+  if (hex === "") {
+    if (!warnedNoKey) {
+      warnedNoKey = true;
+      console.warn(
+        "KHATA: KHATA_ENCRYPTION_KEY not set — khatas are being written in PLAINTEXT. Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+      );
+    }
+    return null;
+  }
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    if (!warnedBadKey) {
+      warnedBadKey = true;
+      console.warn(
+        "KHATA: KHATA_ENCRYPTION_KEY is not 64 hex characters (32 bytes). Ignoring it and writing plaintext rather than failing the call."
+      );
+    }
+    return null;
+  }
+  return Buffer.from(hex, "hex");
+}
+
+export function encryptRecord(
+  record: KhataRecord,
+  key: Buffer
+): EncryptedKhataFile {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([
+    cipher.update(JSON.stringify(record), "utf8"),
+    cipher.final(),
+  ]);
+  return {
+    khataEncryption: "aes-256-gcm",
+    iv: iv.toString("hex"),
+    tag: cipher.getAuthTag().toString("hex"),
+    ciphertext: ciphertext.toString("base64"),
+  };
+}
+
+/** Throws if the ciphertext, IV or tag has been altered. */
+export function decryptRecord(
+  file: EncryptedKhataFile,
+  key: Buffer
+): KhataRecord {
+  const decipher = createDecipheriv(
+    "aes-256-gcm",
+    key,
+    Buffer.from(file.iv, "hex")
+  );
+  decipher.setAuthTag(Buffer.from(file.tag, "hex"));
+  const plain = Buffer.concat([
+    decipher.update(Buffer.from(file.ciphertext, "base64")),
+    decipher.final(),
+  ]).toString("utf8");
+  return JSON.parse(plain) as KhataRecord;
+}
+
+function isEncrypted(value: { algorithm: string }): boolean {
+  return value.algorithm === "aes-256-gcm";
+}
+
+// building and storing the khata
+
+export interface BuildKhataInput {
+  callId: string;
+  customerId: string;
+  consentAt: string | null;
+  startedAt: string;
+  endedAt: string;
+  claims: Claim[];
+  verdicts: Verdict[];
+  costs: CostEntry[];
+  coverage: CallCoverage;
+  customerSignals: CustomerSignal[];
+  prevHash: string | null;
+}
+
+export function buildKhata(input: BuildKhataInput): KhataRecord {
+  const unhashed: Omit<KhataRecord, "hash"> = {
+    callId: input.callId,
+    customerId: input.customerId,
+    consentAt: input.consentAt,
+    startedAt: input.startedAt,
+    endedAt: input.endedAt,
+    claims: input.claims,
+    verdicts: input.verdicts,
+    costs: input.costs,
+    coverage: input.coverage,
+    customerSignals: input.customerSignals,
+    prevHash: input.prevHash,
+  };
+  return { ...unhashed, hash: hashRecord(unhashed) };
+}
+
+/** Hash of the most recent khata, or null if this is the first. */
+export async function readPrevHash(): Promise<string | null> {
+  try {
+    return latestKhataHash();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The record arrives already hashed. Encryption wraps it afterwards, so
+ * the stored hash is over the plaintext and survives the round trip
+ * unchanged — which is what keeps verifyKhata() meaningful.
+ *
+ * With no key set, the body is stored as-is with algorithm 'none' and
+ * empty iv/tag. The column is called ciphertext because the schema says
+ * so; algorithm is the field that tells you whether it actually is one.
+ */
+export async function writeKhata(record: KhataRecord): Promise<string> {
+  const key = encryptionKey();
+  const sealed = key ? encryptRecord(record, key) : null;
+
+  insertKhataRow({
+    call_id: record.callId,
+    hash: record.hash,
+    prev_hash: record.prevHash,
+    algorithm: sealed ? "aes-256-gcm" : "none",
+    iv: sealed ? sealed.iv : "",
+    auth_tag: sealed ? sealed.tag : "",
+    ciphertext: sealed ? sealed.ciphertext : JSON.stringify(record),
+    created_at: new Date().toISOString(),
+  });
+
+  return record.callId;
+}
+
+/** Rebuilds a record from a stored row, decrypting if it was encrypted. */
+function rowToRecord(row: {
+  algorithm: string;
+  iv: string;
+  auth_tag: string;
+  ciphertext: string;
+}): KhataRecord | null {
+  if (!isEncrypted(row)) {
+    try {
+      return JSON.parse(row.ciphertext) as KhataRecord;
+    } catch {
+      return null;
+    }
+  }
+
+  const key = encryptionKey();
+  if (!key) {
+    console.warn(
+      "KHATA: found an encrypted khata but no KHATA_ENCRYPTION_KEY. Skipping it."
+    );
+    return null;
+  }
+  try {
+    return decryptRecord(
+      {
+        khataEncryption: "aes-256-gcm",
+        iv: row.iv,
+        tag: row.auth_tag,
+        ciphertext: row.ciphertext,
+      },
+      key
+    );
+  } catch {
+    // Authentication failed: altered, or the wrong key. Either way it is
+    // not evidence of anything.
+    console.warn("KHATA: a khata failed decryption and was skipped.");
+    return null;
+  }
+}
+
+/** Decrypts transparently. Callers never know which form it was in. */
+export async function readKhata(callId: string): Promise<KhataRecord | null> {
+  const row = getKhataRow(callId);
+  return row ? rowToRecord(row) : null;
+}
+
+export async function listKhatas(): Promise<KhataRecord[]> {
+  const out: KhataRecord[] = [];
+  for (const row of listKhataRows()) {
+    const record = rowToRecord(row);
+    if (record) out.push(record);
+  }
+  return out;
+}
+
+// the proposal
+
+export interface CrmFieldDiff {
+  field: string;
+  /** Read from disk, never from the model. */
+  from: string | number | null;
+  to: string | number | null;
+  reason: string;
+}
+
+export interface CloseProposal {
+  dropOffReason: string;
+  crmDiff: CrmFieldDiff[];
+  followUpDraft: string;
+  /** Off-whitelist fields, and values that failed validation. With reasons. */
+  rejected: RejectedField[];
+  /** Fields withheld because the call was not fully fact-checked. */
+  blockedFields: string[];
+  /** Plain-language warning when coverage was incomplete. */
+  coverageNote: string | null;
+}
+
+// coverage guard
+
+/**
+ * Fields whose values assert a CONCLUSION about how the call went.
+ * Writing any of these requires having actually checked the call.
+ *
+ * `lastContactAt`, `attemptsSoFar` and `quotedTenureMonths` are not on
+ * this list: the call demonstrably happened, so those stay factual even
+ * when nothing could be verified.
+ */
+export const COVERAGE_BLOCKED_FIELDS = [
+  "openObjection",
+  "stage",
+  "nextStep",
+] as const;
+
+export interface CoverageVerdict {
+  complete: boolean;
+  blockedFields: string[];
+  note: string | null;
+}
+
+/**
+ * "We checked and found nothing wrong" and "we could not check" are
+ * opposite statements. Conflating them is how a fact-checker ends up
+ * reporting all clear on a call it never saw — overwriting a true
+ * objection with a false claim of absence, and telling the rep to
+ * reassure a customer who was just misquoted.
+ *
+ * So: if any utterance went unchecked, no conclusion-bearing field may
+ * be written, and the drop-off reason must say why.
+ */
+export function coverageGuard(
+  coverage: CallCoverage | null | undefined
+): CoverageVerdict {
+  // Khatas written before coverage existed have none. Unknown coverage is
+  // treated as incomplete, never as clean — the whole point is that
+  // absence of evidence is not evidence of absence.
+  if (!coverage || typeof coverage.unchecked !== "number") {
+    return {
+      complete: false,
+      blockedFields: [...COVERAGE_BLOCKED_FIELDS],
+      note: "This khata records no coverage information, so it cannot show what was checked. Conclusion fields are withheld.",
+    };
+  }
+
+  if (coverage.unchecked <= 0) {
+    return { complete: true, blockedFields: [], note: null };
+  }
+  return {
+    complete: false,
+    blockedFields: [...COVERAGE_BLOCKED_FIELDS],
+    note: `Only ${coverage.checked} of ${coverage.utterances} utterance${
+      coverage.utterances === 1 ? "" : "s"
+    } were fact-checked — ${coverage.unchecked} failed or never completed. This call is PARTIALLY VERIFIED: nothing here is evidence that the rep quoted correctly. Conclusion fields are withheld.`,
+  };
+}
+
+/**
+ * The only CRM fields a model is ever allowed to propose writing.
+ * Anything else it suggests is dropped and surfaced to the rep as
+ * rejected. A model that can write arbitrary CRM fields is a model that
+ * can quietly change a deal's value or owner.
+ */
+export const ALLOWED_CRM_FIELDS = [
+  "stage",
+  "openObjection",
+  "nextStep",
+  "quotedTenureMonths",
+  "attemptsSoFar",
+  "lastContactAt",
+] as const;
+
+export type AllowedCrmField = (typeof ALLOWED_CRM_FIELDS)[number];
+
+// value validation
+
+/** The only values `stage` may hold. */
+export const CRM_STAGES = [
+  "quote_sent",
+  "negotiation",
+  "kyc_pending",
+  "follow_up",
+  "won",
+  "lost",
+] as const;
+
+/**
+ * Strings a model emits when it has nothing to say but the schema
+ * demanded a value. Writing any of these over a real note destroys
+ * information and looks like data.
+ */
+const PLACEHOLDER_VALUES = new Set([
+  "true",
+  "false",
+  "null",
+  "undefined",
+  "none",
+  "n/a",
+  "na",
+  "nil",
+  "unknown",
+  "string",
+  "-",
+  "",
+]);
+
+export interface RejectedField {
+  field: string;
+  value: string | number | null;
+  reason: string;
+}
+
+type ValidationResult =
+  | { ok: true; value: string | number }
+  | { ok: false; reason: string };
+
+function normaliseStage(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+/**
+ * ALLOWED_CRM_FIELDS controls which fields a model may write.
+ * This controls what may go INTO them.
+ *
+ * Both are needed. Without this, `openObjection` is a writable field and
+ * a model can still replace a customer's real objection with the string
+ * "true" — approved, whitelisted, and worthless. A field-level guard
+ * that permits any value is not a guard.
+ */
+export function validateCrmValue(
+  field: string,
+  value: string | number
+): ValidationResult {
+  switch (field) {
+    case "stage": {
+      if (typeof value !== "string") {
+        return { ok: false, reason: "stage must be text." };
+      }
+      const normalised = normaliseStage(value);
+      if (!(CRM_STAGES as readonly string[]).includes(normalised)) {
+        return {
+          ok: false,
+          reason: `"${value}" is not a known stage. Allowed: ${CRM_STAGES.join(", ")}.`,
+        };
+      }
+      // "Follow-up" is accepted and stored as "follow_up" — forgiving
+      // about formatting, strict about vocabulary.
+      return { ok: true, value: normalised };
+    }
+
+    case "openObjection":
+    case "nextStep": {
+      if (typeof value !== "string") {
+        return { ok: false, reason: `${field} must be a sentence, not a number.` };
+      }
+      const trimmed = value.trim();
+      if (PLACEHOLDER_VALUES.has(trimmed.toLowerCase())) {
+        return {
+          ok: false,
+          reason: `"${trimmed}" is a placeholder, not a note. Refusing to overwrite a real entry with it.`,
+        };
+      }
+      if (trimmed.length < 12 || !trimmed.includes(" ")) {
+        return {
+          ok: false,
+          reason: `"${trimmed}" is too short to be a usable note.`,
+        };
+      }
+      return { ok: true, value: trimmed };
+    }
+
+    case "quotedTenureMonths": {
+      const n =
+        typeof value === "number" ? value : Number(String(value).replace(/[^\d.-]/g, ""));
+      if (n !== 3 && n !== 6 && n !== 9) {
+        return {
+          ok: false,
+          reason: `We only offer 3, 6 and 9 month tenures — "${String(value)}" is not one of them.`,
+        };
+      }
+      return { ok: true, value: n };
+    }
+
+    case "attemptsSoFar": {
+      const n = typeof value === "number" ? value : Number(value);
+      if (!Number.isInteger(n) || n < 0 || n > 100) {
+        return {
+          ok: false,
+          reason: `"${String(value)}" is not a plausible attempt count.`,
+        };
+      }
+      return { ok: true, value: n };
+    }
+
+    case "lastContactAt": {
+      if (typeof value !== "string" || Number.isNaN(Date.parse(value))) {
+        return {
+          ok: false,
+          reason: `"${String(value)}" is not a parseable timestamp.`,
+        };
+      }
+      return { ok: true, value };
+    }
+
+    default:
+      return { ok: false, reason: `${field} is not a writable field.` };
+  }
+}
+
+/**
+ * The CRM lives in the deals table now. `from` values are read straight
+ * out of it, never taken from the model's proposal.
+ */
+export async function sanitiseDiff(
+  customerId: string,
+  proposed: Array<{ field?: unknown; to?: unknown; reason?: unknown }>
+): Promise<{ diff: CrmFieldDiff[]; rejected: RejectedField[] }> {
+  assertInitialised();
+  const deal = getDeal(customerId);
+
+  const diff: CrmFieldDiff[] = [];
+  const rejected: RejectedField[] = [];
+
+  for (const item of proposed) {
+    const field = typeof item.field === "string" ? item.field : null;
+    if (!field) continue;
+
+    const rawValue =
+      typeof item.to === "string" || typeof item.to === "number" ? item.to : null;
+
+    // Gate 1 — is this field writable at all?
+    if (!(ALLOWED_CRM_FIELDS as readonly string[]).includes(field)) {
+      rejected.push({
+        field,
+        value: rawValue,
+        reason: "Not on the writable whitelist.",
+      });
+      continue;
+    }
+
+    if (rawValue === null) {
+      rejected.push({ field, value: null, reason: "No usable value supplied." });
+      continue;
+    }
+
+    // Gate 2 — is this a sane value FOR that field?
+    const validated = validateCrmValue(field, rawValue);
+    if (!validated.ok) {
+      rejected.push({ field, value: rawValue, reason: validated.reason });
+      continue;
+    }
+
+    const current = deal
+      ? (deal as unknown as Record<string, unknown>)[CRM_COLUMN[field]]
+      : null;
+    const from =
+      typeof current === "string" || typeof current === "number" ? current : null;
+
+    if (from === validated.value) continue; // not a change
+
+    diff.push({
+      field,
+      from,
+      to: validated.value,
+      reason: typeof item.reason === "string" ? item.reason : "",
+    });
+  }
+
+  return { diff, rejected };
+}
+
+/**
+ * Write an approved diff to the deals table. Called ONLY from the approve
+ * action, never from propose.
+ */
+export async function applyCrmDiff(
+  customerId: string,
+  diff: CrmFieldDiff[]
+): Promise<{ applied: CrmFieldDiff[]; skipped: string[] }> {
+  assertInitialised();
+  if (!getDeal(customerId)) {
+    return { applied: [], skipped: diff.map((d) => d.field) };
+  }
+
+  const applied: CrmFieldDiff[] = [];
+  const skipped: string[] = [];
+  const columns: Record<string, string | number | null> = {};
+
+  for (const item of diff) {
+    // Re-checked here, not just in sanitiseDiff. The approve action takes
+    // a diff from the client, so this is the last gate before the write
+    // and it cannot assume anything upstream ran.
+    if (!(ALLOWED_CRM_FIELDS as readonly string[]).includes(item.field)) {
+      skipped.push(item.field);
+      continue;
+    }
+    if (item.to === null) {
+      skipped.push(item.field);
+      continue;
+    }
+    const validated = validateCrmValue(item.field, item.to);
+    if (!validated.ok) {
+      skipped.push(item.field);
+      continue;
+    }
+    columns[CRM_COLUMN[item.field]] = validated.value;
+    applied.push(item);
+  }
+
+  updateDealFields(customerId, columns);
+  return { applied, skipped };
+}
+
+export interface ApprovalRecord {
+  callId: string;
+  /** Ties the approval to an exact, unmodified khata. */
+  khataHash: string;
+  approvedAt: string;
+  approvedBy: string;
+  /**
+   * The user id that authorised this. Until authentication lands it is
+   * the sales user the customer is assigned to, resolved server-side —
+   * never a display name posted by the client.
+   */
+  approvedByUserId: string | null;
+  appliedDiff: CrmFieldDiff[];
+  followUpSent: string | null;
+}
+
+/**
+ * Approvals are plaintext by design. They record what a human authorised,
+ * not what was said, and an audit trail nobody can read without a key is
+ * not much of an audit trail. The schema has no approvals table, so they
+ * stay files; the deals row additionally records who approved and which
+ * call it came from.
+ */
+export async function readApproval(
+  callId: string
+): Promise<ApprovalRecord | null> {
+  try {
+    return JSON.parse(
+      await readFile(join(KHATAS_DIR, `${callId}.approval.json`), "utf8")
+    ) as ApprovalRecord;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeApproval(record: ApprovalRecord): Promise<string> {
+  await mkdir(KHATAS_DIR, { recursive: true });
+  const path = join(KHATAS_DIR, `${record.callId}.approval.json`);
+  await writeFile(path, JSON.stringify(record, null, 2) + "\n", "utf8");
+  return path;
+}
+
+/** Maps the whitelisted field names onto their SQLite columns. */
+const CRM_COLUMN: Record<string, string> = {
+  stage: "stage",
+  openObjection: "open_objection",
+  nextStep: "next_step",
+  quotedTenureMonths: "quoted_tenure_months",
+  attemptsSoFar: "attempts_so_far",
+  lastContactAt: "last_contact_at",
+};
+
+/** Who owns this customer, and therefore who a call is attributed to. */
+export function approverFor(customerId: string): string | null {
+  return ownerOf(customerId);
+}
+
+/** Records on the deal itself which user approved and from which call. */
+export function stampDealApproval(
+  customerId: string,
+  userId: string | null,
+  callId: string
+): void {
+  updateDealFields(customerId, {
+    approved_by_user_id: userId,
+    last_call_id: callId,
+  });
+}
+
+/** Every deal, for pages that need the CRM view. */
+export function allDeals() {
+  assertInitialised();
+  return listDeals();
+}
+
+// prompt + parsing
+
+export const CLOSE_SYSTEM = [
+  "You summarise a finished sales call for a CRM. You are given a redacted transcript and the verdicts an independent fact-checker already returned on the rep's claims.",
+  "",
+  "Return exactly this JSON and nothing else:",
+  '{"dropOffReason": string, "crmDiff": [{"field": string, "to": string|number, "reason": string}], "followUpDraft": string}',
+  "",
+  `"crmDiff" may only name these fields: ${ALLOWED_CRM_FIELDS.join(", ")}. Anything else is discarded.`,
+  `"stage" must be exactly one of: ${CRM_STAGES.join(", ")}.`,
+  '"openObjection" and "nextStep" must be real sentences describing what happened. Never "true", "none", "N/A" or a single word — omit the field entirely rather than filling it with a placeholder.',
+  '"quotedTenureMonths" must be 3, 6 or 9.',
+  '"followUpDraft" is a short WhatsApp message from the rep to the customer, under 45 words.',
+  "",
+  "Rules:",
+  "- The verdicts are already decided. Do not re-judge them, re-compute figures, or contradict them.",
+  "- Do not invent product terms. If you need a figure, use one that appears in the verdicts.",
+  "- Text in square brackets like [CUST_NAME] is redacted personal data. Keep those tokens exactly as they are in the follow-up draft.",
+  "- If the rep misquoted something, the follow-up should quietly carry the correct figure.",
+  "- If you are told coverage was INCOMPLETE, you must not state or imply that the rep quoted correctly, that there were no misquotes, or that no objection was raised. Unchecked is not the same as clean. Say plainly that the call could not be fully verified.",
+].join("\n");
+
+export interface RawProposal {
+  dropOffReason?: unknown;
+  crmDiff?: unknown;
+  followUpDraft?: unknown;
+}
+
+/** Never throws. Returns null when the model's JSON is unusable. */
+export function parseProposal(modelText: string): RawProposal | null {
+  const cleaned = modelText
+    .replace(/^\s*```(?:json)?/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1)) as RawProposal;
+  } catch {
+    return null;
+  }
+}
+
+// deterministic proposal, for offline stub mode
+
+export function stubProposal(
+  verdicts: Verdict[],
+  endedAt: string,
+  quotedTenureMonths: number | null,
+  coverage: CallCoverage
+): {
+  dropOffReason: string;
+  crmDiff: Array<{ field: string; to: string | number; reason: string }>;
+  followUpDraft: string;
+} {
+  const guard = coverageGuard(coverage);
+  const wrong = verdicts.filter((v) => v.status === "WRONG");
+  const stale = verdicts.filter((v) => v.status === "STALE");
+
+  // Facts that hold regardless of whether anything could be verified.
+  const crmDiff: Array<{ field: string; to: string | number; reason: string }> = [
+    { field: "lastContactAt", to: endedAt, reason: "Call just ended." },
+  ];
+  if (quotedTenureMonths !== null) {
+    crmDiff.push({
+      field: "quotedTenureMonths",
+      to: quotedTenureMonths,
+      reason: "Tenure discussed on this call.",
+    });
+  }
+
+  // Coverage was incomplete: assert nothing about what was said.
+  if (!guard.complete) {
+    return {
+      dropOffReason: `Cannot say. ${coverage.unchecked} of ${coverage.utterances} utterances were never fact-checked, so this call provides no evidence either way about whether terms were quoted correctly.`,
+      crmDiff,
+      followUpDraft: `Hi [CUST_NAME], thanks for your time today. I'll put the exact terms in writing and send them across shortly.`,
+    };
+  }
+
+  const corrected = [...wrong, ...stale]
+    .map((v) => `${v.sourceField.split(".").pop()} is ${String(v.expected)}`)
+    .join("; ");
+
+  const dropOffReason =
+    wrong.length > 0
+      ? `Rep misquoted ${wrong.length} term${wrong.length === 1 ? "" : "s"} on the call (${wrong
+          .map((v) => v.sourceField.split(".").pop())
+          .join(", ")}). Customer is likely to verify these elsewhere before committing.`
+      : stale.length > 0
+        ? "Rep quoted superseded pricing from an earlier product version. Terms were corrected on the call."
+        : "No misquotes detected across a fully checked call. Ended without a stated objection being resolved.";
+
+  crmDiff.push({
+    field: "openObjection",
+    to:
+      wrong.length + stale.length > 0
+        ? `Was quoted incorrect terms on the last call; corrected to: ${corrected}.`
+        : "No new objection raised on the last call.",
+    reason: "Reflects what actually happened on this call.",
+  });
+
+  const followUpDraft =
+    wrong.length + stale.length > 0
+      ? `Hi [CUST_NAME], thanks for your time. Just to confirm in writing: ${corrected}. Happy to finish the application whenever suits you.`
+      : `Hi [CUST_NAME], thanks for your time today. Everything we discussed stands — let me know when you'd like to go ahead.`;
+
+  return { dropOffReason, crmDiff, followUpDraft };
+}

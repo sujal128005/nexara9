@@ -1,0 +1,32 @@
+"use client";
+
+import { useState } from "react";
+
+/**
+ * The only client island in the header. Logout is a POST so a prefetch
+ * or a stray link crawler cannot sign anyone out.
+ */
+export function LogoutButton() {
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true);
+        void fetch("/api/auth/logout", { method: "POST" }).then(() => {
+          // Full navigation, not router.push: the session cookie was just
+          // cleared and every protected page reads it on the server. A
+          // client-side push would re-render from a cache that still
+          // believes someone is signed in.
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+          window.location.href = "/login";
+        });
+      }}
+      className="border border-hairline px-2.5 py-1 font-mono text-xs text-ink/70 transition-colors hover:border-ink hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:text-ink/35"
+    >
+      {busy ? "Signing out…" : "Logout"}
+    </button>
+  );
+}

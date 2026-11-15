@@ -1,0 +1,69 @@
+{
+  "_note": "One open deal per customer, keyed by customerId. `callId` is what a KhataRecord will be filed under. `consentAt` null means consent has not been captured yet — a call must not be adjudicated without it.",
+  "deals": [
+    {
+      "dealId": "deal_2026_0814",
+      "callId": "call_2026_08_07_0814",
+      "customerId": "cus_mn_iyer",
+      "stage": "quote_sent",
+      "assignedRep": "Nikhil Bhandari",
+      "repId": "rep_nb_04",
+      "source": "merchant_checkout_dropoff",
+      "createdAt": "2026-08-03T11:12:00+05:30",
+      "lastContactAt": "2026-08-06T16:40:00+05:30",
+      "attemptsSoFar": 2,
+      "quotedTenureMonths": 6,
+      "consentAt": null,
+      "openObjection": "Thinks the 6-month plan is interest-free because a colleague told her all EMI here is zero-cost.",
+      "nextStep": "Walk through the ₹349 fee and the 14% p.a. on 6 months, then close on 3 or 6."
+    },
+    {
+      "dealId": "deal_2026_0822",
+      "callId": "call_2026_08_07_0822",
+      "customerId": "cus_rt_deshmukh",
+      "stage": "negotiation",
+      "assignedRep": "Sneha Rathore",
+      "repId": "rep_sr_11",
+      "source": "inbound_web_lead",
+      "createdAt": "2026-07-29T09:55:00+05:30",
+      "lastContactAt": "2026-08-06T19:05:00+05:30",
+      "attemptsSoFar": 4,
+      "quotedTenureMonths": 9,
+      "consentAt": "2026-08-06T19:05:22+05:30",
+      "openObjection": "Wants a 12-month tenure we do not offer, and is comparing our late fee against a rival's.",
+      "nextStep": "Hold the line at 9 months; be exact about ₹250 flat plus 2% per month on overdue principal."
+    },
+    {
+      "dealId": "deal_2026_0831",
+      "callId": "call_2026_08_07_0831",
+      "customerId": "cus_fr_qureshi",
+      "stage": "kyc_pending",
+      "assignedRep": "Nikhil Bhandari",
+      "repId": "rep_nb_04",
+      "source": "merchant_store_referral",
+      "createdAt": "2026-08-05T14:20:00+05:30",
+      "lastContactAt": "2026-08-07T10:15:00+05:30",
+      "attemptsSoFar": 1,
+      "quotedTenureMonths": 3,
+      "consentAt": "2026-08-07T10:15:09+05:30",
+      "openObjection": "Was quoted a ₹99 processing fee by a store promoter working off last quarter's flyer.",
+      "nextStep": "Correct the fee to ₹199 without blaming the store, then finish Aadhaar OTP on the call."
+    },
+    {
+      "dealId": "deal_2026_0819",
+      "callId": "call_2026_08_08_0819",
+      "customerId": "cus_ab_bhatt",
+      "stage": "quote_sent",
+      "assignedRep": "Nikhil Bhandari",
+      "repId": "rep_nb_04",
+      "source": "merchant_checkout_dropoff",
+      "createdAt": "2026-08-05T10:20:00+05:30",
+      "lastContactAt": "2026-08-07T18:05:00+05:30",
+      "attemptsSoFar": 1,
+      "quotedTenureMonths": 9,
+      "consentAt": null,
+      "openObjection": "Wants the lowest possible monthly figure and has not been told the 9-month plan carries interest.",
+      "nextStep": "Confirm the 9-month EMI against her basket, then close on 9 or step her down to 6."
+    }
+  ]
+}

@@ -1,0 +1,179 @@
+{
+  "_note": "Demo customers, mid-funnel. Phone/email/PAN are fictional but realistically shaped on purpose — lib/redact.ts scrubs them before anything crosses the LLM boundary, so they double as redaction fixtures. `demoScript` is the SIMULATED call used by replay mode. Rep lines are adjudicated; customer lines never are, they only get an intent/sentiment read. Web Speech gives one undiarized channel, so a customer side is impossible on a live call and exists only here.",
+  "customers": [
+    {
+      "id": "cus_mn_iyer",
+      "name": "Meenakshi Iyer",
+      "ageYears": 34,
+      "city": "Coimbatore",
+      "state": "Tamil Nadu",
+      "phone": "+91 XXXXX XXXXX",
+      "email": "name@example.com",
+      "panMasked": "AXKPI••••F",
+      "preferredLanguage": "en-IN",
+      "kycStatus": "aadhaar_otp_verified",
+      "cart": {
+        "sku": "SM-S731BZKDINS",
+        "item": "Samsung Galaxy S25 FE 256GB, Graphite",
+        "merchant": "Poorvika Mobiles, RS Puram",
+        "ticketInr": 28400
+      },
+      "interestedTenureMonths": 6,
+      "notes": "Wants the monthly outgo under ₹5,000. Has asked twice what the 'zero-cost' plan actually costs.",
+      "demoScript": [
+        {
+          "speaker": "rep",
+          "text": "the processing fee is three forty nine on the six month plan"
+        },
+        {
+          "speaker": "customer",
+          "text": "three forty nine? my colleague told me there are no charges at all on these EMI plans"
+        },
+        {
+          "speaker": "rep",
+          "text": "your EMI works out to 4928 a month"
+        },
+        {
+          "speaker": "customer",
+          "text": "that is more than I was expecting, what is the total I will end up paying"
+        },
+        {
+          "speaker": "rep",
+          "text": "the six month plan is also zero percent"
+        },
+        {
+          "speaker": "customer",
+          "text": "then why is the EMI more than twenty eight thousand divided by six"
+        },
+        {
+          "speaker": "rep",
+          "text": "and the late fee is five hundred rupees"
+        },
+        {
+          "speaker": "customer",
+          "text": "please send all of this to me in writing before I decide anything"
+        }
+      ]
+    },
+    {
+      "id": "cus_rt_deshmukh",
+      "name": "Rohit Deshmukh",
+      "ageYears": 29,
+      "city": "Pune",
+      "state": "Maharashtra",
+      "phone": "+91 XXXXX XXXXX",
+      "email": "name@example.com",
+      "panMasked": "BQWPD••••K",
+      "preferredLanguage": "en-IN",
+      "kycStatus": "digilocker_pending",
+      "cart": {
+        "sku": "DYS-V12-DSA-IN",
+        "item": "Dyson V12 Detect Slim Absolute cordless vacuum",
+        "merchant": "Croma, Phoenix Marketcity Viman Nagar",
+        "ticketInr": 42900
+      },
+      "interestedTenureMonths": 9,
+      "notes": "Price-shopping against a competitor's 12-month offer. Sensitive to any mention of hidden charges.",
+      "demoScript": [
+        {
+          "speaker": "rep",
+          "text": "the processing fee is four ninety nine on the nine month plan"
+        },
+        {
+          "speaker": "customer",
+          "text": "and if I take twelve months instead, does that fee change"
+        },
+        {
+          "speaker": "rep",
+          "text": "nine month is fourteen percent per annum"
+        },
+        {
+          "speaker": "customer",
+          "text": "fourteen percent is higher than what the other app is showing me"
+        },
+        {
+          "speaker": "rep",
+          "text": "late fee is two fifty flat plus two percent a month on the overdue amount"
+        },
+        {
+          "speaker": "customer",
+          "text": "if I am two or three days late, is there any grace period"
+        },
+        {
+          "speaker": "rep",
+          "text": "we can stretch it to twelve months if you want"
+        },
+        {
+          "speaker": "customer",
+          "text": "let me think about it, call me back tomorrow evening"
+        }
+      ]
+    },
+    {
+      "id": "cus_fr_qureshi",
+      "name": "Farhan Qureshi",
+      "ageYears": 23,
+      "city": "Lucknow",
+      "state": "Uttar Pradesh",
+      "phone": "+91 XXXXX XXXXX",
+      "email": "name@example.com",
+      "panMasked": "CLTPQ••••M",
+      "preferredLanguage": "en-IN",
+      "kycStatus": "not_started",
+      "cart": {
+        "sku": "NX.KLPSI.004",
+        "item": "Acer Aspire Lite 14 AL14-31P, Core i5 13th Gen, 16GB/512GB",
+        "merchant": "Vijay Sales, Hazratganj",
+        "ticketInr": 31990
+      },
+      "interestedTenureMonths": 3,
+      "notes": "First-time credit user. Asked whether he needs to send a PAN card photo — he does not.",
+      "demoScript": [
+        {
+          "speaker": "rep",
+          "text": "the processing fee is just ninety nine rupees on the three month plan"
+        },
+        {
+          "speaker": "customer",
+          "text": "the shop person also told me ninety nine, so that is confirmed then"
+        },
+        {
+          "speaker": "rep",
+          "text": "the three month plan is zero percent interest"
+        },
+        {
+          "speaker": "customer",
+          "text": "zero percent means I pay exactly the laptop price and nothing extra, correct"
+        },
+        {
+          "speaker": "rep",
+          "text": "you just need an Aadhaar OTP for KYC"
+        },
+        {
+          "speaker": "customer",
+          "text": "I do not have my PAN card with me right now, will that be a problem"
+        },
+        {
+          "speaker": "rep",
+          "text": "you have to be at least eighteen to apply"
+        },
+        {
+          "speaker": "customer",
+          "text": "I am twenty three, so that should be fine"
+        }
+      ]
+    },
+    {
+      "id": "cus_ab_bhatt",
+      "name": "Anjali Bhatt",
+      "city": "Indore",
+      "phone": "+91 XXXXX XXXXX",
+      "cart": {
+        "item": "LG 8kg front-load washing machine, FHM1208SDW",
+        "ticketInr": 53700
+      },
+      "interestedTenureMonths": 9,
+      "demoScript": []
+    }
+  ]
+}

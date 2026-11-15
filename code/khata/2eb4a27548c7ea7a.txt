@@ -1,0 +1,134 @@
+/**
+ * POST /api/triage — is there anything here worth extracting?
+ *
+ * Runs on every finalised utterance, so it is the cheapest call in the
+ * system: smallest model, near-zero output, a prompt of two sentences.
+ * Roughly nine in ten utterances on a real call are greetings, filler and
+ * small talk, and this route kills them before the extract model ever
+ * sees them.
+ *
+ * Input is ALREADY REDACTED by the caller. This route does not redact —
+ * it must never be handed raw text.
+ */
+
+import { NextResponse } from "next/server";
+import {
+  callModel,
+  getMode,
+  stubCost,
+  RateLimitedError,
+  TRIAGE_MODEL,
+  EXTRACT_MODEL,
+} from "@/lib/llm";
+import { stubTriage } from "@/lib/stub";
+import type { CostEntry } from "@/lib/types";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const SYSTEM = [
+  "You decide whether a sentence states a checkable fact about a consumer lending offer:",
+  "processing fee, tenure, interest rate, APR, late fee, eligibility, KYC method, EMI amount, or total payable.",
+  "",
+  "THE TWO MISTAKES ARE NOT EQUALLY BAD. A wrong YES costs one cheap follow-up call and is then discarded harmlessly.",
+  "A wrong NO means a misquoted figure reaches the customer unchallenged, which is the exact failure this system exists to prevent.",
+  "So when a sentence is ambiguous, incomplete, or garbled, answer YES.",
+  "",
+  "Answer YES if the sentence contains any number, percentage or rupee amount alongside anything about the offer —",
+  'even fragments like "six month plan is also 0%" or "works out to 4928 a month".',
+  "Speech recognition is lossy and sentences arrive mangled; that is not a reason to say NO.",
+  "",
+  "Answer NO only for pure greetings, pleasantries, questions with no figure, and small talk.",
+  "",
+  "Answer with exactly one word: YES or NO.",
+].join("\n");
+
+export interface TriageResponse {
+  status: "ok" | "rate_limited" | "error";
+  hasClaim: boolean;
+  mode: "llm" | "stub";
+  cost: CostEntry | null;
+  message: string | null;
+}
+
+/** Lets the client show the offline-stub badge before anyone speaks. */
+export function GET() {
+  return NextResponse.json({
+    mode: getMode(),
+    triageModel: getMode() === "stub" ? "offline-stub" : TRIAGE_MODEL,
+    extractModel: getMode() === "stub" ? "offline-stub" : EXTRACT_MODEL,
+  });
+}
+
+export async function POST(request: Request) {
+  let redactedText = "";
+  try {
+    const body = (await request.json()) as { redactedText?: unknown };
+    if (typeof body.redactedText === "string") redactedText = body.redactedText;
+  } catch {
+    // fall through to the empty-input guard below
+  }
+
+  if (redactedText.trim() === "") {
+    const empty: TriageResponse = {
+      status: "ok",
+      hasClaim: false,
+      mode: getMode(),
+      cost: null,
+      message: null,
+    };
+    return NextResponse.json(empty);
+  }
+
+  if (getMode() === "stub") {
+    const result: TriageResponse = {
+      status: "ok",
+      hasClaim: stubTriage(redactedText),
+      mode: "stub",
+      cost: stubCost("triage"),
+      message: null,
+    };
+    return NextResponse.json(result);
+  }
+
+  try {
+    const { text, cost } = await callModel({
+      stage: "triage",
+      model: TRIAGE_MODEL,
+      system: SYSTEM,
+      prompt: redactedText,
+      maxOutputTokens: 4,
+      temperature: 0,
+    });
+
+    const result: TriageResponse = {
+      status: "ok",
+      hasClaim: /^\s*yes/i.test(text),
+      mode: "llm",
+      cost,
+      message: null,
+    };
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof RateLimitedError) {
+      // Not a failure. The utterance is held as PENDING and can be retried.
+      const limited: TriageResponse = {
+        status: "rate_limited",
+        hasClaim: false,
+        mode: "llm",
+        cost: null,
+        message: error.message,
+      };
+      return NextResponse.json(limited);
+    }
+
+    const failed: TriageResponse = {
+      status: "error",
+      hasClaim: false,
+      mode: getMode(),
+      cost: null,
+      message: error instanceof Error ? error.message : "Unknown triage error.",
+    };
+    return NextResponse.json(failed);
+  }
+}

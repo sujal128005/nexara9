@@ -1,0 +1,13 @@
+Sahyog Co-operative Bank (FICTIONAL DEMO SAMPLE) - Key Facts Statement, Personal Loan
+======================================================================================
+Loan amount sanctioned: ₹2,00,000
+Tenure: 36 months
+Rate of interest: 11.5% per annum (fixed, reducing balance)
+EMI: ₹6,595
+Processing fee: ₹2,000 + GST, deducted from disbursal
+Net disbursed amount: ₹197,640
+Annual Percentage Rate (APR): 12.33%
+Cooling-off / look-up period: 3 days. Exit by repaying principal and proportionate APR, no penalty.
+Penal charges: ₹500 per missed EMI, not compounded, not added to interest rate.
+Foreclosure: no charge after 6 EMIs.
+Regulated entity: Sahyog Co-operative Bank (licensed by RBI).

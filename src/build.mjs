@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { site, people, founders, founderProfiles, categories, flagships, projects, complexityLabels } from './content.mjs';
 import { tech } from './tech.mjs';
+const codeIndex = JSON.parse(readFileSync(new URL('./code-index.json', import.meta.url), 'utf8'));
 import { glyph, logoMark, icon } from './glyphs.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -52,7 +53,7 @@ function head({ title, description, path, scripts = [], inner = true }) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="${CSP}">
+<meta http-equiv="Content-Security-Policy" content="${inner ? CSP.replace("connect-src 'none'", "connect-src 'self'") : CSP}">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>${esc(title)}</title>
@@ -371,17 +372,70 @@ function langHTML(langs) {
   return `<div class="langs"><svg class="lang-bar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="${esc(langs.map(([l, pc]) => `${l} ${pc}%`).join(', '))}">${rects}</svg><ul class="lang-legend">${legend}</ul></div>`;
 }
 
-function treeHTML(items, depth = 0) {
-  return `<ul class="tree${depth ? '' : ' tree-root'}">${items
-    .map(([path, desc, kids]) => {
-      const isDir = /\/$/.test(path) || kids;
-      const row = `<span class="t-ico ${isDir ? 'dir' : 'file'}" aria-hidden="true"></span><code class="t-path">${esc(path)}</code><span class="t-desc">${fmt(desc)}</span>`;
-      const id = depth === 0 ? ` id="repo-${slugify(path)}"` : '';
-      return kids
-        ? `<li${id}><details${depth === 0 ? ' open' : ''}><summary>${row}</summary>${treeHTML(kids, depth + 1)}</details></li>`
-        : `<li${id}><div class="t-row">${row}</div></li>`;
-    })
-    .join('')}</ul>`;
+// Descriptions from tech.mjs, keyed by full path ("app/api", "lib/adjudicate.ts"). Grouped entries like "a/, b/" give each part the same text.
+function repoDescriptions(items, prefix = '', out = new Map()) {
+  for (const [path, desc, kids] of items || []) {
+    const parts = path.split(/,\s*/).map((x) => x.replace(/\/$/, ''));
+    for (const part of parts) out.set(prefix + part, desc);
+    if (kids) repoDescriptions(kids, prefix + parts[0] + '/', out);
+  }
+  return out;
+}
+
+// The full repository as a clickable tree: folders open and close, files open in the code viewer.
+function codeTreeHTML(p) {
+  const idx = codeIndex[p.slug];
+  if (!idx) return '';
+  const descs = repoDescriptions(tech[p.slug]?.repo);
+  const root = { dirs: new Map(), files: [] };
+  for (const f of idx.files) {
+    const parts = f.path.split('/');
+    let node = root;
+    for (const d of parts.slice(0, -1)) {
+      if (!node.dirs.has(d)) node.dirs.set(d, { dirs: new Map(), files: [] });
+      node = node.dirs.get(d);
+    }
+    node.files.push(f);
+  }
+  const count = (n) => n.files.length + [...n.dirs.values()].reduce((a, d) => a + count(d), 0);
+  const gh = (path, kind = 'blob') => `https://github.com/${idx.repo}/${kind}/${idx.branch}/${path.split('/').map(encodeURIComponent).join('/')}`;
+  // Paths the walkthrough describes but the viewer leaves out (images, trained models, logs): a row that opens GitHub.
+  const shown = (path) => idx.files.some((f) => f.path === path || f.path.startsWith(path + '/'));
+  for (const [path, desc] of descs) {
+    if (shown(path)) continue;
+    const parts = path.split('/');
+    let node = root;
+    for (const d of parts.slice(0, -1)) node = node && node.dirs.get(d);
+    if (!node) continue;
+    const isDir = (tech[p.slug].repo || []).some(function walk([q, , kids]) { return q.split(/,\s*/).some((x) => x === path.split('/').pop() + '/') || (kids || []).some(walk); });
+    (node.extra ||= []).push({ path, desc, isDir });
+  }
+  const render = (node, prefix, depth) => {
+    const dirs = [...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    const files = [...node.files].sort((a, b) => a.path.localeCompare(b.path));
+    const extra = (node.extra || []).map(({ path, desc, isDir }) => `<li id="repo-${slugify(path)}"><div class="t-row">${ext(gh(path, isDir ? 'tree' : 'blob'), `<span class="t-ico ${isDir ? 'dir' : 'file'}" aria-hidden="true"></span><span class="t-path">${esc(path.split('/').pop())}${isDir ? '/' : ''}</span>`, 't-file t-large')}<span class="t-desc">${fmt(desc)} <span class="t-n t-n-after">on GitHub</span></span></div></li>`);
+    const items = [
+      ...dirs.map(([name, d]) => {
+        const full = prefix + name;
+        const desc = descs.get(full);
+        return `<li id="repo-${slugify(full)}"><details${depth === 0 && dirs.length + files.length <= 6 ? ' open' : ''}><summary><span class="t-ico dir" aria-hidden="true"></span><span class="t-path">${esc(name)}/</span><span class="t-desc">${desc ? fmt(desc) : `<span class="t-n">${count(d)} ${count(d) === 1 ? 'file' : 'files'}</span>`}</span></summary>${render(d, full + '/', depth + 1)}</details></li>`;
+      }),
+      ...files.map((f) => {
+        const name = f.path.split('/').pop();
+        const desc = descs.get(f.path);
+        const meta = f.large ? 'large file' : `${f.lines} ${f.lines === 1 ? 'line' : 'lines'}`;
+        const btn = f.large
+          ? ext(gh(f.path), `<span class="t-ico file" aria-hidden="true"></span><span class="t-path">${esc(name)}</span>`, 't-file t-large')
+          : `<button type="button" class="t-file" data-code="/code/${p.slug}/${f.key}.txt" data-path="${esc(f.path)}" data-lang="${esc(f.lang)}" data-lines="${f.lines}" data-gh="${esc(gh(f.path))}"${f.masked ? ' data-masked' : ''}><span class="t-ico file" aria-hidden="true"></span><span class="t-path">${esc(name)}</span></button>`;
+        return `<li id="repo-${slugify(f.path)}"><div class="t-row">${btn}<span class="t-desc">${desc ? `${fmt(desc)} ` : ''}<span class="t-n${desc ? ' t-n-after' : ''}">${meta}</span></span></div></li>`;
+      }),
+      ...extra,
+    ];
+    return `<ul class="tree${depth ? '' : ' tree-root'}">${items.join('')}</ul>`;
+  };
+  const total = idx.files.length;
+  const lines = idx.files.reduce((a, f) => a + (f.lines || 0), 0);
+  return `<p class="code-meta"><span>${total} files</span><span>${lines.toLocaleString('en-IN')} lines</span><span>Tap any file to read its code</span></p>${render(root, '', 0)}`;
 }
 
 function tableHTML(r) {
@@ -416,7 +470,7 @@ function detailPage(p, idx, prev, next) {
     ? `<img src="/assets/img/projects/${esc(p.image.src)}" alt="${esc(p.image.alt)}" decoding="async">`
     : `<div class="bp ${catClass(p)}" aria-hidden="true"><span class="bp-c bp-tl">${code(idx)}</span><span class="bp-c bp-tr">${p.year}</span><span class="bp-c bp-bl">${esc(p.cats.map(catLabel).join(' · '))}</span><span class="bp-c bp-br">${esc((t.languages || []).map(([l]) => l).slice(0, 2).join(' · '))}</span>${glyph(p.glyph, 'glyph bp-glyph')}</div>`;
 
-  return `${head({ title: `${p.name} · Nexara9`, description: p.short, path: `/projects/${p.slug}/`, scripts: p.widget ? ['demos.js'] : [] })}
+  return `${head({ title: `${p.name} · Nexara9`, description: p.short, path: `/projects/${p.slug}/`, scripts: [...(p.widget ? ['demos.js'] : []), 'code.js'] })}
 <body class="page-detail">
 ${header('projects')}
 <main id="main">
@@ -444,7 +498,7 @@ ${header('projects')}
       ${sec('problem', 'Problem and aim', `<div class="pa-grid"><div class="pa"><h3 class="sub">Problem</h3><p>${fmt(p.problem)}</p></div><div class="pa pa-aim"><h3 class="sub">Aim</h3><p>${fmt(p.aim)}</p></div></div>`)}
       ${sec('how', 'How it works', stepsHTML(p))}
       ${t.arch ? sec('architecture', 'Architecture', archHTML(t.arch)) : ''}
-      ${t.repo ? sec('code', 'Languages and code', `${langHTML(t.languages)}<h3 class="sub">Repository</h3>${treeHTML(t.repo)}`) : ''}
+      ${t.repo ? sec('code', 'Languages and code', `${langHTML(t.languages)}<h3 class="sub">Repository</h3>${codeTreeHTML(p)}`) : ''}
       ${sec('method', 'Methodology', `<ol class="method">${p.methodology.map((m) => `<li>${fmt(m)}</li>`).join('')}</ol>`)}
       ${sec('stack', 'Technology', `<div class="stack">${p.stack.map((g) => g.items.map((it, j) => `<div class="st-row"><span class="st-g">${j === 0 ? esc(g.group) : ''}</span><span class="st-n">${esc(it.name)}</span><span class="st-w">${fmt(it.why)}</span></div>`).join('')).join('')}</div>`)}
       ${sec('demo', 'Demo', demoSection(p))}
@@ -463,7 +517,7 @@ ${dock('projects', `<div class="dd dock-dd">
       <button type="button" class="dd-btn dock-menu" aria-expanded="false" aria-controls="dd-sec" aria-label="Sections of this project">${dockIcon.sections}<span class="pbar-cur">${sections[0][2]}</span></button>
       <div class="dd-panel dock-panel" id="dd-sec" hidden>
         <p class="dd-h">${esc(p.name)}</p>
-        ${sections.map(([id, l, sh]) => `<a href="#${id}" data-sec="${id}" data-short="${sh}"><span>${num[id]}</span>${l}</a>${id === 'code' && t.repo ? `<div class="dd-sub">${t.repo.map(([path]) => `<a href="#repo-${slugify(path)}" data-repo>${esc(path)}</a>`).join('')}</div>` : ''}`).join('')}
+        ${sections.map(([id, l, sh]) => `<a href="#${id}" data-sec="${id}" data-short="${sh}"><span>${num[id]}</span>${l}</a>${id === 'code' && t.repo ? `<div class="dd-sub">${t.repo.map(([path]) => path.split(/,\s*/)[0]).map((path) => `<a href="#repo-${slugify(path)}" data-repo>${esc(path)}</a>`).join('')}</div>` : ''}`).join('')}
         <p class="dd-h dd-h2">Other projects</p>
         ${open.map((x, k) => `<a class="dd-proj-link" href="/projects/${x.slug}/"${x.slug === p.slug ? ' aria-current="page"' : ''}><span>${code(k)}</span>${esc(x.name)}</a>`).join('')}
       </div>

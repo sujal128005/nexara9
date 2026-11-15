@@ -1,0 +1,53 @@
+/**
+ * What each role is allowed to do, in one place.
+ *
+ * These are not permissions bolted onto one job — they are two different
+ * jobs. A rep places calls. An admin reads what came out of them. An
+ * admin has no assigned customers, so a call started from an admin
+ * session would write a row against their user_id and corrupt the
+ * per-rep metrics the admin exists to read.
+ *
+ * Kept as pure functions with no imports so lib/selfcheck.ts can assert
+ * the rules directly. The layout, the login route and the nav all read
+ * from here rather than each re-deciding.
+ */
+
+export type Role = "admin" | "sales";
+
+/** Only a rep places calls. See the file header for why. */
+export function canPlaceCalls(role: Role): boolean {
+  return role === "sales";
+}
+
+/** Only an admin reads across reps. */
+export function canReviewOtherReps(role: Role): boolean {
+  return role === "admin";
+}
+
+/** Where a role lands after login, and where a wrong turn sends it. */
+export function homeFor(role: Role): string {
+  return canPlaceCalls(role) ? "/console" : "/dashboard";
+}
+
+export const CONSOLE_DENIED_MESSAGE =
+  "The console is where reps place calls. Admin accounts have no assigned customers, and a call started here would be attributed to you and skew the team figures on this page. Everything an admin needs is read-only.";
+
+export const ADMIN_READ_ONLY_NOTE =
+  "Admin views are read-only. Admins do not place calls — the console is closed to this account by design, not by omission.";
+
+export interface NavLink {
+  href: string;
+  label: string;
+}
+
+/**
+ * The header links a role may open. A role never sees a link it cannot
+ * open, so the list is derived rather than rendered and then hidden.
+ */
+export function navLinks(role: Role): NavLink[] {
+  const links: NavLink[] = [{ href: "/dashboard", label: "Dashboard" }];
+  if (canPlaceCalls(role)) links.push({ href: "/console", label: "Console" });
+  links.push({ href: "/analytics", label: "Call log" });
+  links.push({ href: "/product", label: "Product terms" });
+  return links;
+}

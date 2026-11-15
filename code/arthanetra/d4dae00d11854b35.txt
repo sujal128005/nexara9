@@ -1,0 +1,10 @@
+# Copy to .env and fill in ONE of these (both optional, ArthaNetra runs fully offline without keys).
+# Free keys: https://console.groq.com  |  https://aistudio.google.com
+GROQ_API_KEY=
+GEMINI_API_KEY=
+
+# Optional overrides
+# ARTHANETRA_PROVIDER=auto          # auto | groq | gemini | offline
+# GROQ_MODEL=openai/gpt-oss-120b
+# GROQ_FAST_MODEL=openai/gpt-oss-20b
+# GEMINI_MODEL=gemini-2.5-flash

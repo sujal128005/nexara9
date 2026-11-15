@@ -1,0 +1,376 @@
+/**
+ * POST /api/close — end of call.
+ *
+ * Two actions, and the split between them is the point:
+ *
+ *   action: "propose"  — writes the khata (audit record, unconditional),
+ *                        then asks a model what it thinks happened.
+ *                        Writes NOTHING to the CRM. Sends NOTHING.
+ *
+ *   action: "approve"  — the rep has read the proposal and pressed the
+ *                        button. Only now does crm.json change and only
+ *                        now is the follow-up marked sent.
+ *
+ * A model may not change a customer record on its own. The approval is
+ * stored beside the khata, keyed to that khata's hash, so an auditor can
+ * tell which exact record a human signed off on.
+ */
+
+import { NextResponse } from "next/server";
+
+import { callModel, getMode, stubCost, RateLimitedError } from "@/lib/llm";
+import {
+  applyCrmDiff,
+  approverFor,
+  buildKhata,
+  CLOSE_SYSTEM,
+  coverageGuard,
+  parseProposal,
+  readKhata,
+  readPrevHash,
+  sanitiseDiff,
+  stubProposal,
+  stampDealApproval,
+  verifyKhata,
+  writeApproval,
+  writeKhata,
+} from "@/lib/closer";
+import { ownerOf, upsertCall } from "@/lib/db";
+import type { CloseProposal, CrmFieldDiff } from "@/lib/closer";
+import { EXTRACT_MODEL } from "@/lib/llm";
+import type {
+  CallCoverage,
+  Claim,
+  CostEntry,
+  CustomerSignal,
+  KhataRecord,
+  Verdict,
+} from "@/lib/types";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export interface ProposeResponse {
+  status: "ok" | "rate_limited" | "error";
+  khata: KhataRecord | null;
+  proposal: CloseProposal | null;
+  mode: "llm" | "stub";
+  message: string | null;
+}
+
+export interface ApproveResponse {
+  status: "ok" | "error";
+  applied: CrmFieldDiff[];
+  skipped: string[];
+  followUpSent: string | null;
+  message: string | null;
+}
+
+function verdictDigest(claims: Claim[], verdicts: Verdict[]): string {
+  const byId = new Map(claims.map((c) => [c.id, c]));
+  return verdicts
+    .map((v) => {
+      const c = byId.get(v.claimId);
+      return `- [${v.status}] ${c ? c.type : "claim"}: rep said ${String(
+        v.stated
+      )}, truth is ${String(v.expected)} (${v.sourceField}). ${v.explanation}`;
+    })
+    .join("\n");
+}
+
+async function handlePropose(body: Record<string, unknown>) {
+  const callId = String(body.callId ?? "");
+  const customerId = String(body.customerId ?? "");
+  const consentAt =
+    typeof body.consentAt === "string" ? body.consentAt : null;
+  const startedAt =
+    typeof body.startedAt === "string" ? body.startedAt : new Date().toISOString();
+  const endedAt =
+    typeof body.endedAt === "string" ? body.endedAt : new Date().toISOString();
+  const claims = Array.isArray(body.claims) ? (body.claims as Claim[]) : [];
+  const verdicts = Array.isArray(body.verdicts) ? (body.verdicts as Verdict[]) : [];
+  const costs = Array.isArray(body.costs) ? (body.costs as CostEntry[]) : [];
+  const transcript = Array.isArray(body.transcript)
+    ? (body.transcript as string[])
+    : [];
+  const quotedTenureMonths =
+    typeof body.quotedTenureMonths === "number" ? body.quotedTenureMonths : null;
+
+  const customerSignals = Array.isArray(body.customerSignals)
+    ? (body.customerSignals as CustomerSignal[])
+    : [];
+
+  const rawCoverage = (body.coverage ?? {}) as Partial<CallCoverage>;
+  const coverage: CallCoverage = {
+    utterances: Number(rawCoverage.utterances ?? 0),
+    checked: Number(rawCoverage.checked ?? 0),
+    unchecked: Number(rawCoverage.unchecked ?? 0),
+  };
+  const guard = coverageGuard(coverage);
+
+  const allCosts = [...costs];
+  let rawProposal: {
+    dropOffReason: string;
+    crmDiff: Array<{ field?: unknown; to?: unknown; reason?: unknown }>;
+    followUpDraft: string;
+  };
+  let status: ProposeResponse["status"] = "ok";
+  let message: string | null = null;
+
+  if (getMode() === "stub") {
+    rawProposal = stubProposal(verdicts, endedAt, quotedTenureMonths, coverage);
+    allCosts.push(stubCost("close"));
+  } else {
+    const prompt = [
+      `Coverage: ${guard.complete ? "COMPLETE" : "INCOMPLETE"} — ${coverage.checked} of ${coverage.utterances} utterances were fact-checked, ${coverage.unchecked} were not.`,
+      "",
+      "Redacted transcript:",
+      transcript.map((line) => `  ${line}`).join("\n") || "  (nothing captured)",
+      "",
+      "Fact-checker verdicts:",
+      verdictDigest(claims, verdicts) || "  (no claims were checked)",
+      "",
+      "Produce the JSON.",
+    ].join("\n");
+
+    try {
+      const result = await callModel({
+        stage: "close",
+        model: EXTRACT_MODEL,
+        system: CLOSE_SYSTEM,
+        prompt,
+        maxOutputTokens: 600,
+        temperature: 0.2,
+        responseMimeType: "application/json",
+      });
+      allCosts.push(result.cost);
+
+      const parsed = parseProposal(result.text);
+      if (!parsed) {
+        // Malformed JSON must not lose the khata. Fall back and say so.
+        rawProposal = stubProposal(verdicts, endedAt, quotedTenureMonths, coverage);
+        message = "Model returned unusable JSON; fell back to a deterministic summary.";
+      } else {
+        rawProposal = {
+          dropOffReason:
+            typeof parsed.dropOffReason === "string"
+              ? parsed.dropOffReason
+              : "Not stated.",
+          crmDiff: Array.isArray(parsed.crmDiff)
+            ? (parsed.crmDiff as Array<{ field?: unknown; to?: unknown; reason?: unknown }>)
+            : [],
+          followUpDraft:
+            typeof parsed.followUpDraft === "string" ? parsed.followUpDraft : "",
+        };
+      }
+    } catch (error) {
+      if (error instanceof RateLimitedError) {
+        rawProposal = stubProposal(verdicts, endedAt, quotedTenureMonths, coverage);
+        status = "rate_limited";
+        message = `${error.message} Showing a deterministic summary instead.`;
+      } else {
+        rawProposal = stubProposal(verdicts, endedAt, quotedTenureMonths, coverage);
+        message = `${
+          error instanceof Error ? error.message : "Close call failed."
+        } Showing a deterministic summary instead.`;
+      }
+    }
+  }
+
+  // Whitelist enforcement, and `from` values read off disk.
+  const { diff, rejected } = await sanitiseDiff(customerId, rawProposal.crmDiff);
+
+  // Coverage guard, applied AFTER the whitelist and regardless of which
+  // path produced the proposal. A model told "coverage is incomplete"
+  // may still try to write a conclusion; this is what stops it.
+  const permitted = guard.complete
+    ? diff
+    : diff.filter((d) => !guard.blockedFields.includes(d.field));
+  const blocked = guard.complete
+    ? []
+    : diff.filter((d) => guard.blockedFields.includes(d.field)).map((d) => d.field);
+
+  const proposal: CloseProposal = {
+    dropOffReason: rawProposal.dropOffReason,
+    crmDiff: permitted,
+    followUpDraft: rawProposal.followUpDraft,
+    rejected,
+    blockedFields: blocked,
+    coverageNote: guard.note,
+  };
+
+  // Khata is built LAST so it includes the cost of the closing call
+  // itself, then written immediately and never touched again.
+  const prevHash = await readPrevHash();
+  const khata = buildKhata({
+    callId,
+    customerId,
+    consentAt,
+    startedAt,
+    endedAt,
+    claims,
+    verdicts,
+    costs: allCosts,
+    coverage,
+    customerSignals,
+    prevHash,
+  });
+
+  try {
+    // The call row is the analytics surface: aggregate counts only, no
+    // transcript. The khata holds the detail and is encrypted.
+    const counts = { VERIFIED: 0, WRONG: 0, STALE: 0, UNSUPPORTED: 0 };
+    for (const v of verdicts) counts[v.status] += 1;
+
+    upsertCall({
+      call_id: callId,
+      // Attributed to the sales user who owns the customer, until auth lands.
+      user_id: ownerOf(customerId) ?? "",
+      customer_id: customerId,
+      started_at: startedAt,
+      ended_at: endedAt,
+      consent_at: consentAt,
+      claims_checked: claims.length,
+      verified_count: counts.VERIFIED,
+      wrong_count: counts.WRONG,
+      stale_count: counts.STALE,
+      unsupported_count: counts.UNSUPPORTED,
+      coverage_complete: guard.complete ? 1 : 0,
+      cost_inr: allCosts.reduce((sum, c) => sum + c.inr, 0),
+    });
+
+    await writeKhata(khata);
+  } catch (error) {
+    return NextResponse.json({
+      status: "error",
+      khata,
+      proposal,
+      mode: getMode(),
+      message: `Khata could not be written to disk: ${
+        error instanceof Error ? error.message : "unknown error"
+      }`,
+    } satisfies ProposeResponse);
+  }
+
+  return NextResponse.json({
+    status,
+    khata,
+    proposal,
+    mode: getMode(),
+    message,
+  } satisfies ProposeResponse);
+}
+
+async function handleApprove(body: Record<string, unknown>) {
+  const callId = String(body.callId ?? "");
+  const customerId = String(body.customerId ?? "");
+  const khataHash = String(body.khataHash ?? "");
+  const approvedBy =
+    typeof body.approvedBy === "string" ? body.approvedBy : "rep";
+  const followUp =
+    typeof body.followUpDraft === "string" ? body.followUpDraft : null;
+  const crmDiff = Array.isArray(body.crmDiff)
+    ? (body.crmDiff as CrmFieldDiff[])
+    : [];
+
+  if (!callId || !customerId || !khataHash) {
+    return NextResponse.json({
+      status: "error",
+      applied: [],
+      skipped: [],
+      followUpSent: null,
+      message: "callId, customerId and khataHash are all required to approve.",
+    } satisfies ApproveResponse);
+  }
+
+  try {
+    // Re-derive the guard from the khata ON DISK rather than trusting the
+    // request. The UI already hides blocked fields; this is what makes
+    // that a guarantee instead of a convention.
+    const stored = await readKhata(callId);
+    if (!stored) {
+      return NextResponse.json({
+        status: "error",
+        applied: [],
+        skipped: [],
+        followUpSent: null,
+        message: `No khata on disk for ${callId}. Nothing was written.`,
+      } satisfies ApproveResponse);
+    }
+    if (stored.hash !== khataHash || !verifyKhata(stored)) {
+      return NextResponse.json({
+        status: "error",
+        applied: [],
+        skipped: [],
+        followUpSent: null,
+        message:
+          "The khata on disk does not match the record being approved. Nothing was written.",
+      } satisfies ApproveResponse);
+    }
+
+    const guard = coverageGuard(stored.coverage);
+    const allowed = guard.complete
+      ? crmDiff
+      : crmDiff.filter((d) => !guard.blockedFields.includes(d.field));
+    const blocked = guard.complete
+      ? []
+      : crmDiff
+          .filter((d) => guard.blockedFields.includes(d.field))
+          .map((d) => d.field);
+
+    const { applied, skipped } = await applyCrmDiff(customerId, allowed);
+
+    // Resolved server-side from customer ownership, never taken from the
+    // client. Once auth lands this becomes the session user and nothing
+    // downstream has to change.
+    const approvedByUserId = approverFor(customerId);
+
+    await writeApproval({
+      callId,
+      khataHash,
+      approvedAt: new Date().toISOString(),
+      approvedBy,
+      approvedByUserId,
+      appliedDiff: applied,
+      followUpSent: followUp,
+    });
+
+    stampDealApproval(customerId, approvedByUserId, callId);
+
+    return NextResponse.json({
+      status: "ok",
+      applied,
+      skipped: [...skipped, ...blocked],
+      // Nothing is actually transmitted — there is no messaging provider
+      // wired up. This records what a human authorised to be sent.
+      followUpSent: followUp,
+      message: blocked.length
+        ? `Withheld ${blocked.join(", ")} — this call was only partially fact-checked.`
+        : null,
+    } satisfies ApproveResponse);
+  } catch (error) {
+    return NextResponse.json({
+      status: "error",
+      applied: [],
+      skipped: [],
+      followUpSent: null,
+      message: error instanceof Error ? error.message : "Approval failed.",
+    } satisfies ApproveResponse);
+  }
+}
+
+export async function POST(request: Request) {
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json(
+      { status: "error", message: "Body must be JSON." },
+      { status: 400 }
+    );
+  }
+
+  return body.action === "approve"
+    ? handleApprove(body)
+    : handlePropose(body);
+}

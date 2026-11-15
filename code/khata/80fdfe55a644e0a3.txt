@@ -1,0 +1,237 @@
+/**
+ * POST /api/correct — draft the sentence the rep says next.
+ *
+ * Fires ONLY on a WRONG verdict. VERIFIED needs no correction, STALE and
+ * UNSUPPORTED are handled by the explanation the adjudicator already
+ * wrote, and firing on those would spend money to state the obvious.
+ *
+ * The important part of this route is not the drafting. It is the refusal
+ * to trust the draft: every sentence is parsed back into a Claim by the
+ * deterministic extractor and re-adjudicated before it is allowed on
+ * screen. Fail that, and the draft is discarded and the rep is shown the
+ * raw correct figure instead.
+ */
+
+import { NextResponse } from "next/server";
+
+import { correct, getMode, stubCost, RateLimitedError } from "@/lib/llm";
+import { checkCorrection, deterministicCorrection } from "@/lib/correction";
+import type { ProductTruth } from "@/lib/adjudicate";
+import type { Claim, CostEntry, Verdict } from "@/lib/types";
+import truthJson from "@/data/product_truth.json";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const truth = truthJson as unknown as ProductTruth;
+
+/**
+ * Two outcomes were conflated here and read identically on screen:
+ * "nothing safe could be drafted" (a failure) and "the model's draft
+ * failed its check so the verified template was used" (the self-check
+ * working). Labelling the second one "suppressed" made correct behaviour
+ * look like a fault in the panel meant to demonstrate rigour, so they
+ * are now separate fields with separate wording.
+ */
+export interface CorrectResponse {
+  status: "ok" | "rate_limited" | "error";
+  /** Null only when nothing safe could be drafted at all. */
+  correction: string | null;
+  correctionSelfChecked: boolean;
+  /** Which drafter produced the correction being shown. */
+  correctionSource: "model" | "template" | null;
+  /** The self-check rejected the model's draft and the verified template
+   *  was used instead. A correction IS shown. Reads positively. */
+  selfCheckNote: string | null;
+  /** No correction is being shown, and this is why. */
+  suppressedReason: string | null;
+  mode: "llm" | "stub";
+  cost: CostEntry | null;
+  message: string | null;
+}
+
+function reply(body: CorrectResponse) {
+  return NextResponse.json(body);
+}
+
+export async function POST(request: Request) {
+  let claim: Claim | null = null;
+  let verdict: Verdict | null = null;
+  let ticketInr: number | null = null;
+
+  try {
+    const body = (await request.json()) as {
+      claim?: Claim;
+      verdict?: Verdict;
+      ticketInr?: number | null;
+    };
+    claim = body.claim ?? null;
+    verdict = body.verdict ?? null;
+    ticketInr = typeof body.ticketInr === "number" ? body.ticketInr : null;
+  } catch {
+    // handled below
+  }
+
+  if (!claim || !verdict) {
+    return reply({
+      status: "error",
+      correction: null,
+      correctionSelfChecked: false,
+      correctionSource: null,
+      selfCheckNote: null,
+      suppressedReason: null,
+      mode: getMode(),
+      cost: null,
+      message: "A claim and a verdict are both required.",
+    });
+  }
+
+  // The gate. Corrections exist for misquotes, nothing else.
+  if (verdict.status !== "WRONG") {
+    return reply({
+      status: "ok",
+      correction: null,
+      correctionSelfChecked: false,
+      correctionSource: null,
+      selfCheckNote: null,
+      suppressedReason: null,
+      mode: getMode(),
+      cost: null,
+      message: `No correction drafted for a ${verdict.status} verdict.`,
+    });
+  }
+
+  const context = { ticketInr };
+  const fallback = deterministicCorrection(claim, verdict, truth);
+
+  // stub mode: template only
+
+  if (getMode() === "stub") {
+    if (!fallback) {
+      return reply({
+        status: "ok",
+        correction: null,
+        correctionSelfChecked: false,
+        correctionSource: null,
+        selfCheckNote: null,
+        suppressedReason: "No template covers this claim type.",
+        mode: "stub",
+        cost: stubCost("correct"),
+        message: null,
+      });
+    }
+
+    // Even the template gets checked. It is deterministic, not infallible.
+    const check = checkCorrection(fallback, claim, truth, context);
+    return reply({
+      status: "ok",
+      correction: check.passed ? fallback : null,
+      correctionSelfChecked: check.passed,
+      correctionSource: check.passed ? "template" : null,
+      selfCheckNote: null,
+      suppressedReason: check.passed
+        ? null
+        : `No correction shown — ${check.reason}`,
+      mode: "stub",
+      cost: stubCost("correct"),
+      message: null,
+    });
+  }
+
+  // live mode
+
+  let draft = "";
+  let cost: CostEntry | null = null;
+
+  try {
+    const result = await correct({
+      claimType: claim.type,
+      tenureMonths: claim.tenureMonths,
+      saidText: claim.redactedText,
+      stated: String(verdict.stated),
+      expected: String(verdict.expected),
+      explanation: verdict.explanation,
+    });
+    draft = result.text.trim().replace(/^["“]|["”]$/g, "");
+    cost = result.cost;
+  } catch (error) {
+    if (error instanceof RateLimitedError) {
+      return reply({
+        status: "rate_limited",
+        correction: null,
+        correctionSelfChecked: false,
+        correctionSource: null,
+        selfCheckNote: null,
+        suppressedReason: null,
+        mode: "llm",
+        cost: null,
+        message: error.message,
+      });
+    }
+    return reply({
+      status: "error",
+      correction: null,
+      correctionSelfChecked: false,
+      correctionSource: null,
+      selfCheckNote: null,
+      suppressedReason: null,
+      mode: "llm",
+      cost: null,
+      message:
+        error instanceof Error ? error.message : "Correction drafting failed.",
+    });
+  }
+
+  // THE SELF-CHECK. Deterministic extractor, deterministic adjudicator.
+  // The model gets no say in whether its own sentence is correct.
+  const check = draft === ""
+    ? { passed: false, reason: "The model returned nothing.", reparsedStatus: null }
+    : checkCorrection(draft, claim, truth, context);
+
+  if (check.passed) {
+    return reply({
+      status: "ok",
+      correction: draft,
+      correctionSelfChecked: true,
+      correctionSource: "model",
+      selfCheckNote: null,
+      suppressedReason: null,
+      mode: "llm",
+      cost,
+      message: null,
+    });
+  }
+
+  // The draft failed. Try the deterministic template before giving up —
+  // but hold it to exactly the same standard.
+  if (fallback) {
+    const fallbackCheck = checkCorrection(fallback, claim, truth, context);
+    if (fallbackCheck.passed) {
+      return reply({
+        status: "ok",
+        correction: fallback,
+        correctionSelfChecked: true,
+        correctionSource: "template",
+        selfCheckNote:
+          "Self-check caught the model's draft; showing the verified template instead.",
+        suppressedReason: null,
+        mode: "llm",
+        cost,
+        message: null,
+      });
+    }
+  }
+
+  // Nothing verified. Show the rep the raw figure and no sentence.
+  return reply({
+    status: "ok",
+    correction: null,
+    correctionSelfChecked: false,
+    correctionSource: null,
+    selfCheckNote: null,
+    suppressedReason: `No correction shown — ${check.reason}`,
+    mode: "llm",
+    cost,
+    message: null,
+  });
+}

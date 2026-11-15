@@ -1,0 +1,29 @@
+# Contributors
+
+Khata was built by two people over a single overnight sprint for AI Build 2026
+at KL University.
+
+## Authors
+
+**Sujal** — [@sujal128005](https://github.com/sujal128005)
+**Vaishnavi** — [@Vaishnavi2327](https://github.com/Vaishnavi2327)
+
+Both of IIITDM Kurnool.
+
+## How we worked
+
+We worked sequentially on one laptop, swapping the keyboard when the person
+typing started making mistakes. The person not typing tested, wrote
+documentation, and played the customer during rehearsals.
+
+Both of us contributed to the architecture, the design decisions, and the
+debugging. The commit history reflects a single machine rather than a division
+of the work — every decision recorded in this repository was made by both of us.
+
+## The parts we are proudest of
+
+The deterministic verification engine, which keeps the language model out of the
+verification path entirely. The self-check loop, which re-parses and re-checks
+the model's own drafted corrections before a human sees them. And the coverage
+guard, which came out of catching our own system reporting "no misquotes
+detected" on a call where the rep had misquoted twice.

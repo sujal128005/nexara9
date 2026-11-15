@@ -1,0 +1,11 @@
+Nimbus Bank Platinum Credit Card - Monthly Statement  (FICTIONAL DEMO SAMPLE)
+===============================================================================
+Statement date: 05-Nov-2026        Payment due date: 25-Nov-2026
+Total Amount Due: ₹50,000
+Minimum Amount Due: ₹2,500 (5% of total outstanding or ₹200, whichever is higher)
+
+Enjoy interest-free period of up to 50 days! Pay just the minimum and keep shopping.
+
+Finance charges: 3.75% per month (45% per annum) on revolving credit, from the date of transaction.
+GST @ 18% is applicable on finance charges and fees.
+Late payment fee: ₹1,300 if minimum amount due is not paid by the due date.

@@ -1,0 +1,365 @@
+/**
+ * SQLite access. Server-only.
+ *
+ * Uses the built-in node:sqlite, so no dependency was added. It is still
+ * flagged experimental in Node and prints one warning on first import;
+ * the API surface used here (DatabaseSync, prepare, run, get, all) has
+ * been stable since 22.5.
+ *
+ * WHAT IS NOT IN HERE: data/product_truth.json. That is a
+ * version-controlled spec, not a dataset — it is reviewed in pull
+ * requests, it carries an archive of superseded versions, and a STALE
+ * verdict depends on being able to diff it in git. Putting it in a
+ * mutable table would make the thing the adjudicator trusts editable
+ * without review. It stays a file and is read exactly as before.
+ */
+
+import { DatabaseSync } from "node:sqlite";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * KHATA_DB_PATH exists so a test run can point at a scratch file instead
+ * of the demo database. Without it the self-check would be inserting and
+ * deleting rows in the same file the demo reads from, which is a bad
+ * habit even when the cleanup works.
+ */
+const DB_PATH =
+  process.env.KHATA_DB_PATH?.trim() || join(process.cwd(), "db", "khata.db");
+const SCHEMA_PATH = join(process.cwd(), "db", "schema.sql");
+
+let handle: DatabaseSync | null = null;
+
+/**
+ * One connection per process, opened lazily. Next.js reloads modules in
+ * dev, so this is deliberately module-scoped rather than per-request —
+ * reopening the file on every request under WAL is how you end up with
+ * lock contention that only shows up under demo conditions.
+ */
+export function db(): DatabaseSync {
+  if (handle) return handle;
+  handle = new DatabaseSync(DB_PATH);
+  handle.exec("PRAGMA journal_mode = WAL;");
+  handle.exec("PRAGMA foreign_keys = ON;");
+  return handle;
+}
+
+/** Applies db/schema.sql. Idempotent — every statement is IF NOT EXISTS. */
+export function applySchema(): void {
+  db().exec(readFileSync(SCHEMA_PATH, "utf8"));
+}
+
+/** True once the tables exist, so callers can fail with advice not a stack. */
+export function isInitialised(): boolean {
+  try {
+    const row = oneRow<{ n: number }>(
+      "SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name IN ('users','customers','deals','calls','khatas')"
+    );
+    return (row?.n ?? 0) === 5;
+  } catch {
+    return false;
+  }
+}
+
+export function assertInitialised(): void {
+  if (!isInitialised()) {
+    throw new Error(
+      "Database not initialised. Run: npm run db:init (then npm run reset:demo to seed)."
+    );
+  }
+}
+
+/**
+ * node:sqlite hands back rows as Record<string, SQLOutputValue> — it
+ * cannot know the shape of a query it did not write, so TypeScript
+ * rejects a direct cast to a row interface. These two helpers do the
+ * widening in one place, so the assertion is stated once and explained
+ * rather than repeated at every call site.
+ *
+ * The row interfaces below are the contract; if a column is renamed in
+ * db/schema.sql, nothing here will complain and the failure will show up
+ * as an undefined field at runtime. That is the cost of the cast.
+ */
+function allRows<T>(sql: string, ...params: Array<string | number | null>): T[] {
+  return db().prepare(sql).all(...params) as unknown as T[];
+}
+
+function oneRow<T>(
+  sql: string,
+  ...params: Array<string | number | null>
+): T | null {
+  return (db().prepare(sql).get(...params) ?? null) as unknown as T | null;
+}
+
+/* rows as they come out of SQLite */
+
+export interface UserRow {
+  id: string;
+  name: string;
+  email: string;
+  password_hash: string;
+  role: "admin" | "sales";
+  created_at: string;
+}
+
+export interface CustomerRow {
+  id: string;
+  name: string;
+  city: string;
+  product: string;
+  ticket_inr: number;
+  tenure_months: number;
+  phone: string | null;
+  demo_script: string;
+  assigned_user_id: string | null;
+}
+
+export interface DealRow {
+  customer_id: string;
+  stage: string;
+  open_objection: string | null;
+  next_step: string | null;
+  quoted_tenure_months: number | null;
+  attempts_so_far: number;
+  last_contact_at: string | null;
+  approved_by_user_id: string | null;
+  last_call_id: string | null;
+}
+
+export interface CallRow {
+  call_id: string;
+  user_id: string;
+  customer_id: string;
+  started_at: string;
+  ended_at: string | null;
+  consent_at: string | null;
+  claims_checked: number;
+  verified_count: number;
+  wrong_count: number;
+  stale_count: number;
+  unsupported_count: number;
+  coverage_complete: number;
+  cost_inr: number;
+}
+
+export interface KhataRow {
+  call_id: string;
+  hash: string;
+  prev_hash: string | null;
+  algorithm: string;
+  iv: string;
+  auth_tag: string;
+  ciphertext: string;
+  created_at: string;
+}
+
+/* reads */
+
+export function listUsers(): UserRow[] {
+  return allRows<UserRow>("SELECT * FROM users ORDER BY role, name");
+}
+
+export function listCustomers(): CustomerRow[] {
+  return allRows<CustomerRow>("SELECT * FROM customers ORDER BY name");
+}
+
+/**
+ * Customers a given user may see. Admins see everything; a sales user
+ * sees only what is assigned to them.
+ *
+ * The scoping is a WHERE clause, not a filter applied after fetching —
+ * rows another rep owns never leave the database, so there is nothing in
+ * the response for a client to inspect.
+ */
+export function listCustomersForUser(
+  userId: string,
+  role: "admin" | "sales"
+): CustomerRow[] {
+  if (role === "admin") return listCustomers();
+  return allRows<CustomerRow>(
+    "SELECT * FROM customers WHERE assigned_user_id = ? ORDER BY name",
+    userId
+  );
+}
+
+export function getUserByEmail(email: string): UserRow | null {
+  return oneRow<UserRow>(
+    "SELECT * FROM users WHERE lower(email) = lower(?)",
+    email
+  );
+}
+
+export function getUser(id: string): UserRow | null {
+  return oneRow<UserRow>("SELECT * FROM users WHERE id = ?", id);
+}
+
+export function getCustomer(id: string): CustomerRow | null {
+  return oneRow<CustomerRow>("SELECT * FROM customers WHERE id = ?", id);
+}
+
+export function listDeals(): DealRow[] {
+  return allRows<DealRow>("SELECT * FROM deals");
+}
+
+export function getDeal(customerId: string): DealRow | null {
+  return oneRow<DealRow>(
+    "SELECT * FROM deals WHERE customer_id = ?",
+    customerId
+  );
+}
+
+export function listCalls(): CallRow[] {
+  return allRows<CallRow>(
+    "SELECT * FROM calls ORDER BY COALESCE(ended_at, started_at) DESC"
+  );
+}
+
+/** Calls a given user may see. Same rule as customers, same WHERE clause. */
+export function listCallsForUser(
+  userId: string,
+  role: "admin" | "sales"
+): CallRow[] {
+  if (role === "admin") return listCalls();
+  return allRows<CallRow>(
+    "SELECT * FROM calls WHERE user_id = ? ORDER BY COALESCE(ended_at, started_at) DESC",
+    userId
+  );
+}
+
+export function getCall(callId: string): CallRow | null {
+  return oneRow<CallRow>("SELECT * FROM calls WHERE call_id = ?", callId);
+}
+
+/**
+ * One call, if this user may see it. Null covers both "no such call" and
+ * "not yours" on purpose: distinguishing them would confirm to a rep
+ * that a colleague's call id exists.
+ *
+ * The ownership test is in the WHERE clause, so another rep's row never
+ * leaves the database and the khata attached to it is never decrypted.
+ * A post-fetch filter would read the same on screen and be wrong.
+ */
+export function getCallForUser(
+  callId: string,
+  userId: string,
+  role: "admin" | "sales"
+): CallRow | null {
+  if (role === "admin") return getCall(callId);
+  return oneRow<CallRow>(
+    "SELECT * FROM calls WHERE call_id = ? AND user_id = ?",
+    callId,
+    userId
+  );
+}
+
+/** One rep's calls, newest first. Same rule, same clause. */
+export function listCallsByRep(userId: string): CallRow[] {
+  return allRows<CallRow>(
+    "SELECT * FROM calls WHERE user_id = ? ORDER BY COALESCE(ended_at, started_at) DESC",
+    userId
+  );
+}
+
+/**
+ * The sales user who owns this customer. Until authentication lands,
+ * this is how a call acquires the user_id the schema requires — the call
+ * is attributed to whoever the customer is assigned to, not to a
+ * hardcoded placeholder.
+ */
+export function ownerOf(customerId: string): string | null {
+  return (
+    oneRow<{ assigned_user_id: string | null }>(
+      "SELECT assigned_user_id FROM customers WHERE id = ?",
+      customerId
+    )?.assigned_user_id ?? null
+  );
+}
+
+/* writes */
+
+export function upsertCall(row: CallRow): void {
+  db()
+    .prepare(
+      `INSERT INTO calls (call_id, user_id, customer_id, started_at, ended_at,
+         consent_at, claims_checked, verified_count, wrong_count, stale_count,
+         unsupported_count, coverage_complete, cost_inr)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(call_id) DO UPDATE SET
+         ended_at = excluded.ended_at,
+         consent_at = excluded.consent_at,
+         claims_checked = excluded.claims_checked,
+         verified_count = excluded.verified_count,
+         wrong_count = excluded.wrong_count,
+         stale_count = excluded.stale_count,
+         unsupported_count = excluded.unsupported_count,
+         coverage_complete = excluded.coverage_complete,
+         cost_inr = excluded.cost_inr`
+    )
+    .run(
+      row.call_id,
+      row.user_id,
+      row.customer_id,
+      row.started_at,
+      row.ended_at,
+      row.consent_at,
+      row.claims_checked,
+      row.verified_count,
+      row.wrong_count,
+      row.stale_count,
+      row.unsupported_count,
+      row.coverage_complete,
+      row.cost_inr
+    );
+}
+
+export function insertKhataRow(row: KhataRow): void {
+  db()
+    .prepare(
+      `INSERT INTO khatas (call_id, hash, prev_hash, algorithm, iv, auth_tag, ciphertext, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(call_id) DO UPDATE SET
+         hash = excluded.hash, prev_hash = excluded.prev_hash,
+         algorithm = excluded.algorithm, iv = excluded.iv,
+         auth_tag = excluded.auth_tag, ciphertext = excluded.ciphertext,
+         created_at = excluded.created_at`
+    )
+    .run(
+      row.call_id,
+      row.hash,
+      row.prev_hash,
+      row.algorithm,
+      row.iv,
+      row.auth_tag,
+      row.ciphertext,
+      row.created_at
+    );
+}
+
+export function getKhataRow(callId: string): KhataRow | null {
+  return oneRow<KhataRow>("SELECT * FROM khatas WHERE call_id = ?", callId);
+}
+
+export function listKhataRows(): KhataRow[] {
+  return allRows<KhataRow>("SELECT * FROM khatas ORDER BY created_at ASC");
+}
+
+/** Hash of the most recently created khata, for the chain. */
+export function latestKhataHash(): string | null {
+  return (
+    oneRow<{ hash: string }>(
+      "SELECT hash FROM khatas ORDER BY created_at DESC, call_id DESC LIMIT 1"
+    )?.hash ?? null
+  );
+}
+
+export function updateDealFields(
+  customerId: string,
+  fields: Record<string, string | number | null>
+): void {
+  const keys = Object.keys(fields);
+  if (keys.length === 0) return;
+  const set = keys.map((k) => `${k} = ?`).join(", ");
+  db()
+    .prepare(`UPDATE deals SET ${set} WHERE customer_id = ?`)
+    .run(...keys.map((k) => fields[k]), customerId);
+}

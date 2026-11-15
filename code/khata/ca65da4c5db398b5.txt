@@ -1,0 +1,210 @@
+/**
+ * The correction the rep reads aloud contains a number, which makes it a
+ * claim, which means it gets verified rather than believed — including
+ * when we wrote it ourselves.
+ *
+ * Every draft is re-parsed by the deterministic extractor (stub.ts, never
+ * the model) and put back through adjudicate(). Fails the round trip and
+ * the draft is binned. A wrong correction is worse than none: the rep
+ * says it out loud with confidence.
+ *
+ * No model calls here; llm.ts does the drafting.
+ */
+
+import { adjudicate } from "./adjudicate";
+import type { AdjudicationContext, ProductTruth } from "./adjudicate";
+import { stubExtractAll } from "./stub";
+import type { Claim, ClaimType, Verdict } from "./types";
+
+function formatInr(n: number): string {
+  const whole = Math.floor(Math.abs(n));
+  const paise = Math.round((Math.abs(n) - whole) * 100);
+  const s = String(whole);
+  let grouped: string;
+  if (s.length <= 3) {
+    grouped = s;
+  } else {
+    const last3 = s.slice(-3);
+    let rest = s.slice(0, -3);
+    const chunks: string[] = [];
+    while (rest.length > 2) {
+      chunks.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest.length) chunks.unshift(rest);
+    grouped = `${chunks.join(",")},${last3}`;
+  }
+  return "₹" + grouped + (paise === 0 ? "" : "." + String(paise).padStart(2, "0"));
+}
+
+function num(v: number | string | null): number | null {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const n = Number(v.replace(/[₹,\s%]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/** "tenures.6.processingFee" -> 6 */
+function tenureFromSourceField(sourceField: string): number | null {
+  const m = /^tenures\.(\d+)/.exec(sourceField);
+  return m ? Number(m[1]) : null;
+}
+
+// the deterministic fallback
+
+/**
+ * A correction built by string template rather than by a model. Boring,
+ * slightly stiff, and guaranteed to carry the right number — which is
+ * the only property that actually matters. Used when there is no API
+ * key, and as the comparison point for whatever the model drafts.
+ *
+ * Every template puts the CORRECT figure before the wrong one, so that
+ * re-parsing the sentence picks up the correction and not the mistake.
+ */
+export function deterministicCorrection(
+  claim: Claim,
+  verdict: Verdict,
+  truth: ProductTruth
+): string | null {
+  const expected = verdict.expected;
+  const tenure = claim.tenureMonths ?? tenureFromSourceField(verdict.sourceField);
+  const expNum = num(expected);
+
+  switch (claim.type) {
+    case "processing_fee": {
+      if (expNum === null || tenure === null) return null;
+      return `Let me correct that — the ${tenure}-month processing fee is ${formatInr(expNum)}, not ${formatInr(num(verdict.stated) ?? 0)}.`;
+    }
+
+    case "apr":
+    case "interest": {
+      if (expNum === null || tenure === null) return null;
+      if (expNum === 0) {
+        return `Correction — the ${tenure}-month plan is 0% interest, though the processing fee and GST still apply.`;
+      }
+      return `Correction — the ${tenure}-month plan is ${expNum}% per annum, not ${num(verdict.stated) ?? 0}%.`;
+    }
+
+    case "late_fee": {
+      if (expNum === null) return null;
+      if (claim.unit === "percent") {
+        return `Correction — it's ${expNum}% a month on the overdue amount, not ${num(verdict.stated) ?? 0}%.`;
+      }
+      return `Correction — the flat late fee is ${formatInr(expNum)}, not ${formatInr(num(verdict.stated) ?? 0)}.`;
+    }
+
+    case "tenure": {
+      const offered = Object.keys(truth.tenures)
+        .map(Number)
+        .sort((a, b) => a - b);
+      return `Correction — we offer ${offered.slice(0, -1).join(", ")} or ${offered[offered.length - 1]} months, nothing longer.`;
+    }
+
+    case "eligibility": {
+      if (verdict.sourceField.includes("minAgeYears")) {
+        return `Correction — you need to be at least ${truth.eligibility.minAgeYears} to apply.`;
+      }
+      return `Correction — the ticket has to be at least ${formatInr(truth.eligibility.minTicketInr)} and at most ${formatInr(truth.eligibility.maxTicketInr)}.`;
+    }
+
+    case "kyc_requirement":
+      return `Correction — we only need an Aadhaar OTP or DigiLocker for KYC.`;
+
+    case "emi_amount": {
+      if (expNum === null || tenure === null) return null;
+      return `Correction — the EMI on the ${tenure}-month plan is ${formatInr(expNum)} a month.`;
+    }
+
+    case "total_payable": {
+      if (expNum === null || tenure === null) return null;
+      return `Correction — the total payable on the ${tenure}-month plan is ${formatInr(expNum)}.`;
+    }
+
+    default:
+      return null;
+  }
+}
+
+// the self-check
+
+export interface CorrectionCheck {
+  passed: boolean;
+  /** Why it failed, for the debug rail. Null when it passed. */
+  reason: string | null;
+  /** What the correction sentence was understood to claim. */
+  reparsedStatus: string | null;
+}
+
+/**
+ * Parse a drafted correction back into a Claim and adjudicate it.
+ * Passes only if the sentence makes the SAME KIND of claim as the
+ * original and that claim comes back VERIFIED.
+ *
+ * The type guard matters: a correction about a processing fee that
+ * re-parses as a tenure claim might adjudicate VERIFIED while saying
+ * nothing about the fee. That is a false pass, and it would ship a
+ * useless sentence to the rep.
+ */
+/**
+ * "apr" and "interest" name the same field in product_truth.json and the
+ * deterministic extractor only ever emits "interest". Without this, every
+ * correction to an apr claim fails the type guard and gets suppressed —
+ * the rep sees the misquote flagged and no sentence to fix it with.
+ */
+function sameClaimKind(a: ClaimType, b: ClaimType): boolean {
+  if (a === b) return true;
+  const rate = (t: ClaimType) => t === "apr" || t === "interest";
+  return rate(a) && rate(b);
+}
+
+export function checkCorrection(
+  draft: string,
+  original: Claim,
+  truth: ProductTruth,
+  context: AdjudicationContext = {}
+): CorrectionCheck {
+  const candidates = stubExtractAll(draft, original.utteranceId);
+
+  if (candidates.length === 0) {
+    return {
+      passed: false,
+      reason: "The drafted sentence contains no checkable claim.",
+      reparsedStatus: null,
+    };
+  }
+
+  // A correction may legitimately mention more than one figure
+  // ("it's 2% a month on the overdue amount, not ₹500"). Check the claim
+  // that is actually about the thing being corrected.
+  const reparsed = candidates.find((c) => sameClaimKind(c.type, original.type));
+
+  if (!reparsed) {
+    return {
+      passed: false,
+      reason: `The draft reads as ${candidates
+        .map((c) => c.type)
+        .join(" / ")}, not ${original.type}.`,
+      reparsedStatus: null,
+    };
+  }
+
+  // A correction may leave the tenure implicit ("the fee is ₹349").
+  // Inherit it from the claim being corrected rather than failing.
+  const withTenure: Claim = {
+    ...reparsed,
+    tenureMonths: reparsed.tenureMonths ?? original.tenureMonths,
+  };
+
+  const verdict = adjudicate(withTenure, truth, context);
+
+  return {
+    passed: verdict.status === "VERIFIED",
+    reason:
+      verdict.status === "VERIFIED"
+        ? null
+        : `Re-checking the draft returned ${verdict.status}: ${verdict.explanation}`,
+    reparsedStatus: verdict.status,
+  };
+}

@@ -1,0 +1,92 @@
+"""Security tests: personal-data masking, upload validation, headers, rate limits, input bounds, integrity."""
+import os
+
+os.environ["ARTHANETRA_PROVIDER"] = "offline"
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from app.llm import reset_gateway  # noqa: E402
+from app.main import app  # noqa: E402
+from app.security import check_model, redact, sniff  # noqa: E402
+
+reset_gateway()
+client = TestClient(app)
+
+
+def test_redacts_indian_identifiers():
+    t = ("Call +91 XXXXX XXXXX, mail name@example.com, PAN ABCDE1234F, Aadhaar 2345 6789 0123, "
+         "A/c No: 50100234567890, IFSC HDFC0001234, UPI ravi@okaxis, card 4111 1111 1111 1111")
+    out, counts = redact(t)
+    for secret in ["98765", "name@example.com", "ABCDE1234F", "6789", "50100234567890", "HDFC0001234", "ravi@okaxis", "4111 1111"]:
+        assert secret not in out
+    assert set(counts) >= {"phone", "email", "pan", "aadhaar", "account", "ifsc", "upi_id", "card"}
+
+
+def test_redaction_keeps_money_amounts():
+    t = "Loan amount: ₹40,00,000. EMI: ₹35,348 x 240. Repayment ₹5,075 on day 15. Premium ₹1,00,000"
+    out, counts = redact(t)
+    assert out == t and counts == {}
+
+
+def test_redacted_before_analysis_and_reported():
+    text = "Loan amount: Rs 10,000\nTenure: 30 days\nInterest rate: 2% per month\nBorrower PAN ABCDE1234F, mobile XXXXXXXXXX"
+    r = client.post("/api/analyze", data={"text": text}).json()
+    assert "ABCDE1234F" not in r["document_text"] and "XXXXXXXXXX" not in r["document_text"]
+    assert r["privacy"]["redactions"] == {"pan": 1, "phone": 1}
+    assert r["privacy"]["stored"] is False
+    assert len(r["integrity"]["report_id"]) == 16
+
+
+def test_integrity_is_deterministic():
+    text = "Loan amount: Rs 10,000\nTenure: 30 days\nInterest rate: 2% per month"
+    a = client.post("/api/analyze", data={"text": text}).json()["integrity"]
+    b = client.post("/api/analyze", data={"text": text}).json()["integrity"]
+    assert a["report_id"] == b["report_id"]
+
+
+def test_file_sniffing():
+    assert sniff(b"%PDF-1.7 ...") == "application/pdf"
+    assert sniff(b"\x89PNG\r\n\x1a\n....") == "image/png"
+    assert sniff(b"MZ\x90\x00\x03\x00\x00\x00") is None  # Windows executable
+    assert sniff("Loan amount ₹5,000".encode()) == "text/plain"
+
+
+def test_executable_renamed_as_pdf_is_rejected():
+    r = client.post("/api/analyze", files={"file": ("offer.pdf", b"MZ\x90\x00\x03\x00\x00\x00\x04\x00", "application/pdf")})
+    assert r.status_code == 400
+
+
+def test_security_headers_present():
+    r = client.get("/api/health")
+    for h in ["x-content-type-options", "x-frame-options", "referrer-policy", "content-security-policy", "permissions-policy"]:
+        assert h in r.headers
+    assert r.headers["cache-control"] == "no-store"
+
+
+def test_no_wildcard_cors_by_default():
+    r = client.get("/api/health", headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in r.headers
+
+
+@pytest.mark.parametrize("bad", [
+    {"model_type": "LoanModel", "principal": 1e15, "tenure_days": 30},
+    {"model_type": "LoanModel", "principal": 1000, "tenure_days": 30, "n_installments": 10_000_000},
+    {"model_type": "Evil", "principal": 1},
+    {"model_type": "CardModel", "outstanding": 1000, "monthly_rate": 5},
+])
+def test_simulator_bounds(bad):
+    with pytest.raises(ValueError):
+        check_model(bad)
+    assert client.post("/api/simulate", json={"model": bad, "facts": {}}).status_code == 400
+
+
+def test_rate_limit():
+    import app.security as sec
+    old = sec.RATE["/api/ask"]
+    sec.RATE["/api/ask"] = (2, 60)
+    try:
+        codes = [client.post("/api/ask", json={"question": "hi there", "analysis": {}}).status_code for _ in range(4)]
+        assert 429 in codes
+    finally:
+        sec.RATE["/api/ask"] = old

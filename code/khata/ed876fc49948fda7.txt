@@ -1,0 +1,43 @@
+/**
+ * Shared table treatment. Class strings rather than a Table component,
+ * so each page keeps its own markup and its own columns — the thing
+ * worth sharing here is the reading experience, not the structure.
+ *
+ * Read on a projector from the back of a room: rows are tall, numbers
+ * are mono and right-aligned so digits line up in a column, and the
+ * zebra is the hairline token at low opacity rather than a new grey.
+ */
+
+/** Header cell, text column. */
+export const TH =
+  "text-left py-2.5 pr-6 font-mono text-[11px] font-normal uppercase tracking-[0.14em] text-ink/45 last:pr-0";
+
+/** Header cell, number column. Aligns with the digits beneath it. */
+export const TH_NUM = `${TH} text-right`;
+
+/**
+ * Zebra + hover on the row. The hairline token at 25% is a tint of the
+ * rule colour already on the page, so the table gains banding without
+ * the palette gaining a colour.
+ */
+export const TR =
+  "border-b border-hairline/70 even:bg-hairline/25 transition-colors hover:bg-hairline/50";
+
+/** Body cell, prose. */
+export const TD = "py-3 pr-6 font-sans text-sm text-ink last:pr-0";
+
+/** Body cell, number. Mono and right-aligned; tabular figures come from globals.css. */
+export const TD_NUM = "py-3 pr-6 text-right font-mono text-xs text-ink last:pr-0";
+
+/** A number that is context rather than the point of the row. */
+export const TD_NUM_MUTED = `${TD_NUM.replace("text-ink", "text-ink/60")}`;
+
+/** A cell holding a date or an id. */
+export const TD_META = "py-3 pr-6 font-mono text-xs text-ink/50 last:pr-0";
+
+/** Link inside a table cell. */
+export const TD_LINK =
+  "underline underline-offset-4 decoration-hairline hover:decoration-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
+
+export const THEAD_ROW = "border-b border-ink/30";
+export const TABLE = "mt-4 w-full border-collapse";

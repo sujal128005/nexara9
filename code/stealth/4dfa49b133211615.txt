@@ -1,0 +1,362 @@
+@import "tailwindcss";
+
+/*
+ * STEALTH design tokens.
+ *
+ * COLOUR POLICY
+ *
+ * Two colour systems, and they must not be confused.
+ *
+ *   1. DECORATIVE. Steel blue and petrol, plus two neutral greys. Used on
+ *      surfaces, section bands, headers, rails and icons. They carry identity
+ *      and hierarchy, and nothing else. None of them is a status.
+ *
+ *   2. FUNCTIONAL. Emerald, amber and rose-red, and ONLY these three, and only
+ *      ever meaning ALLOW, STEP_UP and DECLINE. Nothing decorative may borrow
+ *      those hues. That reservation is what lets a reader glance at any screen
+ *      and know instantly whether they are looking at a verdict or at
+ *      furniture.
+ *
+ * WHY THIS PALETTE AND NOT THE PREVIOUS ONE
+ *
+ * The first version used four saturated hues from 190 to 300 degrees: indigo,
+ * cyan, violet and fuchsia, over a blue-cast slate, with a three-radial
+ * gradient behind the hero. Every one of those choices is a default. Together
+ * they are the house style of a generated interface, and a reader recognises
+ * it before reading a word.
+ *
+ * This one is built on restraint instead. Two real hues carry meaning:
+ *
+ *   accent   212deg, steel blue   interactive, brand, the active nav rule
+ *   measure  195deg, petrol       deterministic stages, benchmarks, anything
+ *                                 that was counted rather than judged
+ *
+ * The other two roles, the pipeline rail and the evidence panels, are NEUTRAL.
+ * They separate by weight and lightness, not by hue. Dropping from four hues
+ * to two is the whole point: hierarchy carried by type, spacing and border
+ * weight reads as considered, and a fifth colour would only dilute the two
+ * that mean something.
+ *
+ * The base is a true graphite with no blue cast, because the blue-slate dark
+ * theme is itself a tell.
+ *
+ * CONTRAST, MEASURED, not eyeballed. Against the dark canvas: accent 5.45:1,
+ * accent-strong 7.68:1, measure 5.44:1, rail 6.05:1, evidence 8.41:1, body ink
+ * 15.95:1, secondary ink 8.04:1. Every decorative hue sits at least 32 degrees
+ * away from the nearest reserved verdict hue, so no piece of furniture can be
+ * mistaken for a decision at a glance or in a screenshot.
+ *
+ * Status is additionally never carried by colour alone: every outcome renders
+ * as glyph + colour + word, so it survives greyscale and a screen reader.
+ */
+@theme {
+  --font-display:
+    "Space Grotesk Variable", "Inter Variable", ui-sans-serif, system-ui,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans:
+    "Space Grotesk Variable", "Inter Variable", ui-sans-serif, system-ui,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /* ---------------------------------------------------------- neutrals */
+  /* True graphite. The previous palette's blue cast is the single most
+   * recognisable marker of a generated dark theme. */
+  --color-canvas: #0e1013;
+  --color-surface: #16191d;
+  /* Recessed, not raised: read-only evidence sits BELOW the panel holding it.
+   * On dark that means darker, which is the reverse of the light theme and the
+   * reason these are tokens rather than literal colours at each call site. */
+  --color-inset: #121519;
+  --color-inset-strong: #0f1215;
+  --color-line: #262a30;
+  --color-line-soft: #1c2025;
+  --color-line-strong: #39404a;
+  --color-ink: #e9ebee;
+  --color-ink-2: #a2a9b3;
+  --color-ink-3: #737b85;
+
+  /* ------------------------------------------------------- decorative */
+  /* Steel blue. Interactive affordances, the active nav rule, primary buttons.
+   * Deliberately a working blue rather than a brand purple. */
+  --color-accent: #5c8cc4;
+  --color-accent-strong: #7ba8db;
+  --color-accent-soft: #131b25;
+  --color-accent-line: #2f4a68;
+
+  /* Petrol. Deterministic stages, benchmarks, anything measured. 195deg keeps
+   * it clear of the emerald that means ALLOW. */
+  --color-measure: #4a92ab;
+  --color-measure-soft: #101a1e;
+  --color-measure-line: #2a5260;
+
+  /* Neutral. The pipeline rail and credential material. No hue on purpose. */
+  --color-rail: #8a929c;
+  --color-rail-soft: #191c21;
+  --color-rail-line: #3b434d;
+
+  /* Neutral, one step lighter. Evidence and disclosure. */
+  --color-evidence: #a6adb6;
+  --color-evidence-soft: #1b1e23;
+  --color-evidence-line: #454d57;
+
+  /* ------------------------------------------------- type scale (7 tiers) */
+  --text-label: 12px;
+  --text-label--line-height: 1.4;
+  --text-meta: 13px;
+  --text-meta--line-height: 1.55;
+  --text-body: 14px;
+  --text-body--line-height: 1.6;
+  --text-lead: 16px;
+  --text-lead--line-height: 1.5;
+  --text-head: 18px;
+  --text-head--line-height: 1.4;
+  --text-page: 26px;
+  --text-page--line-height: 1.2;
+  --text-hero: 44px;
+  --text-hero--line-height: 1.08;
+
+  /* Two radii. Controls are tighter than the surfaces that contain them. */
+  --radius-control: 4px;
+  --radius-panel: 8px;
+
+  /* ---------------------------------------------- functional, RESERVED */
+  /* Unchanged by the retheme. A verdict colour that shifted with a visual
+   * refresh would be a verdict colour nobody could rely on. */
+  --color-allow: #34d399;
+  --color-allow-soft: #052a20;
+  --color-allow-line: #10664c;
+
+  --color-stepup: #fbbf24;
+  --color-stepup-soft: #2b1f06;
+  --color-stepup-line: #8a6011;
+
+  --color-decline: #fb7185;
+  --color-decline-soft: #2e0f18;
+  --color-decline-line: #9c2f43;
+}
+
+/*
+ * THE LIGHT THEME.
+ *
+ * Dark is the default because a decision console is usually read for a long
+ * time in one sitting. Light exists because a projector in a bright room is
+ * the one place dark themes genuinely lose, and a demo is exactly that room.
+ *
+ * Only the tokens are redefined. Every utility resolves through var(--color-*),
+ * so nothing below this line needs a light variant and no component knows which
+ * theme it is in.
+ *
+ * The paper is a warm neutral rather than a blue-grey, for the same reason the
+ * dark canvas is graphite. The decorative hues are darkened rather than reused:
+ * the dark-mode steel blue on white is around 2.6:1 and unreadable. The
+ * functional three are unchanged.
+ */
+:root[data-theme="light"] {
+  --color-canvas: #f5f5f4;
+  --color-surface: #ffffff;
+  /* Recessed is LIGHTER than the surface here, the reverse of dark mode. */
+  --color-inset: #fafaf9;
+  --color-inset-strong: #f2f2f1;
+  --color-line: #e3e3e1;
+  --color-line-soft: #eeeeec;
+  --color-line-strong: #c9c9c6;
+  --color-ink: #16181b;
+  --color-ink-2: #4b5158;
+  --color-ink-3: #6e757d;
+
+  --color-accent: #2f5f96;
+  --color-accent-strong: #24507f;
+  --color-accent-soft: #eef3f9;
+  --color-accent-line: #c5d7e9;
+
+  --color-measure: #23697a;
+  --color-measure-soft: #edf5f7;
+  --color-measure-line: #bcdae0;
+
+  --color-rail: #5a636e;
+  --color-rail-soft: #f1f2f3;
+  --color-rail-line: #d7dade;
+
+  --color-evidence: #4c545e;
+  --color-evidence-soft: #f0f1f2;
+  --color-evidence-line: #d2d5d9;
+
+  --color-allow: #1b6e45;
+  --color-allow-soft: #f1f8f4;
+  --color-allow-line: #c2e0d0;
+
+  --color-stepup: #8a5a12;
+  --color-stepup-soft: #fbf7ee;
+  --color-stepup-line: #e8d5b0;
+
+  --color-decline: #a62b22;
+  --color-decline-soft: #fcf4f3;
+  --color-decline-line: #eec9c5;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Makes scrollbars, form controls and the flash-of-unstyled background
+     * dark too, rather than leaving white gutters around a dark page. */
+    color-scheme: dark;
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+    color: var(--color-ink);
+  }
+
+  /*
+   * No code ligatures. `-->` in an injected listing must render as three
+   * characters, not as an arrow glyph — this UI shows evidence, not prose.
+   */
+  code,
+  kbd,
+  samp,
+  pre,
+  .font-mono,
+  [class*="font-mono"] {
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+
+  a:focus-visible,
+  button:focus-visible {
+    outline: 2px solid var(--color-accent-strong);
+    outline-offset: 2px;
+  }
+}
+
+@utility label-caps {
+  font-size: var(--text-label);
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+/* Display face for headings. Space Grotesk is doing the identity work, so it
+ * gets slightly tighter tracking at large sizes where its width shows. */
+@utility font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+/*
+ * The hero band.
+ *
+ * The previous version stacked three saturated radial gradients in indigo,
+ * violet and cyan. A large multi-hue bloom is the most recognisable single
+ * marker of a generated page, and it was competing with the panels that hold
+ * the actual content.
+ *
+ * This is one soft wash of the brand hue, low in the corner, over a quiet
+ * vertical lift from surface to canvas. It gives the hero a place to sit
+ * without asking to be looked at.
+ */
+@utility hero-band {
+  background:
+    radial-gradient(
+      1100px 520px at 12% 0%,
+      color-mix(in oklab, var(--color-accent) 15%, transparent),
+      transparent 62%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--color-surface) 88%, var(--color-accent)),
+      var(--color-canvas) 78%
+    );
+}
+
+/*
+ * A band for a section that should read as its own place. Almost nothing:
+ * these sit UNDER panels, and a tint strong enough to notice on its own is a
+ * tint that fights the content on top of it.
+ */
+@utility band-rail {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-rail) 6%, var(--color-canvas)),
+    var(--color-canvas)
+  );
+}
+
+@utility band-measure {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-measure) 5%, var(--color-canvas)),
+    var(--color-canvas)
+  );
+}
+
+/* Panel that wants to look lit rather than merely bordered. */
+@utility panel-lift {
+  box-shadow:
+    0 1px 0 0 color-mix(in oklab, var(--color-ink) 5%, transparent) inset,
+    0 18px 40px -30px rgb(0 0 0 / 0.9);
+}
+
+:root[data-theme="light"] .panel-lift {
+  box-shadow:
+    0 1px 2px 0 rgb(16 18 24 / 0.04),
+    0 12px 28px -20px rgb(16 18 24 / 0.24);
+}
+
+/*
+ * The light theme gets much weaker tints.
+ *
+ * The same percentage that reads as a subtle lift against a near-black canvas
+ * reads as a heavy wash against a near-white one. Colour on light backgrounds
+ * has to be roughly a third of the strength to carry the same weight.
+ */
+:root[data-theme="light"] .hero-band {
+  background:
+    radial-gradient(
+      950px 460px at 10% 0%,
+      color-mix(in oklab, var(--color-accent) 9%, transparent),
+      transparent 58%
+    ),
+    linear-gradient(180deg, var(--color-surface), var(--color-canvas) 84%);
+}
+
+:root[data-theme="light"] .band-rail {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-rail) 3%, var(--color-canvas)),
+    var(--color-canvas)
+  );
+}
+
+:root[data-theme="light"] .band-measure {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--color-measure) 3%, var(--color-canvas)),
+    var(--color-canvas)
+  );
+}
+
+/* A hairline rule capping the hero. Two stops. The previous four-stop version
+ * put a small rainbow across the top of the page. */
+@utility accent-rule {
+  background: linear-gradient(
+    90deg,
+    var(--color-accent),
+    var(--color-measure) 46%,
+    transparent
+  );
+}

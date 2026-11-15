@@ -1,0 +1,53 @@
+/**
+ * Reading the current session inside server components and route handlers.
+ *
+ * Split from lib/auth.ts because this imports next/headers, which cannot
+ * be used from middleware or from the seed script. auth.ts stays pure.
+ */
+
+import { cookies } from "next/headers";
+
+import { authDisabled, readSessionToken, SESSION_COOKIE } from "./auth";
+import type { Role, Session } from "./auth";
+import { listUsers } from "./db";
+
+/**
+ * The signed-in user, or null.
+ *
+ * With KHATA_DISABLE_AUTH=1 this returns the seeded admin instead, so a
+ * broken session can never take the demo down. That bypass is deliberate,
+ * documented in .env.example, and reported in the console header so
+ * nobody mistakes it for a working login.
+ */
+export async function currentSession(): Promise<Session | null> {
+  if (authDisabled()) {
+    const admin = listUsers().find((u) => u.role === "admin");
+    if (!admin) return null;
+    return {
+      uid: admin.id,
+      role: "admin",
+      name: admin.name,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    };
+  }
+
+  const jar = await cookies();
+  return readSessionToken(jar.get(SESSION_COOKIE)?.value);
+}
+
+/**
+ * Session or throw. For routes that have no meaningful unauthenticated
+ * response — better a 500 in development than a silent empty result that
+ * looks like "this user has no data".
+ */
+export async function requireSession(): Promise<Session> {
+  const session = await currentSession();
+  if (!session) throw new Error("Not authenticated.");
+  return session;
+}
+
+export function isAdmin(session: Session | null): boolean {
+  return session?.role === "admin";
+}
+
+export type { Role, Session };

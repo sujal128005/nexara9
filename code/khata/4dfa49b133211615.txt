@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  /* Khata design tokens. Paper, not dashboard. */
+  --color-paper: #F7F4ED;     /* page background */
+  --color-ink: #1A1714;       /* primary text */
+  --color-hairline: #DDD6C8;  /* rules, borders, dividers */
+  --color-signal: #C1272D;    /* the ONE saturated colour — wrong claims only */
+}
+
+@theme inline {
+  --color-paper: var(--color-paper);
+  --color-ink: var(--color-ink);
+  --color-hairline: var(--color-hairline);
+  --color-signal: var(--color-signal);
+
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  /* Ledgers are read, not scanned. */
+  line-height: 1.55;
+}
+
+/*
+ * Every number in this product is a ledger entry, so every number is
+ * tabular. Without this a latency counter ticking 2ms -> 11ms visibly
+ * shifts the row it sits in, and columns of rupee figures fail to line
+ * up under each other — which is the one thing a ledger must do.
+ */
+.font-mono,
+code,
+kbd,
+samp,
+pre {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/*
+ * Form controls inherit the paper. Browsers default checkboxes to the
+ * OS accent — usually a saturated blue, which would break the
+ * one-saturated-colour rule before the page has said anything.
+ */
+input[type="checkbox"] {
+  accent-color: var(--color-ink);
+}
+
+select,
+textarea,
+input {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+}
+
+::selection {
+  background-color: var(--color-hairline);
+  color: var(--color-ink);
+}

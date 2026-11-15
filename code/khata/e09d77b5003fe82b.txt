@@ -1,0 +1,455 @@
+/**
+ * The only file that calls a model. Everything returns { text, cost } so
+ * no call goes unpriced. Moves strings; decides nothing — adjudicate.ts
+ * owns truth and imports nothing from here.
+ *
+ * Two transports, one interface: Gemini, and anything that speaks
+ * POST /chat/completions (Groq, Cerebras, OpenRouter, Mistral, Ollama).
+ * Free tiers vanish without warning, so swapping provider is two lines
+ * in .env.local rather than a code change.
+ *
+ * Server-side only. Importing this into a client component leaks the key
+ * into the browser bundle.
+ */
+
+import type { CostEntry } from "./types";
+import ratesFile from "../data/rates.json";
+
+// provider selection
+
+const OPENAI_BASE_URL = (process.env.KHATA_LLM_BASE_URL ?? "").trim().replace(/\/$/, "");
+const OPENAI_KEY = (process.env.KHATA_LLM_API_KEY ?? "").trim();
+const GOOGLE_KEY = (process.env.GOOGLE_API_KEY ?? "").trim();
+
+export type Provider = "openai-compatible" | "gemini" | "none";
+
+export const PROVIDER: Provider =
+  OPENAI_BASE_URL !== "" && OPENAI_KEY !== ""
+    ? "openai-compatible"
+    : GOOGLE_KEY !== ""
+      ? "gemini"
+      : "none";
+
+/** Small/cheap model for the yes-no triage call. */
+export const TRIAGE_MODEL = (
+  process.env.KHATA_TRIAGE_MODEL ??
+  (PROVIDER === "gemini" ? "gemini-2.0-flash-lite" : "llama-3.1-8b-instant")
+).trim();
+
+/** Larger model for structured extraction and drafting. */
+export const EXTRACT_MODEL = (
+  process.env.KHATA_EXTRACT_MODEL ??
+  (PROVIDER === "gemini" ? "gemini-2.0-flash" : "llama-3.3-70b-versatile")
+).trim();
+
+const MIN_CALL_GAP_MS = Number(process.env.KHATA_MIN_CALL_GAP_MS ?? "1200");
+
+const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
+
+export type LlmMode = "llm" | "stub";
+
+export function getMode(): LlmMode {
+  return PROVIDER === "none" ? "stub" : "llm";
+}
+
+// Unmissable, once, at server startup.
+if (PROVIDER === "none") {
+  console.warn(
+    "KHATA: running in OFFLINE STUB mode — no LLM calls. Set KHATA_LLM_BASE_URL + KHATA_LLM_API_KEY (Groq, Cerebras, OpenRouter…) or GOOGLE_API_KEY in .env.local."
+  );
+} else if (PROVIDER === "gemini" && !GOOGLE_KEY.startsWith("AIza")) {
+  console.warn(
+    "KHATA: GOOGLE_API_KEY does not look like an AI Studio API key (those start with 'AIza'). Sending it as an OAuth bearer token instead. OAuth tokens expire in about an hour."
+  );
+} else {
+  console.log(
+    `KHATA: live mode via ${PROVIDER} — triage=${TRIAGE_MODEL}, extract=${EXTRACT_MODEL}`
+  );
+}
+
+// pricing — read from data/rates.json, never hardcoded
+
+interface ModelRate {
+  inputPerMillionUsd: number | null;
+  outputPerMillionUsd: number | null;
+}
+
+interface RatesFile {
+  usdToInr: number | null;
+  models: Record<string, ModelRate | undefined>;
+}
+
+const rates = ratesFile as unknown as RatesFile;
+
+const warnedModels = new Set<string>();
+
+/**
+ * Notional INR cost of one call at published list rates. Returns 0 —
+ * honestly, not as a guess — when rates.json has no usable entry. Free
+ * tiers still produce a number here: the meter is about unit economics
+ * at scale, not your credit card.
+ */
+export function priceCall(
+  model: string,
+  inputTokens: number,
+  outputTokens: number
+): number {
+  const rate = rates.models[model];
+  const fx = rates.usdToInr;
+
+  if (
+    !rate ||
+    fx === null ||
+    rate.inputPerMillionUsd === null ||
+    rate.outputPerMillionUsd === null
+  ) {
+    if (!warnedModels.has(model)) {
+      warnedModels.add(model);
+      console.warn(
+        `KHATA: data/rates.json has no usable rate for "${model}" — cost meter will read 0.00 for it. Add the model and set usdToInr.`
+      );
+    }
+    return 0;
+  }
+
+  const usd =
+    (inputTokens / 1_000_000) * rate.inputPerMillionUsd +
+    (outputTokens / 1_000_000) * rate.outputPerMillionUsd;
+
+  return Math.round(usd * fx * 10_000) / 10_000;
+}
+
+// rate limiting
+
+/**
+ * Every free tier is capped per minute (Groq: 30 rpm) and triage fires on
+ * every finalised utterance — which, with the Task 2 restart loop, can be
+ * several per sentence. Calls are serialised through one queue with a
+ * minimum gap. Latency traded for not getting 429'd mid-demo.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+let lastCallStartedAt = 0;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  const result = queue.then(async () => {
+    const wait = lastCallStartedAt + MIN_CALL_GAP_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastCallStartedAt = Date.now();
+    return fn();
+  });
+  queue = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
+}
+
+/** Thrown on 429 / quota exhaustion. Callers surface this as PENDING. */
+export class RateLimitedError extends Error {
+  readonly retryAfterMs: number;
+  constructor(message: string, retryAfterMs = 4000) {
+    super(message);
+    this.name = "RateLimitedError";
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+/** Any other provider or transport failure. */
+export class LlmError extends Error {
+  readonly status: number;
+  constructor(message: string, status = 0) {
+    super(message);
+    this.name = "LlmError";
+    this.status = status;
+  }
+}
+
+// the gateway
+
+export interface LlmCallOptions {
+  /** Which pipeline stage is spending money. Logged on the CostEntry. */
+  stage: CostEntry["stage"];
+  model: string;
+  prompt: string;
+  system?: string;
+  maxOutputTokens?: number;
+  temperature?: number;
+  /** Set "application/json" to request parseable JSON. */
+  responseMimeType?: string;
+}
+
+export interface LlmCallResult {
+  text: string;
+  cost: CostEntry;
+}
+
+interface RawCall {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+// OpenAI-compatible transport
+
+interface OpenAiResponse {
+  choices?: Array<{ message?: { content?: string | null } }>;
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  error?: { message?: string; type?: string; code?: string };
+}
+
+async function callOpenAiCompatible(options: LlmCallOptions): Promise<RawCall> {
+  const messages: Array<{ role: string; content: string }> = [];
+  if (options.system) messages.push({ role: "system", content: options.system });
+  messages.push({ role: "user", content: options.prompt });
+
+  const body: Record<string, unknown> = {
+    model: options.model,
+    messages,
+    temperature: options.temperature ?? 0,
+    max_tokens: options.maxOutputTokens ?? 256,
+  };
+  if (options.responseMimeType === "application/json") {
+    body.response_format = { type: "json_object" };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (cause) {
+    throw new LlmError(
+      `Could not reach ${OPENAI_BASE_URL}: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`
+    );
+  }
+
+  let payload: OpenAiResponse;
+  try {
+    payload = (await response.json()) as OpenAiResponse;
+  } catch {
+    throw new LlmError(
+      `Provider returned a non-JSON body (HTTP ${response.status}).`,
+      response.status
+    );
+  }
+
+  if (!response.ok) {
+    const detail = payload.error?.message ?? `HTTP ${response.status}`;
+    if (response.status === 429) {
+      const retry = Number(response.headers.get("retry-after") ?? "0") * 1000;
+      throw new RateLimitedError(detail, retry > 0 ? retry : 4000);
+    }
+    throw new LlmError(`Provider error: ${detail}`, response.status);
+  }
+
+  return {
+    text: payload.choices?.[0]?.message?.content ?? "",
+    inputTokens: payload.usage?.prompt_tokens ?? 0,
+    outputTokens: payload.usage?.completion_tokens ?? 0,
+  };
+}
+
+// Gemini transport
+
+interface GeminiResponse {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+  error?: { message?: string; status?: string };
+}
+
+/** AI Studio keys go in x-goog-api-key; anything else is tried as OAuth. */
+function geminiAuthHeaders(): Record<string, string> {
+  return GOOGLE_KEY.startsWith("AIza")
+    ? { "x-goog-api-key": GOOGLE_KEY }
+    : { Authorization: `Bearer ${GOOGLE_KEY}` };
+}
+
+async function callGemini(options: LlmCallOptions): Promise<RawCall> {
+  const body: Record<string, unknown> = {
+    contents: [{ role: "user", parts: [{ text: options.prompt }] }],
+    generationConfig: {
+      temperature: options.temperature ?? 0,
+      maxOutputTokens: options.maxOutputTokens ?? 256,
+      ...(options.responseMimeType
+        ? { responseMimeType: options.responseMimeType }
+        : {}),
+    },
+  };
+  if (options.system) {
+    body.systemInstruction = { parts: [{ text: options.system }] };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${GEMINI_ENDPOINT}/${encodeURIComponent(options.model)}:generateContent`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...geminiAuthHeaders() },
+        body: JSON.stringify(body),
+      }
+    );
+  } catch (cause) {
+    throw new LlmError(
+      `Could not reach the Gemini API: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`
+    );
+  }
+
+  let payload: GeminiResponse;
+  try {
+    payload = (await response.json()) as GeminiResponse;
+  } catch {
+    throw new LlmError(
+      `Gemini returned a non-JSON body (HTTP ${response.status}).`,
+      response.status
+    );
+  }
+
+  if (!response.ok) {
+    const detail = payload.error?.message ?? `HTTP ${response.status}`;
+    // 429 / RESOURCE_EXHAUSTED usually IS a rate limit — but it is also
+    // what Google returns when the credential is not attached to a
+    // project with the Generative Language API enabled. Always pass the
+    // provider's own words through instead of a friendly guess.
+    if (
+      response.status === 429 ||
+      payload.error?.status === "RESOURCE_EXHAUSTED"
+    ) {
+      throw new RateLimitedError(detail);
+    }
+    throw new LlmError(`Gemini error: ${detail}`, response.status);
+  }
+
+  return {
+    text:
+      payload.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ??
+      "",
+    inputTokens: payload.usageMetadata?.promptTokenCount ?? 0,
+    outputTokens: payload.usageMetadata?.candidatesTokenCount ?? 0,
+  };
+}
+
+// public entry point
+
+/**
+ * Make one model call. Queued, priced, and logged.
+ * Throws RateLimitedError on 429, LlmError otherwise.
+ */
+export async function callModel(
+  options: LlmCallOptions
+): Promise<LlmCallResult> {
+  if (PROVIDER === "none") {
+    throw new LlmError(
+      "callModel invoked with no provider configured — callers must check getMode() and use lib/stub.ts instead."
+    );
+  }
+
+  return enqueue(async () => {
+    const raw =
+      PROVIDER === "gemini"
+        ? await callGemini(options)
+        : await callOpenAiCompatible(options);
+
+    const cost: CostEntry = {
+      at: new Date().toISOString(),
+      stage: options.stage,
+      model: options.model,
+      inputTokens: raw.inputTokens,
+      outputTokens: raw.outputTokens,
+      inr: priceCall(options.model, raw.inputTokens, raw.outputTokens),
+    };
+
+    return { text: raw.text, cost };
+  });
+}
+
+// correction drafting
+
+export interface CorrectionRequest {
+  claimType: string;
+  tenureMonths: number | null;
+  /** The redacted sentence the rep actually said. */
+  saidText: string;
+  /** What they stated, as text. */
+  stated: string;
+  /** The correct figure, already computed by adjudicate(). */
+  expected: string;
+  /** The adjudicator's one-line explanation. */
+  explanation: string;
+}
+
+const CORRECT_SYSTEM = [
+  "A sales rep just misquoted a product term on a live call. You write the one sentence they should say next to fix it.",
+  "",
+  "You are given the correct figure. Your job is phrasing, not arithmetic.",
+  "",
+  "Rules:",
+  "- Use the correct figure EXACTLY as given to you. Do not round it, recompute it, or restate it in different units.",
+  "- Mention no other number except the figure they got wrong.",
+  "- One sentence. Under 25 words. Natural spoken Indian English.",
+  "- Correct the fact without grovelling and without blaming the customer.",
+  "- Output the sentence only. No quotes, no preamble, no explanation.",
+].join("\n");
+
+/**
+ * Draft a correction sentence.
+ *
+ * This returns a DRAFT. It is not safe to show a rep until
+ * lib/correction.ts has re-parsed it and re-adjudicated it. The model is
+ * handed the right number precisely so it has nothing to compute, but
+ * "handed the right number" is not the same as "wrote the right number",
+ * and only the deterministic round trip can tell the difference.
+ */
+export async function correct(
+  request: CorrectionRequest
+): Promise<LlmCallResult> {
+  const tenure =
+    request.tenureMonths === null
+      ? "not specified"
+      : `${request.tenureMonths} months`;
+
+  const prompt = [
+    `Rep said: "${request.saidText}"`,
+    `Claim type: ${request.claimType}`,
+    `Tenure: ${tenure}`,
+    `They stated: ${request.stated}`,
+    `The correct figure is: ${request.expected}`,
+    `Why it is wrong: ${request.explanation}`,
+    "",
+    "Write the correction sentence.",
+  ].join("\n");
+
+  return callModel({
+    stage: "correct",
+    model: EXTRACT_MODEL,
+    system: CORRECT_SYSTEM,
+    prompt,
+    maxOutputTokens: 80,
+    temperature: 0.2,
+  });
+}
+
+/** A zero-cost CostEntry for a stub "call", so the ledger stays complete. */
+export function stubCost(stage: CostEntry["stage"]): CostEntry {
+  return {
+    at: new Date().toISOString(),
+    stage,
+    model: "offline-stub",
+    inputTokens: 0,
+    outputTokens: 0,
+    inr: 0,
+  };
+}

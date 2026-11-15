@@ -1,0 +1,183 @@
+/**
+ * Dashboard aggregation. Pure functions over khatas, so the numbers on
+ * screen can be asserted in lib/selfcheck.ts rather than eyeballed.
+ *
+ * Every figure here is derived from a khata that was actually written.
+ * Nothing is seeded, estimated or rounded up to look better. Where a
+ * metric has no denominator the function returns null and the page
+ * prints "insufficient data" — a confident 0% and "we have no calls"
+ * look identical on a dashboard and mean opposite things.
+ */
+
+import type { KhataRecord } from "./types";
+
+export interface CallFacts {
+  callId: string;
+  customerId: string;
+  /** The rep the call is attributed to. */
+  userId: string;
+  endedAt: string;
+  claims: number;
+  verified: number;
+  wrong: number;
+  stale: number;
+  unsupported: number;
+  coverageChecked: number;
+  coverageUtterances: number;
+  coverageComplete: boolean;
+  costInr: number;
+  /** Verdicts where a self-checked sentence was shown to the rep. */
+  correctionsOffered: number;
+  /** Whether a human approved this call's CRM proposal. */
+  approved: boolean;
+  /** sourceField for every WRONG verdict, for the coaching signal. */
+  misquotedFields: string[];
+}
+
+export function factsFromKhata(
+  khata: KhataRecord,
+  userId: string,
+  approved: boolean
+): CallFacts {
+  let verified = 0;
+  let wrong = 0;
+  let stale = 0;
+  let unsupported = 0;
+  let correctionsOffered = 0;
+  const misquotedFields: string[] = [];
+
+  for (const v of khata.verdicts) {
+    if (v.status === "VERIFIED") verified++;
+    else if (v.status === "WRONG") {
+      wrong++;
+      misquotedFields.push(v.sourceField);
+    } else if (v.status === "STALE") stale++;
+    else unsupported++;
+
+    if (v.correction !== null) correctionsOffered++;
+  }
+
+  return {
+    callId: khata.callId,
+    customerId: khata.customerId,
+    userId,
+    endedAt: khata.endedAt ?? khata.startedAt,
+    claims: khata.claims.length,
+    verified,
+    wrong,
+    stale,
+    unsupported,
+    coverageChecked: khata.coverage?.checked ?? 0,
+    coverageUtterances: khata.coverage?.utterances ?? 0,
+    coverageComplete: (khata.coverage?.unchecked ?? 1) === 0,
+    costInr: khata.costs.reduce((sum, c) => sum + c.inr, 0),
+    correctionsOffered,
+    approved,
+    misquotedFields,
+  };
+}
+
+export interface Totals {
+  calls: number;
+  claims: number;
+  verdicts: number;
+  misquotes: number;
+  /** Null when there are no verdicts to divide by. */
+  misquoteRate: number | null;
+  costInr: number;
+  /** Null when no claims were checked. */
+  costPerClaim: number | null;
+  fullyCheckedCalls: number;
+  correctionsOffered: number;
+  approvedCalls: number;
+}
+
+export function totals(facts: CallFacts[]): Totals {
+  const claims = facts.reduce((s, f) => s + f.claims, 0);
+  const verdicts = facts.reduce(
+    (s, f) => s + f.verified + f.wrong + f.stale + f.unsupported,
+    0
+  );
+  const misquotes = facts.reduce((s, f) => s + f.wrong, 0);
+  const costInr = facts.reduce((s, f) => s + f.costInr, 0);
+
+  return {
+    calls: facts.length,
+    claims,
+    verdicts,
+    misquotes,
+    misquoteRate: verdicts === 0 ? null : misquotes / verdicts,
+    costInr,
+    costPerClaim: claims === 0 ? null : costInr / claims,
+    fullyCheckedCalls: facts.filter((f) => f.coverageComplete).length,
+    correctionsOffered: facts.reduce((s, f) => s + f.correctionsOffered, 0),
+    approvedCalls: facts.filter((f) => f.approved).length,
+  };
+}
+
+export interface RepTotals extends Totals {
+  userId: string;
+}
+
+/**
+ * Per-rep breakdown, worst misquote rate first.
+ *
+ * A rep with no verdicts sorts last rather than first: a null rate is
+ * "nothing to judge yet", and putting them at the top of a list ordered
+ * by how often people are wrong would read as an accusation.
+ */
+export function byRep(facts: CallFacts[]): RepTotals[] {
+  const grouped = new Map<string, CallFacts[]>();
+  for (const f of facts) {
+    const bucket = grouped.get(f.userId);
+    if (bucket) bucket.push(f);
+    else grouped.set(f.userId, [f]);
+  }
+
+  return [...grouped.entries()]
+    .map(([userId, rows]) => ({ userId, ...totals(rows) }))
+    .sort((a, b) => {
+      if (a.misquoteRate === null && b.misquoteRate === null) return 0;
+      if (a.misquoteRate === null) return 1;
+      if (b.misquoteRate === null) return -1;
+      return b.misquoteRate - a.misquoteRate;
+    });
+}
+
+export interface FieldCount {
+  field: string;
+  count: number;
+}
+
+/** Every misquoted product field, most frequent first. */
+export function misquotedFields(facts: CallFacts[]): FieldCount[] {
+  const counts = new Map<string, number>();
+  for (const f of facts) {
+    for (const field of f.misquotedFields) {
+      counts.set(field, (counts.get(field) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([field, count]) => ({ field, count }))
+    .sort((a, b) => b.count - a.count || (a.field < b.field ? -1 : 1));
+}
+
+/**
+ * The single field the team gets wrong most often. Null when nobody has
+ * been wrong yet, which is a real answer and not a zero.
+ */
+export function topMisquotedField(facts: CallFacts[]): FieldCount | null {
+  return misquotedFields(facts)[0] ?? null;
+}
+
+/** A dot path rendered as something a human would say out loud. */
+export function fieldLabel(sourceField: string): string {
+  const tenure = /^tenures\.(\d+)\./.exec(sourceField);
+  const leaf = sourceField.split(".").pop() ?? sourceField;
+  const words = leaf
+    .replace(/([A-Z])/g, " $1")
+    .replace(/\bInr\b/i, "")
+    .trim()
+    .toLowerCase();
+  return tenure ? `${tenure[1]}-month ${words}` : words;
+}

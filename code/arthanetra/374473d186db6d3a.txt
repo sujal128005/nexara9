@@ -1,0 +1,13 @@
+Griha Home Finance Ltd. (FICTIONAL DEMO SAMPLE) - Key Facts Statement, Housing Loan
+====================================================================================
+Borrower type: Individual (salaried), purpose: purchase of residential flat
+Sanctioned loan amount: ₹40,00,000
+Loan term: 240 months
+Type of interest rate: Floating (linked to RBI repo rate)
+Rate of interest: 8.75% per annum
+EMI: ₹35,348 (240 monthly instalments)
+Processing fee: 1% of loan amount + GST, deducted from disbursal
+Home Loan Protection Insurance (mandatory): single premium ₹68,000, deducted from disbursal
+Annual Percentage Rate (APR): 8.92%
+Foreclosure charges: 3% of principal outstanding
+Penal charges: ₹750 per missed EMI (not compounded)

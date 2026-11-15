@@ -1,0 +1,349 @@
+/**
+ * Read-only analytics at /analytics.
+ *
+ * Server component. Every figure is aggregated from the khatas actually
+ * on disk — there are no seeded metrics and no illustrative numbers. When
+ * a metric has nothing to compute from it says so rather than showing a
+ * zero, because a confident zero and "we have no data" look identical on
+ * a dashboard and mean opposite things.
+ *
+ * Scoped by role, server-side: a sales user's query is filtered to their
+ * own calls before anything leaves the database.
+ */
+
+import Link from "next/link";
+
+import { AppHeader } from "@/app/header";
+import {
+  TABLE,
+  TD,
+  TD_LINK,
+  TD_META,
+  TD_NUM,
+  TD_NUM_MUTED,
+  TH,
+  TH_NUM,
+  THEAD_ROW,
+  TR,
+} from "@/app/table";
+import { listKhatas, readApproval, verifyKhata } from "@/lib/closer";
+import { isInitialised, listCallsForUser, listCustomers, listUsers } from "@/lib/db";
+import { currentSession } from "@/lib/session";
+import type { KhataRecord, VerdictStatus } from "@/lib/types";
+
+// Khatas are read from disk per request; a prerendered snapshot would be
+// wrong the moment a call ends.
+export const dynamic = "force-dynamic";
+
+const NO_DATA = "insufficient data";
+
+const LABEL = "font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40";
+
+function nameLookup(): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const c of listCustomers()) map.set(c.id, c.name);
+  for (const u of listUsers()) map.set(u.id, u.name);
+  return map;
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+function rupees(n: number): string {
+  return "₹" + n.toFixed(2);
+}
+
+function countByStatus(khata: KhataRecord): Record<VerdictStatus, number> {
+  const counts: Record<VerdictStatus, number> = {
+    VERIFIED: 0,
+    WRONG: 0,
+    STALE: 0,
+    UNSUPPORTED: 0,
+  };
+  for (const v of khata.verdicts) counts[v.status] += 1;
+  return counts;
+}
+
+function callCost(khata: KhataRecord): number {
+  return khata.costs.reduce((sum, c) => sum + c.inr, 0);
+}
+
+export default async function AnalyticsPage() {
+  if (!isInitialised()) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 bg-paper px-8 py-12">
+        <header className="flex flex-wrap items-baseline gap-x-4 border-b border-ink/30 pb-4">
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink">
+            Khata
+          </h1>
+          <p className="font-sans text-sm text-ink/60">analytics</p>
+        </header>
+        <p className="max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+          The database has not been initialised. Run{" "}
+          <span className="font-mono text-xs">npm run db:init</span> and then{" "}
+          <span className="font-mono text-xs">npm run reset:demo</span>.
+        </p>
+      </main>
+    );
+  }
+
+  const session = await currentSession();
+  if (!session) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 bg-paper px-8 py-12">
+        <p className="font-sans text-sm text-ink/70">Not signed in.</p>
+      </main>
+    );
+  }
+
+  const names = nameLookup();
+
+  // Scope BEFORE decrypting. A sales user's own call ids are the only
+  // ones we ever look up, so another rep's khata is never even opened.
+  const visibleCallIds = new Set(
+    listCallsForUser(session.uid, session.role).map((c) => c.call_id)
+  );
+  const khatas = (await listKhatas())
+    .filter((k) => visibleCallIds.has(k.callId))
+    .sort((a, b) =>
+      (a.endedAt ?? a.startedAt) < (b.endedAt ?? b.startedAt) ? 1 : -1
+    );
+
+  const approvals = await Promise.all(
+    khatas.map((k) => readApproval(k.callId))
+  );
+
+  const allVerdicts = khatas.flatMap((k) => k.verdicts);
+  const totalClaims = khatas.reduce((sum, k) => sum + k.claims.length, 0);
+  const totalCost = khatas.reduce((sum, k) => sum + callCost(k), 0);
+  const misquotes = allVerdicts.filter((v) => v.status === "WRONG");
+
+  // Most-misquoted field, from the source paths the adjudicator cited.
+  const fieldCounts = new Map<string, number>();
+  for (const v of misquotes) {
+    fieldCounts.set(v.sourceField, (fieldCounts.get(v.sourceField) ?? 0) + 1);
+  }
+  const topField = [...fieldCounts.entries()].sort((a, b) => b[1] - a[1])[0];
+
+  const latencies = allVerdicts.map((v) => v.latencyMs).filter(Number.isFinite);
+  const avgLatency =
+    latencies.length > 0
+      ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+      : null;
+
+  const summary: Array<{ label: string; value: string; note?: string }> = [
+    { label: "Calls recorded", value: String(khatas.length) },
+    {
+      label: "Claims checked",
+      value: khatas.length === 0 ? NO_DATA : String(totalClaims),
+    },
+    {
+      label: "Claims per call",
+      value:
+        khatas.length === 0 ? NO_DATA : (totalClaims / khatas.length).toFixed(1),
+    },
+    {
+      label: "Misquote rate",
+      value:
+        allVerdicts.length === 0
+          ? NO_DATA
+          : `${((misquotes.length / allVerdicts.length) * 100).toFixed(1)}%`,
+      note:
+        allVerdicts.length === 0
+          ? undefined
+          : `${misquotes.length} of ${allVerdicts.length} claims`,
+    },
+    {
+      label: "Most misquoted",
+      value: topField ? topField[0] : NO_DATA,
+      note: topField
+        ? `${topField[1]} time${topField[1] === 1 ? "" : "s"}`
+        : undefined,
+    },
+    {
+      label: "Total model cost",
+      value: khatas.length === 0 ? NO_DATA : rupees(totalCost),
+    },
+    {
+      label: "Cost per claim",
+      value: totalClaims === 0 ? NO_DATA : rupees(totalCost / totalClaims),
+    },
+    {
+      label: "Verdict latency",
+      value: avgLatency === null ? NO_DATA : `${avgLatency.toFixed(1)} ms`,
+      note: avgLatency === null ? undefined : "deterministic step only",
+    },
+  ];
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-12 bg-paper px-8 py-12">
+      <AppHeader
+        role={session.role}
+        name={session.name}
+        page="call log"
+        current="/analytics"
+      />
+
+      <section className="-mt-4">
+        <h1 className="font-sans text-xl font-semibold tracking-tight text-ink">
+          Call log
+        </h1>
+        {khatas.length === 0 ? (
+          <>
+            <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+              Every closed call, one row each, with its verdict counts,
+              coverage, cost and whether its khata still verifies against the
+              hash chain. Open a row to read the call.
+            </p>
+            <h2 className="mt-8 font-sans text-lg font-medium text-ink">
+              No calls have been closed yet
+            </h2>
+            <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+              A row appears here when a call is closed in the console and its
+              khata is written. Replay mode produces a real khata too, so you
+              do not need a live customer to fill this page — arm Replay,
+              press Start replay, then close the call.
+            </p>
+          </>
+        ) : (
+          <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/60">
+            One row per closed call, aggregated from {khatas.length} khata
+            {khatas.length === 1 ? "" : "s"} in SQLite, decrypted at request
+            time. Open a row to read the call in full.
+          </p>
+        )}
+      </section>
+
+      <section>
+        <h2 className={LABEL}>Summary</h2>
+        <div className="mt-4 grid grid-cols-2 gap-x-10 gap-y-7 md:grid-cols-4">
+          {summary.map((item) => (
+            <div key={item.label} className="border-t border-hairline pt-3">
+              <span className={LABEL}>{item.label}</span>
+              <p
+                className={`mt-1.5 font-mono text-lg ${
+                  item.value === NO_DATA ? "text-ink/35" : "text-ink"
+                }`}
+              >
+                {item.value}
+              </p>
+              {item.note && (
+                <p className="font-mono text-[11px] text-ink/40">{item.note}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {khatas.length > 0 && (
+        <section>
+          <h2 className={LABEL}>Calls</h2>
+          <table className={TABLE}>
+            <thead>
+              <tr className={THEAD_ROW}>
+                <th className={TH}>Ended</th>
+                <th className={TH}>Customer</th>
+                <th className={TH}>Rep</th>
+                {[
+                  "Claims",
+                  "Verified",
+                  "Wrong",
+                  "Stale",
+                  "Coverage",
+                  "Corrections",
+                  "Cost",
+                  "Approved",
+                  "Integrity",
+                ].map((label) => (
+                  <th key={label} className={TH_NUM}>
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {khatas.map((k, i) => {
+                const counts = countByStatus(k);
+                const approval = approvals[i];
+                const shown = k.verdicts.filter(
+                  (v) => v.correction !== null
+                ).length;
+                const complete = k.coverage.unchecked === 0;
+                return (
+                  <tr key={k.callId} className={TR}>
+                    <td className={TD_META}>
+                      {shortDate(k.endedAt ?? k.startedAt)}
+                    </td>
+                    <td className={TD}>
+                      <Link href={`/calls/${k.callId}`} className={TD_LINK}>
+                        {names.get(k.customerId) ?? k.customerId}
+                      </Link>
+                    </td>
+                    <td className={`${TD} text-ink/60`}>
+                      {approval?.approvedByUserId
+                        ? names.get(approval.approvedByUserId) ??
+                          approval.approvedByUserId
+                        : "—"}
+                    </td>
+                    <td className={TD_NUM}>{k.claims.length}</td>
+                    <td className={TD_NUM_MUTED}>{counts.VERIFIED}</td>
+                    <td className={TD_NUM}>{counts.WRONG}</td>
+                    <td className={TD_NUM_MUTED}>{counts.STALE}</td>
+                    <td className={complete ? TD_NUM_MUTED : TD_NUM}>
+                      {k.coverage.checked}/{k.coverage.utterances}
+                    </td>
+                    <td className={TD_NUM_MUTED}>{shown}</td>
+                    <td className={TD_NUM}>{rupees(callCost(k))}</td>
+                    <td className={TD_NUM_MUTED}>
+                      {approval ? `${approval.appliedDiff.length} fields` : "no"}
+                    </td>
+                    <td className={TD_NUM_MUTED}>
+                      {verifyKhata(k) ? "ok" : "FAILED"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-3 max-w-3xl font-mono text-[11px] leading-relaxed text-ink/40">
+            Corrections counts the verdicts where a self-checked sentence was
+            shown to the rep. Approved counts the CRM fields a human authorised;
+            &ldquo;no&rdquo; means the proposal was never approved. Integrity
+            recomputes each khata&rsquo;s hash from its contents.
+          </p>
+        </section>
+      )}
+
+      <section className="border-t border-ink/30 pt-8">
+        <h2 className="font-sans text-lg font-semibold tracking-tight text-ink">
+          What this page is not
+        </h2>
+        <div className="mt-3 max-w-2xl space-y-3 font-sans text-sm leading-relaxed text-ink/70">
+          <p>
+            This page is scoped by role on the server.{" "}
+            <span className="font-semibold text-ink">
+              {session.role === "admin"
+                ? "You are an admin, so this covers every rep."
+                : "You are a sales user, so this covers only your own calls."}
+            </span>{" "}
+            The filter is a WHERE clause applied before any khata is decrypted,
+            not a hidden column — another rep&rsquo;s record is never opened.
+          </p>
+          <p>
+            Khatas are encrypted at rest in SQLite and decrypted per request
+            to render this page, so the data is protected on disk but not in
+            transit to here. In anything beyond a demo, this
+            route would sit behind the same identity provider as the CRM, and
+            reps would see only their own calls.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}

@@ -1,0 +1,141 @@
+/**
+ * lib/emi.ts — deterministic EMI / APR / total-payable maths.
+ *
+ * This is the ONLY place calculations happen. lib/adjudicate.ts calls
+ * into here; nothing here ever calls an LLM. Swap providers and these
+ * numbers don't move.
+ *
+ * Pure. No imports. No I/O. No clock. Same inputs, same outputs, forever.
+ *
+ * Convention: interest is quoted as a nominal annual percentage on a
+ * REDUCING BALANCE, which is how Indian consumer EMI is actually sold.
+ * Monthly rate = annualPercent / 100 / 12.
+ */
+
+/** Round to paise. Money in this codebase is always 2dp. */
+function round2(n: number): number {
+  // +Number.EPSILON nudges 1.005-style binary-float near-misses up.
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * EMI, unrounded. Internal only — round ONCE at the boundary, never
+ * mid-chain, or a 3-month zero-cost plan totals ₹28,400.01 instead of
+ * ₹28,400.00 and the demo looks broken.
+ */
+function emiRaw(
+  principal: number,
+  tenureMonths: number,
+  annualInterestPercent: number
+): number {
+  if (tenureMonths <= 0) return 0;
+  const r = annualInterestPercent / 100 / 12;
+
+  // The 0% branch. This is the whole point of the product and it is
+  // exactly where the textbook amortisation formula divides by zero:
+  //   P * r * (1+r)^n / ((1+r)^n - 1)  ->  0/0 when r === 0.
+  // At 0% the loan is simply split evenly.
+  if (r === 0) return principal / tenureMonths;
+
+  const growth = Math.pow(1 + r, tenureMonths);
+  return (principal * r * growth) / (growth - 1);
+}
+
+/**
+ * Monthly instalment on a reducing-balance loan.
+ * Handles 0% interest without dividing by zero.
+ */
+export function calculateEmi(
+  principal: number,
+  tenureMonths: number,
+  annualInterestPercent: number
+): number {
+  return round2(emiRaw(principal, tenureMonths, annualInterestPercent));
+}
+
+/**
+ * Everything the customer hands over across the life of the plan:
+ * all instalments, plus the one-off processing fee, plus GST on that fee.
+ */
+export function totalPayable(
+  principal: number,
+  tenureMonths: number,
+  annualInterestPercent: number,
+  processingFeeInr: number,
+  gstPercent: number
+): number {
+  const instalments = emiRaw(principal, tenureMonths, annualInterestPercent) * tenureMonths;
+  const feeWithGst = processingFeeInr * (1 + gstPercent / 100);
+  return round2(instalments + feeWithGst);
+}
+
+/**
+ * What the customer actually pays ABOVE the sticker price once the
+ * processing fee and its GST are counted. For a "zero-cost" 3-month
+ * plan this is NOT zero — it is the fee plus GST.
+ */
+export function noCostEmiRealCost(
+  principal: number,
+  tenureMonths: number,
+  annualInterestPercent: number,
+  processingFeeInr: number,
+  gstPercent: number
+): number {
+  const instalments = emiRaw(principal, tenureMonths, annualInterestPercent) * tenureMonths;
+  const feeWithGst = processingFeeInr * (1 + gstPercent / 100);
+  return round2(instalments + feeWithGst - principal);
+}
+
+/**
+ * The honest annualised cost of the plan.
+ *
+ * The customer buys goods worth `principal` but pays the processing fee
+ * and its GST up front, so the credit actually advanced to them is
+ * `principal - feeWithGst`. We solve for the monthly rate that makes the
+ * instalment stream's present value equal that net advance, then
+ * annualise it nominally (rate * 12).
+ *
+ * Consequence, and the number this product is built to surface: a
+ * "0% zero-cost" 3-month plan has a non-zero effective APR.
+ *
+ * Solved by bisection — deterministic, no iteration-count surprises,
+ * converges to well below display precision in 200 halvings.
+ */
+export function effectiveApr(
+  principal: number,
+  tenureMonths: number,
+  annualInterestPercent: number,
+  processingFeeInr: number,
+  gstPercent: number
+): number {
+  if (tenureMonths <= 0 || principal <= 0) return 0;
+
+  const emi = emiRaw(principal, tenureMonths, annualInterestPercent);
+  const feeWithGst = processingFeeInr * (1 + gstPercent / 100);
+  const netAdvanced = principal - feeWithGst;
+
+  // Degenerate: fee swallows the whole advance. Nothing sane to report.
+  if (netAdvanced <= 0) return 0;
+
+  // Present value of the instalment stream at monthly rate r.
+  // Strictly decreasing in r, which is what makes bisection safe.
+  const pv = (r: number): number =>
+    r === 0
+      ? emi * tenureMonths
+      : (emi * (1 - Math.pow(1 + r, -tenureMonths))) / r;
+
+  // If even a 0% discount rate undershoots the advance, the plan costs
+  // the customer nothing at all. Can't happen with a positive fee, but
+  // guard it rather than return a negative APR.
+  if (pv(0) <= netAdvanced) return 0;
+
+  let lo = 0; // pv(lo) >= netAdvanced
+  let hi = 1; // 100% per month — comfortably above any real answer
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    if (pv(mid) > netAdvanced) lo = mid;
+    else hi = mid;
+  }
+
+  return round2(((lo + hi) / 2) * 12 * 100);
+}

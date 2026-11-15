@@ -1,0 +1,108 @@
+/**
+ * Route gate for the authenticated pages.
+ *
+ * This verifies the cookie signature properly, using Web Crypto because
+ * the Edge runtime has no node:crypto. It produces the same HMAC-SHA256
+ * that lib/auth.ts signs with, so a forged or edited cookie is rejected
+ * here rather than merely looking present.
+ *
+ * IT IS STILL NOT THE SECURITY BOUNDARY. Middleware decides which page to
+ * render; the pages and routes decide what data to return, and every one
+ * of them re-reads the session and scopes its query to the user. A gate
+ * that only redirects would leave the data reachable by any route that
+ * forgot to check.
+ */
+
+import { NextResponse, type NextRequest } from "next/server";
+
+import { resolveSecret, SESSION_COOKIE } from "@/lib/auth-shared";
+
+const PROTECTED_PREFIXES = [
+  "/console",
+  "/analytics",
+  "/product",
+  "/dashboard",
+  "/calls",
+  "/reps",
+  // Rehearsal crib sheet. Sales-only, and the page re-checks the role
+  // itself — this only keeps it behind a login.
+  "/script",
+];
+
+function base64UrlToBytes(value: string): Uint8Array {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function sessionIsValid(token: string | undefined): Promise<boolean> {
+  if (!token) return false;
+  const dot = token.lastIndexOf(".");
+  if (dot <= 0) return false;
+
+  const payload = token.slice(0, dot);
+  const signature = token.slice(dot + 1);
+
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(resolveSecret()),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+    const signatureOk = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      base64UrlToBytes(signature) as BufferSource,
+      new TextEncoder().encode(payload)
+    );
+    if (!signatureOk) return false;
+
+    const decoded = JSON.parse(
+      new TextDecoder().decode(base64UrlToBytes(payload))
+    ) as { exp?: unknown };
+
+    return (
+      typeof decoded.exp === "number" && decoded.exp > Math.floor(Date.now() / 1000)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function middleware(request: NextRequest) {
+  // The escape hatch. A broken session must never be able to take the
+  // demo down; documented in .env.example and surfaced in the console
+  // header so nobody mistakes it for a working login.
+  if (process.env.KHATA_DISABLE_AUTH === "1") return NextResponse.next();
+
+  const { pathname } = request.nextUrl;
+  const isProtected = PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+  if (!isProtected) return NextResponse.next();
+
+  if (await sessionIsValid(request.cookies.get(SESSION_COOKIE)?.value)) {
+    return NextResponse.next();
+  }
+
+  const login = request.nextUrl.clone();
+  login.pathname = "/login";
+  login.search = "";
+  return NextResponse.redirect(login);
+}
+
+export const config = {
+  matcher: [
+    "/console/:path*",
+    "/analytics/:path*",
+    "/product/:path*",
+    "/dashboard/:path*",
+    "/calls/:path*",
+    "/reps/:path*",
+    "/script/:path*",
+  ],
+};

@@ -1,0 +1,202 @@
+"use client";
+
+import { useState } from "react";
+
+import {
+  DEMO_PASSWORD,
+  DEMO_USERS,
+  showDemoCredentials,
+} from "@/lib/demo-accounts";
+
+interface LoginWire {
+  ok: boolean;
+  message: string | null;
+  redirectTo: string | null;
+}
+
+const FIELD =
+  "mt-2 w-full border border-hairline bg-paper px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:border-ink focus:outline-2 focus:outline-offset-2 focus:outline-ink";
+
+const LABEL =
+  "block font-mono text-[11px] uppercase tracking-[0.14em] text-ink/45";
+
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const showCredentials = showDemoCredentials();
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = (await res.json()) as LoginWire;
+      if (data.ok && data.redirectTo) {
+        // Full navigation rather than a router push: the session cookie
+        // was just set, and every protected page reads it server-side.
+        window.location.href = data.redirectTo;
+        return;
+      }
+      setError(data.message ?? "Sign in failed.");
+    } catch {
+      setError(
+        "Could not reach the server. Check that the dev server is still running on this port, then try again."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-6 px-6 py-12">
+      <div className="border border-hairline bg-paper px-8 py-9">
+        <header className="border-b border-ink/30 pb-4">
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink">
+            Khata
+          </h1>
+          <p className="mt-1 font-sans text-sm text-ink/60">
+            Sign in to place calls or read the team record.
+          </p>
+        </header>
+
+        <form onSubmit={submit} className="mt-7 flex flex-col gap-6">
+          <div>
+            <label htmlFor="email" className={LABEL}>
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="username"
+              autoFocus
+              placeholder="name@khata.example"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={FIELD}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className={LABEL}>
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={FIELD}
+            />
+          </div>
+
+          {/*
+            The message comes from the route, which deliberately gives the
+            same answer for a wrong email and a wrong password. What it
+            must not do is stop at "invalid" — so the route's message says
+            what did not match, and this adds what to do about it.
+          */}
+          {error && (
+            <div
+              role="alert"
+              className="border-l-2 border-ink bg-hairline/30 py-3 pl-4 pr-3"
+            >
+              <p className="font-sans text-sm leading-relaxed text-ink">
+                {error}
+              </p>
+              <p className="mt-1.5 font-sans text-xs leading-relaxed text-ink/60">
+                {showCredentials
+                  ? "The demo accounts are listed below this card — every one of them uses the same password."
+                  : "If the accounts have not been seeded yet, run npm run reset:demo, which prints the credentials and writes them into the README."}
+              </p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="self-start border border-ink bg-ink px-6 py-2.5 font-sans text-sm font-medium text-paper transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:border-hairline disabled:bg-transparent disabled:font-normal disabled:text-ink/40"
+          >
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </div>
+
+      {showCredentials ? (
+        <section className="border border-dashed border-[#A9761B] px-6 py-5">
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <span className="border border-[#A9761B] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[#A9761B]">
+              development only
+            </span>
+            <p className="font-sans text-sm text-ink/70">
+              Seeded demo accounts
+            </p>
+          </div>
+
+          <p className="mt-3 font-mono text-xs text-ink/60">
+            password for all four:{" "}
+            <span className="text-ink">{DEMO_PASSWORD}</span>
+          </p>
+
+          <ul className="mt-4 flex flex-col gap-2">
+            {DEMO_USERS.map((u) => (
+              <li key={u.id} className="flex flex-wrap items-baseline gap-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail(u.email);
+                    setPassword(DEMO_PASSWORD);
+                    setError(null);
+                  }}
+                  className="border border-hairline px-2 py-1 font-mono text-xs text-ink transition-colors hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                >
+                  Use {u.email}
+                </button>
+                <span className="font-sans text-sm text-ink/60">{u.name}</span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+                  {u.role}
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <p className="mt-5 font-sans text-xs leading-relaxed text-ink/50">
+            This block is printed because the accounts are seeded fixtures,
+            not real ones. Set{" "}
+            <span className="font-mono">
+              NEXT_PUBLIC_KHATA_HIDE_DEMO_CREDENTIALS=1
+            </span>{" "}
+            to switch it off. It defaults to on: being locked out of your own
+            demo is a worse failure than a development build showing a
+            development password.
+          </p>
+        </section>
+      ) : (
+        <p className="font-sans text-xs leading-relaxed text-ink/50">
+          Demo credentials are hidden. Unset{" "}
+          <span className="font-mono">
+            NEXT_PUBLIC_KHATA_HIDE_DEMO_CREDENTIALS
+          </span>{" "}
+          to show them, or run{" "}
+          <span className="font-mono">npm run reset:demo</span>, which prints
+          them and writes them into the README.
+        </p>
+      )}
+
+      <p className="font-sans text-xs leading-relaxed text-ink/45">
+        Locked out entirely? Set{" "}
+        <span className="font-mono">KHATA_DISABLE_AUTH=1</span> in{" "}
+        <span className="font-mono">.env.local</span> and restart. The gate is
+        skipped and you land as the admin.
+      </p>
+    </main>
+  );
+}

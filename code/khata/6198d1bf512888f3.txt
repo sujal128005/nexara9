@@ -1,0 +1,22 @@
+import { NextResponse } from "next/server";
+
+import { SESSION_COOKIE } from "@/lib/auth";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function POST() {
+  const response = NextResponse.json({ ok: true });
+  // Expire rather than delete, so a stale copy in a proxy is overwritten
+  // with something already dead rather than simply absent.
+  response.cookies.set({
+    name: SESSION_COOKIE,
+    value: "",
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+    secure: process.env.NODE_ENV === "production",
+  });
+  return response;
+}

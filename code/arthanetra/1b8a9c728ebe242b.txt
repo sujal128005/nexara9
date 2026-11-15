@@ -1,0 +1,12 @@
+# One-click deploy on Render.com (free tier): New + > Blueprint > select this repo.
+services:
+  - type: web
+    name: arthanetra
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

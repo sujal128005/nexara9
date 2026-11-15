@@ -1,0 +1,592 @@
+/**
+ * The verdict engine. No LLM is imported, called or consulted here —
+ * verdicts come from arithmetic and equality against product_truth.json.
+ * If you ever want to ask the model to double-check something, that is
+ * the bug.
+ *
+ * Sync, no I/O. Only impurity is the wall clock for adjudicatedAt and
+ * latencyMs, injectable via context.now so tests are deterministic.
+ */
+
+import type { Claim, ClaimType, Verdict, VerdictStatus } from "./types";
+import { calculateEmi, totalPayable } from "./emi";
+
+// shape of data/product_truth.json
+
+export interface TenureTerms {
+  tenureMonths: number;
+  label: string;
+  processingFee: number;
+  gstPercent: number;
+  customerInterestPercent: number;
+  merchantSubsidised: boolean;
+}
+
+export interface LateFeeTerms {
+  flatInr: number;
+  monthlyPercentOnOverduePrincipal: number;
+  gracePeriodDays: number;
+}
+
+export interface EligibilityTerms {
+  minAgeYears: number;
+  minTicketInr: number;
+  maxTicketInr: number;
+}
+
+export interface KycTerms {
+  methods: string[];
+  panRequired: boolean;
+  physicalDocsRequired: boolean;
+}
+
+/** The part of the truth that can differ between versions. */
+export interface TruthSnapshot {
+  tenures: Record<string, TenureTerms>;
+  lateFee: LateFeeTerms;
+  eligibility: EligibilityTerms;
+  kyc: KycTerms;
+}
+
+export interface ArchiveEntry extends TruthSnapshot {
+  version: string;
+  effectiveFrom: string;
+  /** Last date this version was in force. This is the date STALE cites. */
+  effectiveTo: string;
+  changeNote: string;
+}
+
+export interface ProductTruth extends TruthSnapshot {
+  product: string;
+  version: string;
+  effectiveFrom: string;
+  supersedes: string | null;
+  currency: string;
+  archive: ArchiveEntry[];
+}
+
+/**
+ * Anything the adjudicator needs that isn't in the Claim or the truth.
+ * `ticketInr` is the elephant: lib/types.ts has no field for the deal
+ * size, so an "your EMI is ₹4,928" claim is uncheckable without it.
+ * See the note at the bottom of this file.
+ */
+export interface AdjudicationContext {
+  ticketInr?: number | null;
+  /** Injectable clock, in epoch ms. Defaults to Date.now(). */
+  now?: number;
+}
+
+// formatting — hand-rolled so output is identical in Node and browser
+
+/** Indian digit grouping: 28,400 / 1,28,400. No Intl, no ICU surprises. */
+function formatInr(n: number): string {
+  const negative = n < 0;
+  const abs = Math.abs(n);
+  const whole = Math.floor(abs);
+  const paise = Math.round((abs - whole) * 100);
+
+  const s = String(whole);
+  let grouped: string;
+  if (s.length <= 3) {
+    grouped = s;
+  } else {
+    const last3 = s.slice(-3);
+    let rest = s.slice(0, -3);
+    const chunks: string[] = [];
+    while (rest.length > 2) {
+      chunks.unshift(rest.slice(-2));
+      rest = rest.slice(0, -2);
+    }
+    if (rest.length) chunks.unshift(rest);
+    grouped = chunks.join(",") + "," + last3;
+  }
+
+  const tail = paise === 0 ? "" : "." + String(paise).padStart(2, "0");
+  return (negative ? "-₹" : "₹") + grouped + tail;
+}
+
+function formatPercent(n: number): string {
+  return (Number.isInteger(n) ? String(n) : String(n)) + "%";
+}
+
+function formatNumber(n: number, format: ProbeFormat): string {
+  switch (format) {
+    case "inr":
+      return formatInr(n);
+    case "percent":
+      return formatPercent(n);
+    case "months":
+      return `${n} months`;
+    default:
+      return String(n);
+  }
+}
+
+/**
+ * The model emits `value` as a number sometimes and a string other times,
+ * for the same claim. Returning strings verbatim meant the same figure
+ * rendered as "₹500" or "500" depending on which it happened to be, in
+ * the same session. Coerce anything numeric — including strings that
+ * already carry ₹ or % — so a value looks identical either way.
+ * Genuinely non-numeric strings ("Aadhaar OTP") pass through untouched.
+ */
+function formatValue(v: number | string | null, format: ProbeFormat): string {
+  if (v === null) return "nothing";
+  if (typeof v === "number") return formatNumber(v, format);
+  const n = toNumber(v);
+  return n === null ? v : formatNumber(n, format);
+}
+
+// probes — "what would have to be true for this claim to be right"
+
+type ProbeFormat = "inr" | "percent" | "months" | "text";
+
+type ProbeKind =
+  | "money" // exact to the paisa
+  | "moneyDerived" // computed EMI/total; ±₹1 because reps round aloud
+  | "percent" // ±0.01
+  | "numberSet" // must be one of a set
+  | "textList"; // must name one of a list of options
+
+interface Probe {
+  /** Dot path into a TruthSnapshot, e.g. "tenures.3.processingFee". */
+  path: string;
+  kind: ProbeKind;
+  /** Rep-readable noun phrase, e.g. "the 6-month processing fee". */
+  subject: string;
+  /** Set when the subject takes "are" rather than "is". */
+  pluralSubject?: boolean;
+  format: ProbeFormat;
+  /** Goes into Verdict.expected. */
+  display: number | string;
+  expectedNumber?: number;
+  expectedNumbers?: number[];
+  expectedTexts?: string[];
+}
+
+function toNumber(v: number | string | null): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const cleaned = v.replace(/[₹,\s%]/g, "");
+    const n = Number(cleaned);
+    return cleaned !== "" && Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function normaliseText(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Which tenure buckets to test. Null tenure means "check all three". */
+function tenureKeys(claim: Claim, snap: TruthSnapshot): string[] {
+  if (claim.tenureMonths !== null) {
+    const key = String(claim.tenureMonths);
+    return key in snap.tenures ? [key] : [];
+  }
+  return Object.keys(snap.tenures).sort((a, b) => Number(a) - Number(b));
+}
+
+/**
+ * Build every probe that could satisfy this claim against one snapshot.
+ * An empty array means "we hold no truth for this" -> UNSUPPORTED.
+ */
+function probesFor(
+  claim: Claim,
+  snap: TruthSnapshot,
+  ctx: AdjudicationContext
+): Probe[] {
+  const probes: Probe[] = [];
+  const keys = tenureKeys(claim, snap);
+
+  switch (claim.type) {
+    case "processing_fee": {
+      for (const k of keys) {
+        const t = snap.tenures[k];
+        probes.push({
+          path: `tenures.${k}.processingFee`,
+          kind: "money",
+          subject: `the ${k}-month processing fee`,
+          format: "inr",
+          display: t.processingFee,
+          expectedNumber: t.processingFee,
+        });
+      }
+      return probes;
+    }
+
+    case "apr":
+    case "interest": {
+      for (const k of keys) {
+        const t = snap.tenures[k];
+        probes.push({
+          path: `tenures.${k}.customerInterestPercent`,
+          kind: "percent",
+          subject: `the customer interest rate on the ${k}-month plan`,
+          format: "percent",
+          display: t.customerInterestPercent,
+          expectedNumber: t.customerInterestPercent,
+        });
+      }
+      return probes;
+    }
+
+    case "tenure": {
+      const offered = Object.keys(snap.tenures)
+        .map(Number)
+        .sort((a, b) => a - b);
+      probes.push({
+        path: "tenures",
+        kind: "numberSet",
+        subject: "the tenures we offer",
+        pluralSubject: true,
+        format: "months",
+        display: offered.join(", ") + " months",
+        expectedNumbers: offered,
+      });
+      return probes;
+    }
+
+    case "late_fee": {
+      // Two different numbers live under "late fee": a flat ₹250 and a
+      // 2%/month charge. Unit disambiguates; if the LLM didn't set one,
+      // try the flat fee first, then the percentage.
+      if (claim.unit !== "percent") {
+        probes.push({
+          path: "lateFee.flatInr",
+          kind: "money",
+          subject: "the flat late fee",
+          format: "inr",
+          display: snap.lateFee.flatInr,
+          expectedNumber: snap.lateFee.flatInr,
+        });
+      }
+      if (claim.unit !== "inr") {
+        probes.push({
+          path: "lateFee.monthlyPercentOnOverduePrincipal",
+          kind: "percent",
+          subject: "the monthly late charge on overdue principal",
+          format: "percent",
+          display: snap.lateFee.monthlyPercentOnOverduePrincipal,
+          expectedNumber: snap.lateFee.monthlyPercentOnOverduePrincipal,
+        });
+      }
+      return probes;
+    }
+
+    case "eligibility": {
+      const n = toNumber(claim.value);
+      if (n === null) return []; // hedged / non-numeric -> UNSUPPORTED
+      // A number under 120 is an age; anything bigger is a ticket bound.
+      if (n <= 120) {
+        probes.push({
+          path: "eligibility.minAgeYears",
+          kind: "money",
+          subject: "the minimum age",
+          format: "months",
+          display: snap.eligibility.minAgeYears,
+          expectedNumber: snap.eligibility.minAgeYears,
+        });
+      } else {
+        probes.push({
+          path: "eligibility.minTicketInr",
+          kind: "money",
+          subject: "the minimum ticket size",
+          format: "inr",
+          display: snap.eligibility.minTicketInr,
+          expectedNumber: snap.eligibility.minTicketInr,
+        });
+        probes.push({
+          path: "eligibility.maxTicketInr",
+          kind: "money",
+          subject: "the maximum ticket size",
+          format: "inr",
+          display: snap.eligibility.maxTicketInr,
+          expectedNumber: snap.eligibility.maxTicketInr,
+        });
+      }
+      return probes;
+    }
+
+    case "kyc_requirement": {
+      probes.push({
+        path: "kyc.methods",
+        kind: "textList",
+        subject: "the accepted KYC methods",
+        pluralSubject: true,
+        format: "text",
+        display: snap.kyc.methods.join(" or "),
+        expectedTexts: snap.kyc.methods,
+      });
+      return probes;
+    }
+
+    case "emi_amount":
+    case "total_payable": {
+      const ticket = ctx.ticketInr;
+      if (typeof ticket !== "number" || !Number.isFinite(ticket) || ticket <= 0) {
+        return []; // no deal size -> nothing to compute against
+      }
+      for (const k of keys) {
+        const t = snap.tenures[k];
+        const months = Number(k);
+        const expected =
+          claim.type === "emi_amount"
+            ? calculateEmi(ticket, months, t.customerInterestPercent)
+            : totalPayable(
+                ticket,
+                months,
+                t.customerInterestPercent,
+                t.processingFee,
+                t.gstPercent
+              );
+        probes.push({
+          path: `tenures.${k}`,
+          kind: "moneyDerived",
+          subject:
+            claim.type === "emi_amount"
+              ? `the ${k}-month EMI on ${formatInr(ticket)}`
+              : `the ${k}-month total payable on ${formatInr(ticket)}`,
+          format: "inr",
+          display: expected,
+          expectedNumber: expected,
+        });
+      }
+      return probes;
+    }
+
+    default:
+      return [];
+  }
+}
+
+function probeMatches(stated: number | string | null, probe: Probe): boolean {
+  if (stated === null) return false;
+
+  if (probe.kind === "textList") {
+    if (typeof stated !== "string") return false;
+    const said = normaliseText(stated);
+    if (said === "") return false;
+    return (probe.expectedTexts ?? []).some((opt) => {
+      const want = normaliseText(opt);
+      // "Aadhaar" should match "Aadhaar OTP", and vice versa.
+      return said === want || said.includes(want) || want.includes(said);
+    });
+  }
+
+  const n = toNumber(stated);
+  if (n === null) return false;
+
+  switch (probe.kind) {
+    case "money":
+      return Math.abs(n - (probe.expectedNumber ?? NaN)) < 0.005;
+    case "moneyDerived":
+      return Math.abs(n - (probe.expectedNumber ?? NaN)) <= 1;
+    case "percent":
+      return Math.abs(n - (probe.expectedNumber ?? NaN)) <= 0.01;
+    case "numberSet":
+      return (probe.expectedNumbers ?? []).includes(n);
+    default:
+      return false;
+  }
+}
+
+// the adjudicator
+
+const CLAIM_LABEL: Record<ClaimType, string> = {
+  processing_fee: "a processing fee",
+  tenure: "a tenure",
+  apr: "an APR",
+  interest: "an interest rate",
+  late_fee: "a late fee",
+  eligibility: "an eligibility rule",
+  total_payable: "a total payable",
+  emi_amount: "an EMI amount",
+  kyc_requirement: "a KYC requirement",
+};
+
+function capitalise(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function buildVerdict(
+  claim: Claim,
+  status: VerdictStatus,
+  expected: number | string | null,
+  sourceField: string,
+  truth: ProductTruth,
+  explanation: string,
+  now: number
+): Verdict {
+  const started = Date.parse(claim.extractedAt);
+  const latencyMs = Number.isFinite(started) ? Math.max(0, now - started) : 0;
+
+  return {
+    claimId: claim.id,
+    status,
+    stated: claim.value,
+    expected,
+    sourceField,
+    sourceVersion: truth.version,
+    sourceEffectiveFrom: truth.effectiveFrom,
+    explanation,
+    // Task 5 owns corrections. We never invent one here, and we never
+    // mark a correction self-checked that nobody checked.
+    correction: null,
+    correctionSelfChecked: false,
+    adjudicatedAt: new Date(now).toISOString(),
+    latencyMs,
+  };
+}
+
+/**
+ * Decide whether a Claim is true. Pure, synchronous, LLM-free.
+ *
+ *  VERIFIED    — matches product_truth v4.2
+ *  STALE       — matched a previous version; names the version and the
+ *                date it stopped being true
+ *  WRONG       — matches nothing we have ever published
+ *  UNSUPPORTED — we hold no truth for this claim type, tenure, or the
+ *                rep hedged instead of stating a value
+ */
+export function adjudicate(
+  claim: Claim,
+  truth: ProductTruth,
+  context: AdjudicationContext = {}
+): Verdict {
+  const now = context.now ?? Date.now();
+
+  // UNSUPPORTED: the rep hedged, there's no number to check.
+  if (claim.value === null) {
+    return buildVerdict(
+      claim,
+      "UNSUPPORTED",
+      null,
+      "",
+      truth,
+      `The rep gestured at ${CLAIM_LABEL[claim.type]} without stating a value, so there is nothing to check against the product terms.`,
+      now
+    );
+  }
+
+  const currentProbes = probesFor(claim, truth, context);
+
+  // UNSUPPORTED: we hold no truth for this claim.
+  if (currentProbes.length === 0) {
+    const why =
+      claim.type === "emi_amount" || claim.type === "total_payable"
+        ? `Khata doesn't know the ticket amount on this call, so it can't check ${CLAIM_LABEL[claim.type]}.`
+        : `Khata holds no source-of-truth entry for ${CLAIM_LABEL[claim.type]} in this form, so this claim can't be checked.`;
+    return buildVerdict(claim, "UNSUPPORTED", null, "", truth, why, now);
+  }
+
+  // VERIFIED: matches the version in force today.
+  for (const probe of currentProbes) {
+    if (!probeMatches(claim.value, probe)) continue;
+
+    let explanation = `Correct — ${probe.subject} ${
+      probe.pluralSubject ? "are" : "is"
+    } ${formatValue(probe.display, probe.format)} under product terms v${
+      truth.version
+    }.`;
+
+    // Honesty clause: "0% interest" is true and still costs money.
+    if (
+      (claim.type === "apr" || claim.type === "interest") &&
+      probe.expectedNumber === 0
+    ) {
+      const key = probe.path.split(".")[1];
+      const t = truth.tenures[key];
+      if (t && t.merchantSubsidised) {
+        const feeWithGst = t.processingFee * (1 + t.gstPercent / 100);
+        explanation = `Correct — the ${key}-month plan carries 0% customer interest because the merchant subsidises it, though the customer still pays ${formatInr(
+          feeWithGst
+        )} in processing fee plus GST.`;
+      }
+    }
+
+    return buildVerdict(
+      claim,
+      "VERIFIED",
+      probe.display,
+      probe.path,
+      truth,
+      explanation,
+      now
+    );
+  }
+
+  // STALE: matches something we used to publish.
+  // Note on sourceField/sourceVersion: they cite the CURRENT truth,
+  // because Verdict.expected is defined as the correct value. The
+  // superseded version and its end date go in the explanation.
+  for (const entry of truth.archive) {
+    const archivedProbes = probesFor(claim, entry, context);
+    for (const probe of archivedProbes) {
+      if (!probeMatches(claim.value, probe)) continue;
+
+      const currentMatch =
+        currentProbes.find((p) => p.path === probe.path) ?? currentProbes[0];
+
+      return buildVerdict(
+        claim,
+        "STALE",
+        currentMatch.display,
+        currentMatch.path,
+        truth,
+        `That was true under v${entry.version}, but ${probe.subject} stopped being ${formatValue(
+          probe.display,
+          probe.format
+        )} on ${entry.effectiveTo} — it is ${formatValue(
+          currentMatch.display,
+          currentMatch.format
+        )} under v${truth.version}.`,
+        now
+      );
+    }
+  }
+
+  // WRONG: we have never published this number.
+  const primary = currentProbes[0];
+  const alternatives = currentProbes.slice(1);
+  let explanation = `${capitalise(primary.subject)} ${
+    primary.pluralSubject ? "are" : "is"
+  } ${formatValue(primary.display, primary.format)}, not ${formatValue(
+    claim.value,
+    primary.format
+  )}.`;
+
+  // Tenure-agnostic claim that missed every bucket: say so, so the rep
+  // doesn't think we only checked one plan.
+  if (claim.tenureMonths === null && alternatives.length > 0) {
+    const all = currentProbes
+      .map((p) => formatValue(p.display, p.format))
+      .join(" / ");
+    explanation = `No plan has ${formatValue(
+      claim.value,
+      primary.format
+    )} — ${primary.subject.replace(/^the \d+-month /, "the ")} is ${all} on the 3, 6 and 9-month plans.`;
+  }
+
+  return buildVerdict(
+    claim,
+    "WRONG",
+    primary.display,
+    primary.path,
+    truth,
+    explanation,
+    now
+  );
+}
+
+/*
+ * CONTRACT GAP — flagged, not silently worked around.                 *
+ *                                                                     *
+ * lib/types.ts has no field for the ticket/deal amount, so an EMI or  *
+ * total-payable claim carries no principal and cannot be verified on  *
+ * the Claim alone. Rather than edit the frozen contract, adjudicate()  *
+ * takes an optional third argument carrying the call's ticket size,   *
+ * and returns UNSUPPORTED when it isn't supplied. The two-arg call     *
+ * shape in the spec still works unchanged.                            *
+ */

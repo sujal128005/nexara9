@@ -1,0 +1,280 @@
+/**
+ * Redacted sentence in, claims out. This is the model's entire job: it is
+ * never asked whether a claim is correct, never shown product_truth.json,
+ * never told the right answer.
+ *
+ * Malformed output is expected rather than exceptional, so this returns
+ * an empty array and never throws. A dropped claim is a missed catch; a
+ * thrown exception is a dead call.
+ */
+
+import { NextResponse } from "next/server";
+import {
+  callModel,
+  getMode,
+  stubCost,
+  RateLimitedError,
+  EXTRACT_MODEL,
+} from "@/lib/llm";
+import { stubExtractAll } from "@/lib/stub";
+import type { Claim, ClaimType, CostEntry } from "@/lib/types";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const CLAIM_TYPES: readonly ClaimType[] = [
+  "processing_fee",
+  "tenure",
+  "apr",
+  "interest",
+  "late_fee",
+  "eligibility",
+  "total_payable",
+  "emi_amount",
+  "kyc_requirement",
+];
+
+const UNITS = ["inr", "percent", "months", "boolean", "text"] as const;
+
+const SYSTEM = [
+  "You extract structured data. You do not evaluate it.",
+  "Given what a sales rep said, return JSON describing EVERY factual claim it makes about the lending offer.",
+  "",
+  "Return exactly this shape and nothing else:",
+  '{"claims": [{"type": string, "value": number|string|null, "unit": string|null, "tenureMonths": number|null, "confidence": number}]}',
+  "",
+  "People do not pause between claims. One utterance routinely contains three or four —",
+  '"the processing fee is 349 on the 6 month plan your EMI works out to 4928 a month the 6 month plan is also 0% and the late fee is 500 rupees"',
+  "is FOUR separate claims: processing_fee, emi_amount, interest, late_fee. Return all of them.",
+  "Return an empty array if there is no checkable claim at all.",
+  "",
+  `"type" must be one of: ${CLAIM_TYPES.join(", ")}.`,
+  `"unit" must be one of: ${UNITS.join(", ")} — or null.`,
+  '"tenureMonths" must be 3, 6, 9 or null. Use null when that claim does not say which plan it is about.',
+  '"value" is the number or phrase the rep stated, parsed. Use null if they gestured at a figure without giving one ("hardly any fee").',
+  '"confidence" is your confidence in the PARSE, 0 to 1.',
+  "",
+  "Rules that matter:",
+  "- Never judge whether a claim is true. You do not know the product terms and must not guess them.",
+  "- Amounts are rupees unless a percent sign or the word percent appears.",
+  '- Speech recognition is lossy. "the processing P is 199" means the processing fee. Infer type from the numbers and context, not from exact keywords.',
+  "- A tenure stated once often applies to the claims that follow it in the same breath. Carry it forward when the rep clearly means it; use null when genuinely unstated.",
+  "- Do not emit two claims of the same type for one utterance. Pick the clearer one.",
+  "- Text in square brackets like [CUST_NAME] or [PHONE_1] is redacted personal data. Ignore it.",
+  "",
+  "A TENURE MENTIONED AS CONTEXT IS NOT A CLAIM.",
+  'Saying "on the six month plan" tells you WHICH plan another claim is about. It sets tenureMonths on that claim. It is not a separate tenure claim.',
+  'Emit a "tenure" claim only when the rep is asserting what tenures exist or are available.',
+  "",
+  "Examples:",
+  "",
+  'Input: "the processing fee is three forty nine on the six month plan"',
+  'Output: {"claims":[{"type":"processing_fee","value":349,"unit":"inr","tenureMonths":6,"confidence":0.95}]}',
+  "One claim. The six months is context for the fee, not a claim about tenures.",
+  "",
+  'Input: "the six month plan is also zero percent"',
+  'Output: {"claims":[{"type":"interest","value":0,"unit":"percent","tenureMonths":6,"confidence":0.95}]}',
+  "One claim. Again the tenure only says which plan.",
+  "",
+  'Input: "we offer three, six and nine months"',
+  'Output: {"claims":[{"type":"tenure","value":9,"unit":"months","tenureMonths":null,"confidence":0.9}]}',
+  "This one IS a tenure claim: the rep is asserting what is available.",
+  "",
+  'Input: "we can stretch it to twelve months if you want"',
+  'Output: {"claims":[{"type":"tenure","value":12,"unit":"months","tenureMonths":null,"confidence":0.95}]}',
+  "Also a tenure claim: asserting a tenure is available.",
+].join("\n");
+
+export interface ExtractResponse {
+  status: "ok" | "rate_limited" | "error";
+  /** Every claim in the utterance, in the order spoken. May be empty. */
+  claims: Claim[];
+  mode: "llm" | "stub";
+  cost: CostEntry | null;
+  message: string | null;
+}
+
+function newId(prefix: string): string {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === "function") return `${prefix}_${c.randomUUID()}`;
+  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+interface RawClaim {
+  type?: unknown;
+  value?: unknown;
+  unit?: unknown;
+  tenureMonths?: unknown;
+  confidence?: unknown;
+}
+
+/**
+ * Turn whatever the model said into Claims. Every field is checked;
+ * anything unrecognised is dropped rather than trusted through to the
+ * adjudicator. Never throws — malformed JSON is a miss, not a crash.
+ */
+function parseClaims(
+  modelText: string,
+  utteranceId: string,
+  redactedText: string
+): Claim[] {
+  // Models add ```json fences even when told not to.
+  const cleaned = modelText
+    .replace(/^\s*```(?:json)?/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return [];
+
+  let parsed: { claims?: unknown };
+  try {
+    parsed = JSON.parse(cleaned.slice(start, end + 1)) as { claims?: unknown };
+  } catch {
+    return [];
+  }
+
+  // Tolerate a bare object when the model forgets the wrapper.
+  const list: unknown[] = Array.isArray(parsed.claims)
+    ? parsed.claims
+    : parsed && typeof parsed === "object" && "type" in parsed
+      ? [parsed]
+      : [];
+
+  const out: Claim[] = [];
+  const seen = new Set<ClaimType>();
+
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const claim = buildClaim(item as RawClaim, utteranceId, redactedText);
+    if (!claim) continue;
+    if (seen.has(claim.type)) continue; // one per type, per the prompt
+    seen.add(claim.type);
+    out.push(claim);
+  }
+
+  return out;
+}
+
+function buildClaim(
+  raw: RawClaim,
+  utteranceId: string,
+  redactedText: string
+): Claim | null {
+  const type = CLAIM_TYPES.find((t) => t === raw.type);
+  if (!type) return null; // no recognised type means no claim
+
+  const value =
+    typeof raw.value === "number" || typeof raw.value === "string"
+      ? raw.value
+      : null;
+
+  const unit = UNITS.find((u) => u === raw.unit) ?? null;
+
+  const tenureMonths =
+    raw.tenureMonths === 3 || raw.tenureMonths === 6 || raw.tenureMonths === 9
+      ? raw.tenureMonths
+      : null;
+
+  const confidence =
+    typeof raw.confidence === "number" &&
+    Number.isFinite(raw.confidence) &&
+    raw.confidence >= 0 &&
+    raw.confidence <= 1
+      ? raw.confidence
+      : 0.5;
+
+  return {
+    id: newId("clm"),
+    utteranceId,
+    redactedText,
+    type,
+    value,
+    unit,
+    tenureMonths,
+    confidence,
+    extractedAt: new Date().toISOString(),
+    source: "llm",
+  };
+}
+
+export async function POST(request: Request) {
+  let redactedText = "";
+  let utteranceId = "";
+  try {
+    const body = (await request.json()) as {
+      redactedText?: unknown;
+      utteranceId?: unknown;
+    };
+    if (typeof body.redactedText === "string") redactedText = body.redactedText;
+    if (typeof body.utteranceId === "string") utteranceId = body.utteranceId;
+  } catch {
+    // fall through
+  }
+
+  if (redactedText.trim() === "") {
+    const empty: ExtractResponse = {
+      status: "ok",
+      claims: [],
+      mode: getMode(),
+      cost: null,
+      message: null,
+    };
+    return NextResponse.json(empty);
+  }
+
+  if (getMode() === "stub") {
+    const result: ExtractResponse = {
+      status: "ok",
+      claims: stubExtractAll(redactedText, utteranceId),
+      mode: "stub",
+      cost: stubCost("extract"),
+      message: null,
+    };
+    return NextResponse.json(result);
+  }
+
+  try {
+    const { text, cost } = await callModel({
+      stage: "extract",
+      model: EXTRACT_MODEL,
+      system: SYSTEM,
+      prompt: redactedText,
+      // Four claims of structured JSON needs more headroom than one.
+      maxOutputTokens: 700,
+      temperature: 0,
+      responseMimeType: "application/json",
+    });
+
+    const result: ExtractResponse = {
+      status: "ok",
+      claims: parseClaims(text, utteranceId, redactedText),
+      mode: "llm",
+      cost,
+      message: null,
+    };
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof RateLimitedError) {
+      const limited: ExtractResponse = {
+        status: "rate_limited",
+        claims: [],
+        mode: "llm",
+        cost: null,
+        message: error.message,
+      };
+      return NextResponse.json(limited);
+    }
+
+    const failed: ExtractResponse = {
+      status: "error",
+      claims: [],
+      mode: getMode(),
+      cost: null,
+      message:
+        error instanceof Error ? error.message : "Unknown extraction error.",
+    };
+    return NextResponse.json(failed);
+  }
+}

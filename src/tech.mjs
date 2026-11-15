@@ -32,7 +32,7 @@ export const tech = {
       title: 'Everything runs in the browser',
       tiers: [
         { name: 'Page', sub: 'code/index.html', nodes: [['Input panel', 'Mood, Veg / Non-veg / Both, price range, dish name.'], ['Result cards', 'Best picks, canteen call buttons, today’s mess menu.']] },
-        { name: 'Logic', sub: 'logic.js', nodes: [['suggestFood()', 'Validates input, filters, ranks and picks.'], ['Price inference', 'Default budget per mood when none is given.'], ['Mess menu', 'Finds the current meal from the day and time.']] },
+        { name: 'Logic', sub: 'code/logic.js', nodes: [['suggestFood()', 'Validates input, filters, ranks and picks.'], ['Price inference', 'Default budget per mood when none is given.'], ['Mess menu', 'Finds the current meal from the day and time.']] },
         { name: 'Data', sub: 'code/data.js', nodes: [['Canteen items', 'Name, price, veg or non-veg, canteen.'], ['Mess menu', 'Breakfast, lunch, snacks, dinner for each day.'], ['Canteen phones', 'Tap-to-call links.']] },
       ],
       flow: [
@@ -46,8 +46,8 @@ export const tech = {
       ['code/', 'The app itself.', [
         ['index.html', 'Layout and styling (Tailwind CSS), the input form and the result area.'],
         ['data.js', 'Every canteen item with its price and type, the full weekly mess menu and canteen phone numbers.'],
+        ['logic.js', 'The recommendation engine: price ranges, substantial-meal detection, food cards, `suggestFood()`, current-meal detection and the mess menu view.'],
       ]],
-      ['logic.js', 'The recommendation engine: price ranges, substantial-meal detection, food cards, `suggestFood()`, current-meal detection and the mess menu view.'],
       ['work-flow logic', 'The decision flow written as a diagram: inputs → validation → dish override or price check → filter → rank → show.'],
       ['assets/', 'The IIITDM Kurnool logo.'],
     ],

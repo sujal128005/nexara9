@@ -1,0 +1,117 @@
+/**
+ * Intent and sentiment for one customer line.
+ *
+ * This is what the customer channel gets INSTEAD of adjudication. There
+ * is no verdict here and no source field, because nothing a customer
+ * says is checkable against the product terms — they are asking, not
+ * asserting. Routing a customer line into adjudicate() would record a
+ * misquote against a rep who never made one.
+ *
+ * Falls back to the deterministic classifier on any failure, so the
+ * customer channel keeps working offline and while rate-limited.
+ */
+
+import { NextResponse } from "next/server";
+
+import { callModel, getMode, stubCost, TRIAGE_MODEL } from "@/lib/llm";
+import { stubClassifyCustomer } from "@/lib/stub";
+import type {
+  CostEntry,
+  CustomerIntent,
+  CustomerSentiment,
+} from "@/lib/types";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const INTENTS: readonly CustomerIntent[] = [
+  "interested",
+  "confused",
+  "price_concern",
+  "eligibility_query",
+  "callback_request",
+  "other",
+];
+
+const SENTIMENTS: readonly CustomerSentiment[] = [
+  "positive",
+  "neutral",
+  "negative",
+];
+
+const SYSTEM = [
+  "You read one line spoken by a customer on a sales call and label it.",
+  "",
+  'Return only: {"intent": string, "sentiment": string}',
+  "",
+  `intent must be one of: ${INTENTS.join(", ")}`,
+  `sentiment must be one of: ${SENTIMENTS.join(", ")}`,
+  "",
+  "Do not judge whether anything the customer said is factually correct. That is not your job and you do not have the product terms.",
+  "Text in square brackets like [CUST_NAME] is redacted personal data. Ignore it.",
+].join("\n");
+
+export interface ClassifyResponse {
+  intent: CustomerIntent;
+  sentiment: CustomerSentiment;
+  source: "llm" | "stub";
+  cost: CostEntry | null;
+}
+
+export async function POST(request: Request) {
+  let redactedText = "";
+  try {
+    const body = (await request.json()) as { redactedText?: unknown };
+    if (typeof body.redactedText === "string") redactedText = body.redactedText;
+  } catch {
+    // handled by the empty check
+  }
+
+  const fallback = stubClassifyCustomer(redactedText);
+
+  if (redactedText.trim() === "" || getMode() === "stub") {
+    return NextResponse.json({
+      ...fallback,
+      source: "stub",
+      cost: redactedText.trim() === "" ? null : stubCost("triage"),
+    } satisfies ClassifyResponse);
+  }
+
+  try {
+    const { text, cost } = await callModel({
+      stage: "triage",
+      model: TRIAGE_MODEL,
+      system: SYSTEM,
+      prompt: redactedText,
+      maxOutputTokens: 40,
+      temperature: 0,
+      responseMimeType: "application/json",
+    });
+
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    const parsed =
+      start === -1 || end <= start
+        ? null
+        : (JSON.parse(text.slice(start, end + 1)) as {
+            intent?: unknown;
+            sentiment?: unknown;
+          });
+
+    return NextResponse.json({
+      intent: INTENTS.find((i) => i === parsed?.intent) ?? fallback.intent,
+      sentiment:
+        SENTIMENTS.find((s) => s === parsed?.sentiment) ?? fallback.sentiment,
+      source: "llm",
+      cost,
+    } satisfies ClassifyResponse);
+  } catch {
+    // Rate limited, offline, or malformed. A customer line is colour, not
+    // evidence — degrade to the keyword read rather than surfacing an error.
+    return NextResponse.json({
+      ...fallback,
+      source: "stub",
+      cost: null,
+    } satisfies ClassifyResponse);
+  }
+}

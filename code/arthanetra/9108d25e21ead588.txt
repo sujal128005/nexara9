@@ -1,0 +1,21 @@
+RupeeRocket - Instant Personal Loan  (FICTIONAL DEMO SAMPLE)
+=========================================================
+Get ₹5,000 in your bank in 5 minutes! Instant approval, no CIBIL check.
+Interest only 0.1% per day. No hidden charges!
+Offer valid only for the next 30 minutes.
+
+LOAN DETAILS
+Loan Amount: ₹5,000
+Tenure: 15 days
+Interest rate: 0.1% per day
+Processing fee: ₹900 + 18% GST (deducted from loan amount)
+Amount credited to your account: ₹3,938
+Repayment amount: ₹5,075 on day 15
+
+LATE PAYMENT
+Penal interest of 2% per day on the overdue amount, compounded daily.
+In case of default, your emergency contacts will be informed.
+
+App permissions required to proceed: Contacts, Gallery, SMS, Location, Camera.
+Cooling-off period: Not applicable.
+*T&C apply.

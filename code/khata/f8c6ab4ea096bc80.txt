@@ -1,0 +1,2079 @@
+/**
+ * lib/selfcheck.ts — zero-config test runner.
+ *
+ *   npx tsx lib/selfcheck.ts
+ *
+ * No vitest, no jest, no config file, no watcher. Plain assertions that
+ * print PASS/FAIL and exit non-zero if anything is red. Run it before
+ * every demo — it takes about a second and it is the only thing standing
+ * between you and quoting a wrong number on stage.
+ */
+
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+import {
+  calculateEmi,
+  totalPayable,
+  effectiveApr,
+  noCostEmiRealCost,
+} from "./emi";
+import { adjudicate } from "./adjudicate";
+import type { ProductTruth } from "./adjudicate";
+import { redact, unredact } from "./redact";
+import {
+  digitise,
+  stubTriage,
+  stubExtract,
+  stubExtractAll,
+  stubClassifyCustomer,
+} from "./stub";
+import { checkCorrection, deterministicCorrection } from "./correction";
+import {
+  ALLOWED_CRM_FIELDS,
+  buildKhata,
+  coverageGuard,
+  hashRecord,
+  decryptRecord,
+  encryptRecord,
+  sanitiseDiff,
+  stubProposal,
+  validateCrmValue,
+  verifyKhata,
+} from "./closer";
+import {
+  createSessionToken,
+  hashPassword,
+  readSessionToken,
+  verifyPassword,
+} from "./auth";
+import {
+  byRep,
+  factsFromKhata,
+  fieldLabel,
+  topMisquotedField,
+  totals,
+} from "./metrics";
+import { LIVE_CUSTOMER_ID, LIVE_SCRIPT } from "./livescript";
+import {
+  closeBlockedBecause,
+  searchCustomers,
+  ticketForCall,
+} from "./callflow";
+import {
+  ADMIN_READ_ONLY_NOTE,
+  canPlaceCalls,
+  canReviewOtherReps,
+  CONSOLE_DENIED_MESSAGE,
+  homeFor,
+  navLinks,
+} from "./access";
+import type { Claim, ClaimType, Verdict, VerdictStatus } from "./types";
+
+// tiny harness
+
+let passed = 0;
+let failed = 0;
+
+function check(label: string, condition: boolean, detail = ""): void {
+  if (condition) {
+    passed++;
+    console.log(`PASS  ${label}`);
+  } else {
+    failed++;
+    console.log(`FAIL  ${label}${detail ? `\n        ${detail}` : ""}`);
+  }
+}
+
+/**
+ * String() throws on a null-prototype object, and SQLite rows are
+ * null-prototype. Building the detail eagerly meant a failing assertion
+ * about a row crashed the runner instead of reporting the failure.
+ */
+function show(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value) ?? "[object]";
+    } catch {
+      return "[object]";
+    }
+  }
+  return String(value);
+}
+
+function eq(label: string, actual: unknown, expected: unknown): void {
+  const ok = Object.is(actual, expected);
+  check(label, ok, ok ? "" : `expected ${show(expected)}, got ${show(actual)}`);
+}
+
+// load the source of truth
+
+function truthPath(): string {
+  const fromCwd = resolve(process.cwd(), "data/product_truth.json");
+  if (existsSync(fromCwd)) return fromCwd;
+  return resolve(__dirname, "../data/product_truth.json");
+}
+
+const truth = JSON.parse(readFileSync(truthPath(), "utf8")) as ProductTruth;
+
+// fixed clock, so latencyMs and adjudicatedAt are deterministic
+
+const EXTRACTED_AT = "2026-08-07T06:30:00.000Z";
+const NOW = Date.parse("2026-08-07T06:30:00.412Z");
+
+let claimSeq = 0;
+function makeClaim(
+  type: ClaimType,
+  value: number | string | null,
+  unit: Claim["unit"],
+  tenureMonths: 3 | 6 | 9 | null,
+  redactedText: string
+): Claim {
+  claimSeq++;
+  return {
+    id: `clm_selfcheck_${claimSeq}`,
+    utteranceId: `utt_selfcheck_${claimSeq}`,
+    redactedText,
+    type,
+    value,
+    unit,
+    tenureMonths,
+    confidence: 0.95,
+    extractedAt: EXTRACTED_AT,
+    source: "llm",
+  };
+}
+
+function statusOf(
+  type: ClaimType,
+  value: number | string | null,
+  unit: Claim["unit"],
+  tenureMonths: 3 | 6 | 9 | null,
+  text: string,
+  ticketInr?: number
+): VerdictStatus {
+  return adjudicate(makeClaim(type, value, unit, tenureMonths, text), truth, {
+    now: NOW,
+    ticketInr: ticketInr ?? null,
+  }).status;
+}
+
+// source of truth sanity
+
+console.log("\n-- product_truth.json --");
+eq("version is 4.2", truth.version, "4.2");
+eq("effectiveFrom is 2026-07-14", truth.effectiveFrom, "2026-07-14");
+eq("3-month fee is Rs 199", truth.tenures["3"].processingFee, 199);
+eq("6-month fee is Rs 349", truth.tenures["6"].processingFee, 349);
+eq("9-month fee is Rs 499", truth.tenures["9"].processingFee, 499);
+eq("3-month customer interest is 0%", truth.tenures["3"].customerInterestPercent, 0);
+eq("6-month customer interest is 14%", truth.tenures["6"].customerInterestPercent, 14);
+eq("flat late fee is Rs 250", truth.lateFee.flatInr, 250);
+eq("late charge is 2% per month", truth.lateFee.monthlyPercentOnOverduePrincipal, 2);
+eq("min age is 21", truth.eligibility.minAgeYears, 21);
+eq("ticket floor is Rs 3,000", truth.eligibility.minTicketInr, 3000);
+eq("ticket ceiling is Rs 60,000", truth.eligibility.maxTicketInr, 60000);
+eq("archive holds exactly one superseded version", truth.archive.length, 1);
+eq("archived version is 4.1", truth.archive[0].version, "4.1");
+eq("archived 3-month fee was Rs 99", truth.archive[0].tenures["3"].processingFee, 99);
+eq("v4.1 stopped applying on 2026-07-13", truth.archive[0].effectiveTo, "2026-07-13");
+
+// eMI maths
+
+console.log("\n-- lib/emi.ts --");
+
+// The 0% branch: this is where the textbook formula divides by zero.
+const emi0 = calculateEmi(28400, 3, 0);
+eq("EMI at 0% over 3 months on Rs 28,400 is 9466.67", emi0, 9466.67);
+check("EMI at 0% is finite (no divide-by-zero)", Number.isFinite(emi0), String(emi0));
+eq("EMI at 0% over 3 months on Rs 31,990 is 10663.33", calculateEmi(31990, 3, 0), 10663.33);
+
+// Reducing balance at a real rate.
+eq("EMI at 14% over 6 months on Rs 28,400 is 4928.48", calculateEmi(28400, 6, 14), 4928.48);
+eq("EMI at 14% over 9 months on Rs 42,900 is 5049.02", calculateEmi(42900, 9, 14), 5049.02);
+check(
+  "EMI at 14% is larger than EMI at 0% for the same loan",
+  calculateEmi(28400, 6, 14) > calculateEmi(28400, 6, 0)
+);
+
+// Totals must not drift on rounding: 9466.67 x 3 would be 28400.01.
+eq(
+  "total payable, 3-month zero-cost on Rs 28,400, is 28634.82",
+  totalPayable(28400, 3, 0, 199, 18),
+  28634.82
+);
+eq(
+  "total payable, 6-month at 14% on Rs 28,400, is 29982.70",
+  totalPayable(28400, 6, 14, 349, 18),
+  29982.7
+);
+
+// What "zero cost" really costs: the fee plus its GST, and nothing else.
+eq(
+  "real cost of the 3-month zero-cost plan is Rs 234.82 (199 + 18% GST)",
+  noCostEmiRealCost(28400, 3, 0, 199, 18),
+  234.82
+);
+eq(
+  "real cost of the 6-month plan on Rs 28,400 is Rs 1582.70",
+  noCostEmiRealCost(28400, 6, 14, 349, 18),
+  1582.7
+);
+
+// The headline number of the whole product.
+const apr3 = effectiveApr(28400, 3, 0, 199, 18);
+eq("effective APR on the 3-month 'zero-cost' plan is 5.00%", apr3, 5);
+check(
+  "effective APR on a 0% plan is NOT zero — the fee is real",
+  apr3 > 0,
+  `got ${apr3}`
+);
+check(
+  "effective APR on the 6-month plan exceeds its 14% headline rate",
+  effectiveApr(28400, 6, 14, 349, 18) > 14,
+  `got ${effectiveApr(28400, 6, 14, 349, 18)}`
+);
+
+// verdicts — one of each status
+
+console.log("\n-- lib/adjudicate.ts --");
+
+// VERIFIED
+const verified = adjudicate(
+  makeClaim("processing_fee", 199, "inr", 3, "the processing fee is one ninety nine on the three month plan"),
+  truth,
+  { now: NOW }
+);
+eq("Rs 199 fee on 3 months -> VERIFIED", verified.status, "VERIFIED");
+eq("VERIFIED cites tenures.3.processingFee", verified.sourceField, "tenures.3.processingFee");
+eq("VERIFIED reports expected 199", verified.expected, 199);
+eq("VERIFIED carries source version 4.2", verified.sourceVersion, "4.2");
+eq("VERIFIED carries source effectiveFrom", verified.sourceEffectiveFrom, "2026-07-14");
+eq("VERIFIED latency is 412ms", verified.latencyMs, 412);
+eq("VERIFIED leaves correction null (Task 5 owns it)", verified.correction, null);
+eq("VERIFIED leaves correctionSelfChecked false", verified.correctionSelfChecked, false);
+eq("verdict points back at its claim", verified.claimId, verified.claimId);
+
+// STALE — the whole reason v4.1 is in the archive.
+const stale = adjudicate(
+  makeClaim("processing_fee", 99, "inr", 3, "it's just ninety nine rupees processing on the three month"),
+  truth,
+  { now: NOW }
+);
+eq("Rs 99 fee on 3 months -> STALE, not WRONG", stale.status, "STALE");
+check(
+  "STALE explanation names version 4.1",
+  stale.explanation.includes("4.1"),
+  stale.explanation
+);
+check(
+  "STALE explanation names the date it stopped being true",
+  stale.explanation.includes("2026-07-13"),
+  stale.explanation
+);
+eq("STALE still reports the CURRENT correct value", stale.expected, 199);
+
+// WRONG
+const wrong = adjudicate(
+  makeClaim("processing_fee", 399, "inr", 6, "six month plan, processing is three ninety nine"),
+  truth,
+  { now: NOW }
+);
+eq("Rs 399 fee on 6 months -> WRONG", wrong.status, "WRONG");
+eq("WRONG reports the real figure", wrong.expected, 349);
+check(
+  "WRONG explanation contrasts stated with expected",
+  wrong.explanation.includes("349") && wrong.explanation.includes("399"),
+  wrong.explanation
+);
+
+// UNSUPPORTED — no ticket size on the call, so an EMI figure is uncheckable.
+const unsupported = adjudicate(
+  makeClaim("emi_amount", 4928.48, "inr", 6, "your emi works out to about forty nine hundred"),
+  truth,
+  { now: NOW }
+);
+eq("EMI claim with no ticket amount -> UNSUPPORTED", unsupported.status, "UNSUPPORTED");
+eq("UNSUPPORTED has no expected value", unsupported.expected, null);
+
+// ...and becomes checkable once the ticket is supplied.
+eq(
+  "same EMI claim WITH the ticket -> VERIFIED",
+  statusOf("emi_amount", 4928.48, "inr", 6, "your emi is 4928.48", 28400),
+  "VERIFIED"
+);
+eq(
+  "a wrong EMI figure with the ticket -> WRONG",
+  statusOf("emi_amount", 4200, "inr", 6, "your emi is about forty two hundred", 28400),
+  "WRONG"
+);
+
+// the rest of the claim surface
+
+console.log("\n-- claim coverage --");
+
+eq(
+  "0% interest on the 3-month plan -> VERIFIED",
+  statusOf("apr", 0, "percent", 3, "the three month is zero percent"),
+  "VERIFIED"
+);
+const zeroApr = adjudicate(
+  makeClaim("apr", 0, "percent", 3, "the three month is zero percent"),
+  truth,
+  { now: NOW }
+);
+check(
+  "0% verdict still warns the fee is real",
+  zeroApr.explanation.includes("234.82"),
+  zeroApr.explanation
+);
+
+eq(
+  "claiming 0% on the 6-month plan -> WRONG",
+  statusOf("apr", 0, "percent", 6, "six month is also zero percent"),
+  "WRONG"
+);
+eq(
+  "14% on the 6-month plan -> VERIFIED",
+  statusOf("interest", 14, "percent", 6, "fourteen percent per annum"),
+  "VERIFIED"
+);
+eq(
+  "12-month tenure -> WRONG",
+  statusOf("tenure", 12, "months", null, "we can stretch it to twelve months"),
+  "WRONG"
+);
+eq(
+  "9-month tenure -> VERIFIED",
+  statusOf("tenure", 9, "months", null, "we do three, six and nine"),
+  "VERIFIED"
+);
+eq(
+  "Rs 250 flat late fee -> VERIFIED",
+  statusOf("late_fee", 250, "inr", null, "late fee is two fifty"),
+  "VERIFIED"
+);
+eq(
+  "2% per month on overdue principal -> VERIFIED",
+  statusOf("late_fee", 2, "percent", null, "two percent a month on what's overdue"),
+  "VERIFIED"
+);
+eq(
+  "Rs 500 late fee -> WRONG",
+  statusOf("late_fee", 500, "inr", null, "late fee is five hundred"),
+  "WRONG"
+);
+eq(
+  "minimum age 21 -> VERIFIED",
+  statusOf("eligibility", 21, "text", null, "you have to be twenty one"),
+  "VERIFIED"
+);
+eq(
+  "minimum age 18 -> WRONG",
+  statusOf("eligibility", 18, "text", null, "anyone over eighteen"),
+  "WRONG"
+);
+eq(
+  "Rs 60,000 ticket ceiling -> VERIFIED",
+  statusOf("eligibility", 60000, "inr", null, "we go up to sixty thousand"),
+  "VERIFIED"
+);
+eq(
+  "Aadhaar OTP KYC -> VERIFIED",
+  statusOf("kyc_requirement", "Aadhaar OTP", "text", null, "just an aadhaar otp"),
+  "VERIFIED"
+);
+eq(
+  "DigiLocker KYC -> VERIFIED",
+  statusOf("kyc_requirement", "DigiLocker", "text", null, "or digilocker"),
+  "VERIFIED"
+);
+eq(
+  "PAN card photo KYC -> WRONG",
+  statusOf("kyc_requirement", "PAN card photo", "text", null, "send a photo of your pan card"),
+  "WRONG"
+);
+eq(
+  "a hedged claim with no value -> UNSUPPORTED",
+  statusOf("processing_fee", null, null, 3, "there's basically no fee"),
+  "UNSUPPORTED"
+);
+
+// Tenure-agnostic claims are checked against all three buckets.
+eq(
+  "Rs 349 fee with no tenure stated -> VERIFIED (matches the 6-month bucket)",
+  statusOf("processing_fee", 349, "inr", null, "processing is three forty nine"),
+  "VERIFIED"
+);
+eq(
+  "Rs 275 fee with no tenure stated -> WRONG (matches no bucket)",
+  statusOf("processing_fee", 275, "inr", null, "processing is two seventy five"),
+  "WRONG"
+);
+
+// redaction — and above all, what it must NOT touch
+
+console.log("\n-- lib/redact.ts: the trap --");
+
+// If any of these five fail, Khata has nothing left to verify. A naive
+// digit-stripping regex passes every other test in this file and fails
+// these, which is exactly why they are here.
+const CLAIM_NUMBERS =
+  "the processing fee is ₹199 plus 18% GST on the 3 month plan for a ₹28,400 phone";
+eq(
+  "a sentence of pure claim numbers is returned untouched",
+  redact(CLAIM_NUMBERS).redacted,
+  CLAIM_NUMBERS
+);
+
+for (const survivor of ["₹199", "14%", "3 months", "28,400", "₹60,000", "9466.67"]) {
+  const sentence = `the number is ${survivor} exactly`;
+  eq(`"${survivor}" survives redaction`, redact(sentence).redacted, sentence);
+}
+
+// 60,000 and 9466.67 both start with a digit in 6-9. That is the single
+// most likely way for a phone regex to eat a currency amount.
+check(
+  "a ticket ceiling of 60,000 is not mistaken for a mobile number",
+  !redact("we go up to ₹60,000 on any plan").redacted.includes("[PHONE"),
+  redact("we go up to ₹60,000 on any plan").redacted
+);
+
+console.log("\n-- lib/redact.ts: what it must catch --");
+
+const customer = { name: "Meenakshi Iyer" };
+
+function redactionOf(text: string): string {
+  return redact(text, customer).redacted;
+}
+
+check(
+  "+91 XXXXX XXXXX -> [PHONE_1]",
+  redactionOf("call me on +91 XXXXX XXXXX").includes("[PHONE_1]"),
+  redactionOf("call me on +91 XXXXX XXXXX")
+);
+check(
+  "bare 10-digit mobile -> [PHONE_1]",
+  redactionOf("her number is XXXXXXXXXX").includes("[PHONE_1]"),
+  redactionOf("her number is XXXXXXXXXX")
+);
+check(
+  "0-prefixed hyphenated mobile -> [PHONE_1]",
+  redactionOf("dial 098431-07726 now").includes("[PHONE_1]"),
+  redactionOf("dial 098431-07726 now")
+);
+check(
+  "grouped Aadhaar -> [AADHAAR_1]",
+  redactionOf("aadhaar is 2345 6789 0123").includes("[AADHAAR_1]"),
+  redactionOf("aadhaar is 2345 6789 0123")
+);
+check(
+  "unspaced 12-digit Aadhaar -> [AADHAAR_1]",
+  redactionOf("aadhaar 234567890123 verified").includes("[AADHAAR_1]"),
+  redactionOf("aadhaar 234567890123 verified")
+);
+check(
+  "PAN -> [PAN_1]",
+  redactionOf("pan is AXKPI3421F ok").includes("[PAN_1]"),
+  redactionOf("pan is AXKPI3421F ok")
+);
+check(
+  "email -> [EMAIL_1]",
+  redactionOf("write to name@example.com").includes("[EMAIL_1]"),
+  redactionOf("write to name@example.com")
+);
+check(
+  "customer's full name -> [CUST_NAME]",
+  redactionOf("Meenakshi Iyer is on the line").includes("[CUST_NAME]"),
+  redactionOf("Meenakshi Iyer is on the line")
+);
+check(
+  "first name alone, lowercased, -> [CUST_NAME]",
+  redactionOf("thanks meenakshi for holding").includes("[CUST_NAME]"),
+  redactionOf("thanks meenakshi for holding")
+);
+check(
+  "no customer name leaks through",
+  !/meenakshi/i.test(redactionOf("Meenakshi, your fee is ₹349")),
+  redactionOf("Meenakshi, your fee is ₹349")
+);
+
+// The whole point: PII out, claims intact, in the same sentence.
+const mixed = redactionOf(
+  "Meenakshi Iyer on XXXXXXXXXX — the fee is ₹349 on the 6 month plan for ₹28,400"
+);
+check("mixed sentence redacts the name", mixed.includes("[CUST_NAME]"), mixed);
+check("mixed sentence redacts the phone", mixed.includes("[PHONE_1]"), mixed);
+check("mixed sentence keeps ₹349", mixed.includes("₹349"), mixed);
+check("mixed sentence keeps the 6 month tenure", mixed.includes("6 month"), mixed);
+check("mixed sentence keeps ₹28,400", mixed.includes("₹28,400"), mixed);
+
+// Stable tokens, and a clean round trip.
+const repeated = redact("ring XXXXXXXXXX, then ring XXXXXXXXXX again");
+eq(
+  "the same phone number twice yields one token",
+  Object.keys(repeated.map).length,
+  1
+);
+eq(
+  "unredact restores the original text",
+  unredact(repeated.redacted, repeated.map),
+  "ring XXXXXXXXXX, then ring XXXXXXXXXX again"
+);
+
+// offline stub — the no-API-key path
+
+console.log("\n-- lib/stub.ts --");
+
+eq('digitise: "one ninety nine" -> 199', digitise("one ninety nine"), "199");
+eq('digitise: "three forty nine" -> 349', digitise("three forty nine"), "349");
+eq('digitise: "two fifty" -> 250', digitise("two fifty"), "250");
+eq('digitise: "ninety nine" -> 99', digitise("ninety nine"), "99");
+eq('digitise: "three month" -> "3 month"', digitise("three month"), "3 month");
+eq('digitise: "five hundred" -> 500', digitise("five hundred"), "500");
+
+eq("triage rejects small talk", stubTriage("hello sir how are you today"), false);
+eq(
+  "triage accepts a fee claim",
+  stubTriage("the processing fee is 199 on the three month plan"),
+  true
+);
+
+// The ASR failure we actually saw on screen: "fee" heard as "P".
+const asrNoise = stubExtract(
+  "the processing P is 199 on the three month plan",
+  "utt_asr"
+);
+check("stub parses a claim out of ASR noise", asrNoise !== null);
+if (asrNoise) {
+  eq("...as a processing_fee claim", asrNoise.type, "processing_fee");
+  eq("...with value 199, not the tenure 3", asrNoise.value, 199);
+  eq("...on the 3-month plan", asrNoise.tenureMonths, 3);
+  eq("...marked source: stub", asrNoise.source, "stub");
+  eq(
+    "...and it adjudicates VERIFIED",
+    adjudicate(asrNoise, truth, { now: NOW }).status,
+    "VERIFIED"
+  );
+}
+
+// Every scripted demo line must produce the verdict it was written for.
+const script: Array<[string, VerdictStatus]> = [
+  ["the processing fee is just ninety nine rupees on the three month plan", "STALE"],
+  ["the three month plan is zero percent interest", "VERIFIED"],
+  ["you just need an Aadhaar OTP for KYC", "VERIFIED"],
+  ["you have to be at least eighteen to apply", "WRONG"],
+  ["the processing fee is three forty nine on the six month plan", "VERIFIED"],
+  ["the six month plan is also zero percent", "WRONG"],
+  ["and the late fee is five hundred rupees", "WRONG"],
+  ["the processing fee is four ninety nine on the nine month plan", "VERIFIED"],
+  ["nine month is fourteen percent per annum", "VERIFIED"],
+  ["we can stretch it to twelve months if you want", "WRONG"],
+];
+
+for (const [line, expected] of script) {
+  const parsed = stubExtract(line, "utt_script");
+  if (!parsed) {
+    check(`script line -> ${expected}: "${line}"`, false, "stub parsed nothing");
+    continue;
+  }
+  const status = adjudicate(parsed, truth, { now: NOW, ticketInr: 28400 }).status;
+  eq(`script: "${line}"`, status, expected);
+}
+
+// multi-claim extraction — people do not pause between claims
+
+console.log("\n-- one utterance, several claims --");
+
+// Verbatim off the screen: four scripted lines said in one breath, as
+// Chrome transcribed them. Every claim in here must survive.
+const RUN_ON =
+  "the processing fees 349 on the 6 month plan your EMI work out to 4928 a month the 6 month plan is also 0% and the late P is 500 rupees";
+
+const runOnClaims = stubExtractAll(RUN_ON, "utt_runon");
+eq("a four-claim utterance yields four claims", runOnClaims.length, 4);
+
+const byType = new Map(runOnClaims.map((c) => [c.type, c]));
+for (const wanted of ["processing_fee", "emi_amount", "interest", "late_fee"]) {
+  check(`  ...including ${wanted}`, byType.has(wanted as ClaimType));
+}
+
+const runOnStatuses = runOnClaims.map(
+  (c) => `${c.type}=${adjudicate(c, truth, { now: NOW, ticketInr: 28400 }).status}`
+);
+check(
+  "  ...the 349 fee reads VERIFIED",
+  runOnStatuses.includes("processing_fee=VERIFIED"),
+  runOnStatuses.join(" ")
+);
+check(
+  "  ...the 4928 EMI reads VERIFIED",
+  runOnStatuses.includes("emi_amount=VERIFIED"),
+  runOnStatuses.join(" ")
+);
+check(
+  "  ...the 0% on 6 months reads WRONG",
+  runOnStatuses.includes("interest=WRONG"),
+  runOnStatuses.join(" ")
+);
+check(
+  "  ...the 500 late fee reads WRONG",
+  runOnStatuses.includes("late_fee=WRONG"),
+  runOnStatuses.join(" ")
+);
+
+// The clause-bleed failure: a late-fee claim must not pick up the "0%"
+// from the sentence before it just because they share an utterance.
+const lateClaim = byType.get("late_fee");
+check(
+  "  ...and the late fee took 500, not the neighbouring 0%",
+  lateClaim !== undefined && lateClaim.value === 500,
+  lateClaim ? String(lateClaim.value) : "missing"
+);
+const interestClaim = byType.get("interest");
+check(
+  "  ...while the interest claim kept the 6-month tenure from earlier in the sentence",
+  interestClaim !== undefined && interestClaim.tenureMonths === 6,
+  interestClaim ? String(interestClaim.tenureMonths) : "missing"
+);
+
+// A single-claim utterance must still behave exactly as before.
+eq(
+  "a one-claim utterance still yields one",
+  stubExtractAll("the processing fee is 199 on the three month plan", "u").length,
+  1
+);
+eq(
+  "small talk yields none",
+  stubExtractAll("hello sir how are you today", "u").length,
+  0
+);
+
+// replay — the wifi-is-dead insurance path
+
+console.log("\n-- replay: scripted call, no microphone --");
+console.log("   (replay feeds demoScript lines into the SAME pipeline;");
+console.log("    this asserts the downstream chain, not the timer)");
+
+interface ScriptLine {
+  speaker: "rep" | "customer";
+  text: string;
+}
+
+interface ScriptedCustomer {
+  id: string;
+  name: string;
+  cart: { ticketInr: number };
+  demoScript: ScriptLine[];
+}
+
+const customers = (
+  JSON.parse(
+    readFileSync(resolve(process.cwd(), "data/customers.json"), "utf8")
+  ) as { customers: ScriptedCustomer[] }
+).customers;
+
+/**
+ * Exactly what replay does per line: redact, extract, adjudicate.
+ * Redaction is included deliberately — a scripted line must survive the
+ * PII scrub with its figures intact, same as a spoken one.
+ */
+function replayStatuses(customer: ScriptedCustomer): VerdictStatus[] {
+  const out: VerdictStatus[] = [];
+  // REP LINES ONLY. This mirrors the guard in ingest(): a customer line
+  // never reaches adjudicate(), so it can never contribute a verdict.
+  for (const line of customer.demoScript.filter((l) => l.speaker === "rep")) {
+    const { redacted } = redact(line.text, { name: customer.name });
+    for (const claim of stubExtractAll(redacted, "utt_replay")) {
+      out.push(
+        adjudicate(claim, truth, {
+          now: NOW,
+          ticketInr: customer.cart.ticketInr,
+        }).status
+      );
+    }
+  }
+  return out;
+}
+
+const EXPECTED_REPLAY: Record<string, VerdictStatus[]> = {
+  "Meenakshi Iyer": ["VERIFIED", "VERIFIED", "WRONG", "WRONG"],
+  "Rohit Deshmukh": ["VERIFIED", "VERIFIED", "VERIFIED", "WRONG"],
+  "Farhan Qureshi": ["STALE", "VERIFIED", "VERIFIED", "WRONG"],
+};
+
+/**
+ * The three scripted customers, by id. Selecting rather than iterating
+ * is deliberate: Anjali Bhatt exists for live phone calls and carries no
+ * demoScript, and a replay suite that walked every customer would either
+ * fail on her or quietly start asserting something else.
+ */
+const SCRIPTED_IDS = ["cus_mn_iyer", "cus_rt_deshmukh", "cus_fr_qureshi"];
+const scriptedCustomers = SCRIPTED_IDS.map((id) => {
+  const found = customers.find((c) => c.id === id);
+  if (!found) throw new Error(`seed fixture missing scripted customer ${id}`);
+  return found;
+});
+
+eq("exactly three customers carry a demo script", scriptedCustomers.length, 3);
+check(
+  "...and every other seeded customer carries none",
+  customers
+    .filter((c) => !SCRIPTED_IDS.includes(c.id))
+    .every((c) => c.demoScript.length === 0)
+);
+
+for (const customer of scriptedCustomers) {
+  const expected = EXPECTED_REPLAY[customer.name];
+  if (!expected) {
+    check(`no expected replay sequence for ${customer.name}`, false);
+    continue;
+  }
+  const actual = replayStatuses(customer);
+  eq(
+    `replay — ${customer.name}: ${expected.join(" ")}`,
+    actual.join(" "),
+    expected.join(" ")
+  );
+}
+
+// Every scripted call must contain at least one misquote, or the demo
+// has nothing to show. Scripted customers only — see SCRIPTED_IDS.
+for (const customer of scriptedCustomers) {
+  const statuses = replayStatuses(customer);
+  check(
+    `  ${customer.name}'s script contains something to correct`,
+    statuses.some((s) => s !== "VERIFIED"),
+    statuses.join(" ")
+  );
+}
+
+// A late-fee percentage is not a product interest rate. Multi-claim
+// extraction briefly read "2% a month on the overdue amount" as an
+// interest claim and adjudicated it WRONG — accusing the rep of a
+// misquote they never made. A false accusation is the worst output this
+// system can produce.
+{
+  const line = "late fee is two fifty flat plus two percent a month on the overdue amount";
+  const claims = stubExtractAll(line, "u");
+  eq("a late-fee percentage yields exactly one claim", claims.length, 1);
+  eq("...and it is a late_fee claim", claims[0].type, "late_fee");
+  eq(
+    "...adjudicated VERIFIED, not a false misquote",
+    adjudicate(claims[0], truth, { now: NOW }).status,
+    "VERIFIED"
+  );
+}
+
+// value formatting is independent of the type the value arrived as
+
+console.log("\n-- value formatting --");
+console.log("   (the model emits value as a number sometimes and a string");
+console.log("    other times; the same figure must render identically)");
+
+function explanationFor(
+  type: ClaimType,
+  value: number | string,
+  unit: Claim["unit"],
+  tenure: 3 | 6 | 9 | null
+): string {
+  return adjudicate(makeClaim(type, value, unit, tenure, "x"), truth, {
+    now: NOW,
+  }).explanation;
+}
+
+eq(
+  "a numeric string with an inr unit formats as rupees",
+  explanationFor("late_fee", "500", "inr", null),
+  explanationFor("late_fee", 500, "inr", null)
+);
+check(
+  "...and carries the symbol",
+  explanationFor("late_fee", "500", "inr", null).includes("₹500"),
+  explanationFor("late_fee", "500", "inr", null)
+);
+
+eq(
+  "a numeric string with a percent unit formats as a percentage",
+  explanationFor("interest", "0", "percent", 6),
+  explanationFor("interest", 0, "percent", 6)
+);
+check(
+  "...and carries the sign",
+  explanationFor("interest", "0", "percent", 6).includes("not 0%"),
+  explanationFor("interest", "0", "percent", 6)
+);
+
+eq(
+  'a string already carrying a symbol ("0%") is normalised, not doubled',
+  explanationFor("interest", "0%", "percent", 6),
+  explanationFor("interest", 0, "percent", 6)
+);
+eq(
+  'a string already carrying "₹500" matches the plain number',
+  explanationFor("late_fee", "₹500", "inr", null),
+  explanationFor("late_fee", 500, "inr", null)
+);
+
+check(
+  "a genuinely non-numeric string passes through unchanged",
+  explanationFor("kyc_requirement", "PAN card photo", "text", null).includes(
+    "PAN card photo"
+  ),
+  explanationFor("kyc_requirement", "PAN card photo", "text", null)
+);
+
+// subject/verb agreement
+
+console.log("\n-- plural subjects --");
+
+const tenureExplanation = explanationFor("tenure", 9, "months", null);
+check(
+  'plural subject takes "are": the tenures we offer',
+  tenureExplanation.includes("tenures we offer are"),
+  tenureExplanation
+);
+const kycExplanation = explanationFor(
+  "kyc_requirement",
+  "Aadhaar OTP",
+  "text",
+  null
+);
+check(
+  'plural subject takes "are": the accepted KYC methods',
+  kycExplanation.includes("KYC methods are"),
+  kycExplanation
+);
+const feeExplanation = explanationFor("processing_fee", 349, "inr", 6);
+check(
+  'singular subject still takes "is"',
+  feeExplanation.includes("processing fee is"),
+  feeExplanation
+);
+
+// the customer channel — simulated, and never adjudicated
+
+console.log("\n-- simulated customer channel --");
+
+for (const customer of scriptedCustomers) {
+  const reps = customer.demoScript.filter((l) => l.speaker === "rep");
+  const cust = customer.demoScript.filter((l) => l.speaker === "customer");
+  check(
+    `${customer.name}'s script has both sides`,
+    reps.length > 0 && cust.length > 0,
+    `${reps.length} rep / ${cust.length} customer`
+  );
+}
+
+/**
+ * The guard that matters, and why it cannot be left to content.
+ *
+ * Several customer lines DO parse as claims — "fourteen percent is higher
+ * than what the other app is showing me" extracts an interest claim of
+ * 14%, which adjudicates VERIFIED. Letting it through would credit the
+ * rep with a correct statement they never made, and inflate the khata
+ * with claims from the wrong speaker. Nothing about the content stops
+ * it; only the speaker check does.
+ */
+{
+  const extractable = customers
+    .flatMap((c) => c.demoScript)
+    .filter((l) => l.speaker === "customer")
+    .map((l) => ({ text: l.text, claims: stubExtractAll(l.text, "utt_cust") }))
+    .filter((r) => r.claims.length > 0);
+
+  check(
+    "customer lines in the scripts DO parse as claims if let through",
+    extractable.length > 0,
+    "none parsed — this assertion no longer proves the guard is needed"
+  );
+
+  const statuses = extractable.map(
+    (r) => adjudicate(r.claims[0], truth, { now: NOW }).status
+  );
+  check(
+    "...and would land real verdicts in the rep's audit record",
+    statuses.some((st) => st === "VERIFIED" || st === "STALE" || st === "WRONG"),
+    statuses.join(" ")
+  );
+}
+
+// The status sequences above are computed from rep lines only. If the
+// guard were removed, these would change — which is what makes them a
+// regression test for it.
+eq(
+  "adding a customer channel did not change the rep verdict sequence",
+  replayStatuses(customers[2]).join(" "),
+  "STALE VERIFIED VERIFIED WRONG"
+);
+
+console.log("\n-- customer classification (offline) --");
+
+const classifyCases: Array<[string, string]> = [
+  ["let me think about it, call me back tomorrow evening", "callback_request"],
+  ["I do not have my PAN card with me right now, will that be a problem", "eligibility_query"],
+  ["fourteen percent is higher than what the other app is showing me", "price_concern"],
+  ["then why is the EMI more than twenty eight thousand divided by six", "confused"],
+  ["I am twenty three, so that should be fine", "interested"],
+];
+
+for (const [line, expected] of classifyCases) {
+  eq(`intent: "${line.slice(0, 40)}..."`, stubClassifyCustomer(line).intent, expected);
+}
+
+check(
+  "a price complaint reads negative",
+  stubClassifyCustomer("fourteen percent is higher than what the other app is showing me")
+    .sentiment === "negative"
+);
+check(
+  "an agreeable line reads positive",
+  stubClassifyCustomer("I am twenty three, so that should be fine").sentiment ===
+    "positive"
+);
+
+// corrections — and the refusal to trust them
+
+console.log("\n-- lib/correction.ts --");
+
+/** Adjudicate a spoken line, then draft and check its correction. */
+function correctionFor(
+  line: string,
+  ticketInr?: number
+): { claim: Claim; verdict: Verdict; draft: string | null } {
+  const claim = stubExtract(line, "utt_corr");
+  if (!claim) throw new Error(`stub parsed nothing from: ${line}`);
+  const verdict = adjudicate(claim, truth, { now: NOW, ticketInr: ticketInr ?? null });
+  return { claim, verdict, draft: deterministicCorrection(claim, verdict, truth) };
+}
+
+const wrongLines: Array<[string, number | undefined]> = [
+  ["the processing fee is three ninety nine on the six month plan", undefined],
+  ["the six month plan is also zero percent", undefined],
+  ["and the late fee is five hundred rupees", undefined],
+  ["we can stretch it to twelve months if you want", undefined],
+  ["you have to be at least eighteen to apply", undefined],
+  ["just send a photo of your PAN card for KYC", undefined],
+  ["your EMI works out to 4200 a month", 28400],
+];
+
+for (const [line, ticket] of wrongLines) {
+  const { claim, verdict, draft } = correctionFor(line, ticket);
+  eq(`"${line}" -> WRONG`, verdict.status, "WRONG");
+  if (!draft) {
+    check(`  ...and a correction is drafted`, false, "no template matched");
+    continue;
+  }
+  const result = checkCorrection(draft, claim, truth, {
+    now: NOW,
+    ticketInr: ticket ?? null,
+  });
+  check(
+    `  ...correction self-checks clean: "${draft}"`,
+    result.passed,
+    result.reason ?? ""
+  );
+}
+
+// The whole point of the round trip: a correction carrying the WRONG
+// number must be caught and thrown away, not read aloud.
+{
+  const { claim } = correctionFor(
+    "the processing fee is three ninety nine on the six month plan"
+  );
+  const sabotaged = checkCorrection(
+    "Let me correct that — the 6-month processing fee is ₹399, not ₹349.",
+    claim,
+    truth,
+    { now: NOW }
+  );
+  eq("a correction repeating the wrong figure is rejected", sabotaged.passed, false);
+  check(
+    "...and says why",
+    (sabotaged.reason ?? "").includes("WRONG"),
+    sabotaged.reason ?? ""
+  );
+
+  // A sentence that verifies, but about something else entirely.
+  const offTopic = checkCorrection(
+    "Correction — we offer 3, 6 or 9 months, nothing longer.",
+    claim,
+    truth,
+    { now: NOW }
+  );
+  eq("a correction about the wrong claim type is rejected", offTopic.passed, false);
+  check(
+    "...even though that sentence is itself true",
+    adjudicate(
+      stubExtract("Correction — we offer 3, 6 or 9 months, nothing longer.", "u")!,
+      truth,
+      { now: NOW }
+    ).status === "VERIFIED"
+  );
+}
+
+// The model emits type "apr"; the deterministic re-parser only ever
+// emits "interest". If those aren't treated as the same kind of claim,
+// EVERY apr correction fails the type guard and the rep is shown a
+// flagged misquote with no sentence to fix it.
+{
+  const aprClaim = makeClaim(
+    "apr",
+    0,
+    "percent",
+    6,
+    "the six month plan is also zero percent"
+  );
+  const aprVerdict = adjudicate(aprClaim, truth, { now: NOW });
+  eq("a 0% apr claim on 6 months is WRONG", aprVerdict.status, "WRONG");
+
+  const aprDraft = deterministicCorrection(aprClaim, aprVerdict, truth);
+  check("an apr correction is drafted", aprDraft !== null);
+  if (aprDraft) {
+    const aprCheck = checkCorrection(aprDraft, aprClaim, truth, { now: NOW });
+    check(
+      "an apr correction survives the type guard",
+      aprCheck.passed,
+      aprCheck.reason ?? ""
+    );
+  }
+}
+
+// Corrections are never drafted for anything but a misquote.
+{
+  const { verdict } = correctionFor(
+    "the processing fee is three forty nine on the six month plan"
+  );
+  eq("a VERIFIED claim needs no correction", verdict.status, "VERIFIED");
+  eq("adjudicate leaves correction null", verdict.correction, null);
+  eq(
+    "adjudicate leaves correctionSelfChecked false",
+    verdict.correctionSelfChecked,
+    false
+  );
+}
+
+// the khata and its hash chain
+
+console.log("\n-- lib/closer.ts --");
+
+const sampleClaim = makeClaim("processing_fee", 199, "inr", 3, "fee is 199");
+const sampleVerdict = adjudicate(sampleClaim, truth, { now: NOW });
+
+const khataA = buildKhata({
+  callId: "call_test_a",
+  customerId: "cus_mn_iyer",
+  consentAt: "2026-08-07T06:00:00.000Z",
+  startedAt: "2026-08-07T06:00:01.000Z",
+  endedAt: "2026-08-07T06:04:00.000Z",
+  claims: [sampleClaim],
+  verdicts: [sampleVerdict],
+  costs: [],
+  coverage: { utterances: 1, checked: 1, unchecked: 0 },
+  customerSignals: [],
+  prevHash: null,
+});
+
+check("a fresh khata verifies against its own hash", verifyKhata(khataA));
+eq("the first khata is genesis", khataA.prevHash, null);
+
+// strip the hash, then confirm the same body hashes the same way
+const khataABody = Object.fromEntries(
+  Object.entries(khataA).filter(([key]) => key !== "hash")
+) as Omit<typeof khataA, "hash">;
+eq("hashing the same body twice agrees", hashRecord(khataABody), khataA.hash);
+
+// Same content, same hash — regardless of key insertion order.
+const reordered = buildKhata({
+  endedAt: "2026-08-07T06:04:00.000Z",
+  startedAt: "2026-08-07T06:00:01.000Z",
+  costs: [],
+  claims: [sampleClaim],
+  verdicts: [sampleVerdict],
+  prevHash: null,
+  coverage: { utterances: 1, checked: 1, unchecked: 0 },
+  customerSignals: [],
+  callId: "call_test_a",
+  customerId: "cus_mn_iyer",
+  consentAt: "2026-08-07T06:00:00.000Z",
+});
+eq("identical content hashes identically", reordered.hash, khataA.hash);
+
+// Tampering must be detectable — that is the entire reason for the hash.
+const tampered = {
+  ...khataA,
+  verdicts: [{ ...sampleVerdict, status: "VERIFIED" as VerdictStatus, stated: 99 }],
+};
+eq("an edited khata fails verification", verifyKhata(tampered), false);
+
+const khataB = buildKhata({
+  callId: "call_test_b",
+  customerId: "cus_fr_qureshi",
+  consentAt: null,
+  startedAt: "2026-08-07T07:00:00.000Z",
+  endedAt: "2026-08-07T07:03:00.000Z",
+  claims: [],
+  verdicts: [],
+  costs: [],
+  coverage: { utterances: 0, checked: 0, unchecked: 0 },
+  customerSignals: [],
+  prevHash: khataA.hash,
+});
+eq("the next khata chains to the previous hash", khataB.prevHash, khataA.hash);
+check("...and still verifies", verifyKhata(khataB));
+check("...with a different hash of its own", khataB.hash !== khataA.hash);
+
+eq(
+  "consentAt survives into the khata",
+  khataA.consentAt,
+  "2026-08-07T06:00:00.000Z"
+);
+eq("a call without consent records null, not a fake timestamp", khataB.consentAt, null);
+
+// coverage — "unchecked" must never read as "clean"
+
+console.log("\n-- khata encryption --");
+
+const testKey = Buffer.from(
+  "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90",
+  "hex"
+);
+
+const sealed = encryptRecord(khataA, testKey);
+eq("encryption names its algorithm", sealed.khataEncryption, "aes-256-gcm");
+eq("a 96-bit IV is stored", sealed.iv.length, 24);
+check("an auth tag is stored", sealed.tag.length > 0);
+check(
+  "the customer id does not survive into the ciphertext",
+  !Buffer.from(sealed.ciphertext, "base64").toString("utf8").includes("cus_")
+);
+
+const opened = decryptRecord(sealed, testKey);
+eq("round trip restores the callId", opened.callId, khataA.callId);
+eq("round trip restores the claim count", opened.claims.length, khataA.claims.length);
+
+// The property the plaintext-first ordering exists to protect. Hashing
+// the ciphertext instead would tie the chain to a random IV.
+eq("the hash is unchanged by encryption", opened.hash, khataA.hash);
+check("hash verification survives the round trip", verifyKhata(opened));
+
+// A reused IV under the same key is the one mistake GCM does not forgive.
+const sealedAgain = encryptRecord(khataA, testKey);
+check("a fresh IV is generated per file", sealed.iv !== sealedAgain.iv);
+check(
+  "the same record encrypts to different ciphertext each time",
+  sealed.ciphertext !== sealedAgain.ciphertext
+);
+
+{
+  const raw = Buffer.from(sealed.ciphertext, "base64");
+  raw[Math.floor(raw.length / 2)] ^= 0xff;
+  let threw = false;
+  try {
+    decryptRecord({ ...sealed, ciphertext: raw.toString("base64") }, testKey);
+  } catch {
+    threw = true;
+  }
+  check("modified ciphertext fails authentication", threw);
+}
+
+{
+  let threw = false;
+  try {
+    decryptRecord(sealed, Buffer.from("f".repeat(64), "hex"));
+  } catch {
+    threw = true;
+  }
+  check("the wrong key fails authentication", threw);
+}
+
+console.log("\n-- coverage guard --");
+console.log("   (the bug this exists to prevent: a fact-checker that saw");
+console.log("    nothing reporting all clear, then deleting a true objection)");
+
+const CLEAN = { utterances: 4, checked: 4, unchecked: 0 };
+const BLIND = { utterances: 4, checked: 0, unchecked: 4 };
+const PARTIAL = { utterances: 4, checked: 3, unchecked: 1 };
+
+eq("full coverage is complete", coverageGuard(CLEAN).complete, true);
+eq("no coverage is incomplete", coverageGuard(BLIND).complete, false);
+eq("even one missed utterance is incomplete", coverageGuard(PARTIAL).complete, false);
+eq("complete coverage blocks nothing", coverageGuard(CLEAN).blockedFields.length, 0);
+eq(
+  "a legacy khata with no coverage field is treated as incomplete",
+  coverageGuard(undefined).complete,
+  false
+);
+check(
+  "incomplete coverage blocks openObjection",
+  coverageGuard(BLIND).blockedFields.includes("openObjection")
+);
+check(
+  "incomplete coverage blocks stage and nextStep",
+  coverageGuard(BLIND).blockedFields.includes("stage") &&
+    coverageGuard(BLIND).blockedFields.includes("nextStep")
+);
+
+// The exact scenario that shipped a false all-clear: two real misquotes,
+// every utterance unchecked because the credential was invalid.
+const blindProposal = stubProposal([], "2026-08-07T16:14:40.670Z", 6, BLIND);
+check(
+  "a blind call does NOT claim there were no misquotes",
+  !/no misquote/i.test(blindProposal.dropOffReason),
+  blindProposal.dropOffReason
+);
+check(
+  "...it says the call could not be checked",
+  /never fact-checked|cannot say/i.test(blindProposal.dropOffReason),
+  blindProposal.dropOffReason
+);
+check(
+  "...it proposes no openObjection overwrite",
+  !blindProposal.crmDiff.some((d) => d.field === "openObjection"),
+  blindProposal.crmDiff.map((d) => d.field).join(",")
+);
+check(
+  "...but still records that the call happened",
+  blindProposal.crmDiff.some((d) => d.field === "lastContactAt")
+);
+check(
+  '...and the follow-up does not tell the customer "everything stands"',
+  !/everything we discussed stands/i.test(blindProposal.followUpDraft),
+  blindProposal.followUpDraft
+);
+
+// A fully checked, genuinely clean call may still say so.
+const cleanProposal = stubProposal([], "2026-08-07T16:14:40.670Z", 6, CLEAN);
+check(
+  "a fully checked clean call may report no misquotes",
+  /no misquotes detected/i.test(cleanProposal.dropOffReason),
+  cleanProposal.dropOffReason
+);
+check(
+  "...and may update openObjection",
+  cleanProposal.crmDiff.some((d) => d.field === "openObjection")
+);
+
+eq(
+  "coverage is recorded in the khata itself",
+  khataA.coverage.checked,
+  1
+);
+check(
+  "a khata with unchecked utterances hashes differently from a clean one",
+  buildKhata({
+    callId: "c",
+    customerId: "x",
+    consentAt: null,
+    startedAt: "2026-08-07T06:00:00.000Z",
+    endedAt: "2026-08-07T06:01:00.000Z",
+    claims: [],
+    verdicts: [],
+    costs: [],
+    coverage: BLIND,
+    customerSignals: [],
+    prevHash: null,
+  }).hash !==
+    buildKhata({
+      callId: "c",
+      customerId: "x",
+      consentAt: null,
+      startedAt: "2026-08-07T06:00:00.000Z",
+      endedAt: "2026-08-07T06:01:00.000Z",
+      claims: [],
+      verdicts: [],
+      costs: [],
+      coverage: CLEAN,
+      customerSignals: [],
+      prevHash: null,
+    }).hash
+);
+
+// cRM write whitelist (async — touches data/crm.json, read only)
+
+async function asyncChecks(): Promise<void> {
+  console.log("\n-- CRM write guard --");
+
+  const { diff, rejected } = await sanitiseDiff("cus_mn_iyer", [
+    { field: "stage", to: "negotiation", reason: "moved forward" },
+    {
+      field: "nextStep",
+      to: "Send the corrected late fee in writing before Friday",
+      reason: "follow up",
+    },
+    // Everything below is off-whitelist and must not reach crm.json.
+    { field: "assignedRep", to: "someone else", reason: "reassign" },
+    { field: "ticketInr", to: 1, reason: "discount" },
+    { field: "consentAt", to: "2026-01-01T00:00:00Z", reason: "backdate consent" },
+  ]);
+
+  const fields = diff.map((d) => d.field);
+  const rejectedNames = rejected.map((r) => r.field);
+
+  check("whitelisted fields pass through", fields.includes("stage"), fields.join(","));
+  check(
+    "rep reassignment is rejected",
+    rejectedNames.includes("assignedRep"),
+    rejectedNames.join(",")
+  );
+  check("ticket value edits are rejected", rejectedNames.includes("ticketInr"));
+  check(
+    "backdating consent is rejected",
+    rejectedNames.includes("consentAt"),
+    rejectedNames.join(",")
+  );
+  check(
+    "no rejected field leaks into the diff",
+    !fields.some((f) => !(ALLOWED_CRM_FIELDS as readonly string[]).includes(f))
+  );
+  check(
+    "every rejection carries a reason",
+    rejected.every((r) => r.reason.trim().length > 0)
+  );
+
+  // Compare against what crm.json actually holds rather than a
+  // hardcoded seed value — the file is live demo data and gets written
+  // to. The property under test is "from comes from disk", not "the
+  // stage happens to be quote_sent".
+  const crmOnDisk = JSON.parse(
+    readFileSync(resolve(process.cwd(), "data/crm.json"), "utf8")
+  ) as { deals: Array<{ customerId: string; stage: string }> };
+  const dealOnDisk = crmOnDisk.deals.find((d) => d.customerId === "cus_mn_iyer");
+
+  const stageDiff = diff.find((d) => d.field === "stage");
+  check(
+    "the 'from' value is read off disk, not taken from the proposal",
+    stageDiff !== undefined &&
+      dealOnDisk !== undefined &&
+      stageDiff.from === dealOnDisk.stage,
+    `diff says ${stageDiff ? String(stageDiff.from) : "missing"}, disk says ${
+      dealOnDisk ? dealOnDisk.stage : "missing"
+    }`
+  );
+
+/*
+   * Value validation — a writable field is not a field that accepts *
+   * anything. These are the exact values that got written for real. *
+ */
+
+  console.log("\n-- CRM value guard --");
+
+  const junk = await sanitiseDiff("cus_mn_iyer", [
+    { field: "openObjection", to: "true", reason: "model said true" },
+    { field: "stage", to: "Follow-up", reason: "formatting variant" },
+    { field: "nextStep", to: "N/A", reason: "nothing to say" },
+    { field: "quotedTenureMonths", to: 12, reason: "customer wanted 12" },
+    { field: "attemptsSoFar", to: "lots", reason: "vague" },
+    { field: "lastContactAt", to: "yesterday evening", reason: "not a date" },
+  ]);
+
+  const junkFields = junk.diff.map((d) => d.field);
+  const junkRejected = new Map(junk.rejected.map((r) => [r.field, r.reason]));
+
+  check(
+    'openObjection = "true" is rejected, not written',
+    junkRejected.has("openObjection") && !junkFields.includes("openObjection"),
+    junkRejected.get("openObjection") ?? "was accepted"
+  );
+  check(
+    'nextStep = "N/A" is rejected as a placeholder',
+    junkRejected.has("nextStep"),
+    junkRejected.get("nextStep") ?? "was accepted"
+  );
+  check(
+    "a 12-month tenure is rejected — we do not offer it",
+    junkRejected.has("quotedTenureMonths"),
+    junkRejected.get("quotedTenureMonths") ?? "was accepted"
+  );
+  check(
+    'attemptsSoFar = "lots" is rejected',
+    junkRejected.has("attemptsSoFar"),
+    junkRejected.get("attemptsSoFar") ?? "was accepted"
+  );
+  check(
+    'lastContactAt = "yesterday evening" is rejected',
+    junkRejected.has("lastContactAt"),
+    junkRejected.get("lastContactAt") ?? "was accepted"
+  );
+
+  // Forgiving about formatting, strict about vocabulary.
+  const stageJunk = junk.diff.find((d) => d.field === "stage");
+  check(
+    '"Follow-up" is accepted and normalised to "follow_up"',
+    stageJunk !== undefined && stageJunk.to === "follow_up",
+    stageJunk ? String(stageJunk.to) : "was rejected"
+  );
+
+  eq(
+    'an invented stage like "Closed Won Maybe" is rejected',
+    validateCrmValue("stage", "Closed Won Maybe").ok,
+    false
+  );
+  eq(
+    "a real objection sentence is accepted",
+    validateCrmValue(
+      "openObjection",
+      "Was quoted 0% on the 6-month plan, which is wrong."
+    ).ok,
+    true
+  );
+  eq("a 6-month tenure is accepted", validateCrmValue("quotedTenureMonths", 6).ok, true);
+  eq(
+    "an ISO timestamp is accepted",
+    validateCrmValue("lastContactAt", "2026-08-07T16:14:40.670Z").ok,
+    true
+  );
+}
+
+
+async function dbChecks(): Promise<void> {
+  console.log("\n-- sqlite persistence --");
+
+  const {
+    applySchema,
+    isInitialised,
+    listCustomers,
+    listDeals,
+    listUsers,
+    ownerOf,
+    upsertCall,
+    db,
+  } = await import("./db");
+  const { writeKhata, readKhata, listKhatas, readPrevHash } = await import(
+    "./closer"
+  );
+
+  applySchema();
+  check("schema applies and all five tables exist", isInitialised());
+
+  const users = listUsers();
+  const seededCustomers = listCustomers();
+  const seededDeals = listDeals();
+
+  check(
+    "reset restored the opening state: 4 users, 4 customers, 4 deals",
+    users.length === 4 && seededCustomers.length === 4 && seededDeals.length === 4,
+    `${users.length} users / ${seededCustomers.length} customers / ${seededDeals.length} deals`
+  );
+  eq(
+    "one admin and three sales users",
+    `${users.filter((u) => u.role === "admin").length}/${users.filter((u) => u.role === "sales").length}`,
+    "1/3"
+  );
+  check(
+    "no plaintext password is stored",
+    users.every((u) => u.password_hash.startsWith("scrypt$"))
+  );
+  check(
+    "every customer is assigned to a user, so a call can be attributed",
+    seededCustomers.every((c) => c.assigned_user_id !== null)
+  );
+  check(
+    "demo scripts survived the round trip through SQLite",
+    seededCustomers
+      .filter((c) => c.demo_script !== "[]")
+      .every((c) => {
+        const script = JSON.parse(c.demo_script) as Array<{ speaker: string }>;
+        return (
+          script.length === 8 &&
+          script.some((l) => l.speaker === "rep") &&
+          script.some((l) => l.speaker === "customer")
+        );
+      })
+  );
+  eq(
+    "exactly three seeded customers have a script; the live-call one has none",
+    seededCustomers.filter((c) => c.demo_script !== "[]").length,
+    3
+  );
+  check(
+    "a fresh reset leaves no deal marked approved",
+    seededDeals.every(
+      (d) => d.approved_by_user_id === null && d.last_call_id === null
+    )
+  );
+
+  const persisted = buildKhata({
+    callId: "call_selfcheck_a",
+    customerId: "cus_mn_iyer",
+    consentAt: "2026-08-08T05:00:00.000Z",
+    startedAt: "2026-08-08T05:00:01.000Z",
+    endedAt: "2026-08-08T05:04:00.000Z",
+    claims: [sampleClaim],
+    verdicts: [sampleVerdict],
+    costs: [],
+    coverage: { utterances: 1, checked: 1, unchecked: 0 },
+    customerSignals: [],
+    prevHash: null,
+  });
+  // khatas.call_id references calls(call_id), so the call row goes first
+  // — the same order the close route uses.
+  upsertCall({
+    call_id: persisted.callId,
+    user_id: ownerOf(persisted.customerId) ?? "",
+    customer_id: persisted.customerId,
+    started_at: persisted.startedAt,
+    ended_at: persisted.endedAt,
+    consent_at: persisted.consentAt,
+    claims_checked: persisted.claims.length,
+    verified_count: 1,
+    wrong_count: 0,
+    stale_count: 0,
+    unsupported_count: 0,
+    coverage_complete: 1,
+    cost_inr: 0,
+  });
+  await writeKhata(persisted);
+
+  const readBack = await readKhata("call_selfcheck_a");
+  check("a khata written to SQLite reads back", readBack !== null);
+  if (readBack) {
+    eq("...with the same callId", readBack.callId, persisted.callId);
+    eq("...with the same claim count", readBack.claims.length, 1);
+    // The property the plaintext-first ordering exists to protect, now
+    // across a database round trip as well as an encryption one.
+    eq("...with the hash unchanged", readBack.hash, persisted.hash);
+    check("...and it still verifies", verifyKhata(readBack));
+  }
+
+  const second = buildKhata({
+    callId: "call_selfcheck_b",
+    customerId: "cus_fr_qureshi",
+    consentAt: null,
+    startedAt: "2026-08-08T06:00:00.000Z",
+    endedAt: "2026-08-08T06:03:00.000Z",
+    claims: [],
+    verdicts: [],
+    costs: [],
+    coverage: { utterances: 0, checked: 0, unchecked: 0 },
+    customerSignals: [],
+    prevHash: await readPrevHash(),
+  });
+  upsertCall({
+    call_id: second.callId,
+    user_id: ownerOf(second.customerId) ?? "",
+    customer_id: second.customerId,
+    started_at: second.startedAt,
+    ended_at: second.endedAt,
+    consent_at: null,
+    claims_checked: 0,
+    verified_count: 0,
+    wrong_count: 0,
+    stale_count: 0,
+    unsupported_count: 0,
+    coverage_complete: 1,
+    cost_inr: 0,
+  });
+  await writeKhata(second);
+  eq("the second khata chains to the first", second.prevHash, persisted.hash);
+
+  const all = await listKhatas();
+  const first = all.find((k) => k.callId === "call_selfcheck_a");
+  const next = all.find((k) => k.callId === "call_selfcheck_b");
+  check(
+    "both khatas come back from the database",
+    first !== undefined && next !== undefined
+  );
+  if (first && next) {
+    eq("the chain holds when re-read from the DB", next.prevHash, first.hash);
+    check(
+      "both still verify after persistence",
+      verifyKhata(first) && verifyKhata(next)
+    );
+  }
+
+  // The console's only data source, called with each role. This is the
+  // assertion that matters for F1: not that a link was hidden, but that
+  // an admin session asking the console for data gets none.
+  const { buildBootstrap } = await import("./bootstrap");
+  const adminSession = {
+    uid: "usr_admin_pr",
+    role: "admin" as const,
+    name: "Priya Raghavan",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  };
+  const repSession = {
+    uid: ownerOf("cus_mn_iyer") ?? "",
+    role: "sales" as const,
+    name: "rep",
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  };
+
+  const adminBoot = buildBootstrap(adminSession, false);
+  eq("an admin gets no customers from the console route", adminBoot.customers.length, 0);
+  eq("...no deals either", adminBoot.deals.length, 0);
+  eq("...and the response is not ok", adminBoot.ok, false);
+  check(
+    "...with a message saying why, not a bare empty list",
+    adminBoot.message !== null && adminBoot.message.length > 60
+  );
+
+  const repBoot = buildBootstrap(repSession, false);
+  check("a rep gets their own customers", repBoot.ok && repBoot.customers.length > 0);
+  check(
+    "...and only their own",
+    repBoot.customers.every((c) => c.assignedUserId === repSession.uid)
+  );
+  eq(
+    "an unauthenticated request gets nothing",
+    buildBootstrap(null, false).customers.length,
+    0
+  );
+
+  // Scoping, against real rows. The point of these is that the guard is
+  // a WHERE clause: a rep asking for another rep's call gets the same
+  // answer as a rep asking for a call id that does not exist, and the
+  // khata behind it is never decrypted.
+  const { getCallForUser, listCallsByRep, listCallsForUser, getCall } =
+    await import("./db");
+
+  const ownerA = ownerOf("cus_mn_iyer") ?? "";
+  // Deliberately NOT the owner of the other seeded customer: both demo
+  // customers happen to belong to the same rep, so picking that one
+  // would have compared a rep against themselves and passed for the
+  // wrong reason.
+  const otherRep =
+    listUsers().find((u) => u.role === "sales" && u.id !== ownerA)?.id ?? "";
+  check("there is a second sales user to test isolation against", otherRep !== "");
+  check("...who is not the owner", ownerA !== otherRep, `${ownerA} / ${otherRep}`);
+
+  check(
+    "the owning rep can open their own call",
+    getCallForUser("call_selfcheck_a", ownerA, "sales") !== null
+  );
+  check(
+    "another rep gets null for it, not a filtered row",
+    getCallForUser("call_selfcheck_a", otherRep, "sales") === null
+  );
+  check(
+    "a call that does not exist is indistinguishable from one that is not yours",
+    getCallForUser("call_no_such_thing", ownerA, "sales") === null
+  );
+  check(
+    "an admin can open any call",
+    getCallForUser("call_selfcheck_a", "usr_admin_pr", "admin") !== null
+  );
+  check(
+    "the row itself exists — the null above was the scope, not a missing call",
+    getCall("call_selfcheck_a") !== null
+  );
+
+  const repACalls = listCallsByRep(ownerA).map((c) => c.call_id);
+  check(
+    "a rep drill-down lists that rep's calls",
+    repACalls.includes("call_selfcheck_a")
+  );
+  const scopedOther = listCallsForUser(otherRep, "sales").map((c) => c.call_id);
+  check(
+    "and another rep's list contains neither of them",
+    !scopedOther.includes("call_selfcheck_a") &&
+      !scopedOther.includes("call_selfcheck_b")
+  );
+  const adminCalls = listCallsForUser("usr_admin_pr", "admin").map((c) => c.call_id);
+  check(
+    "an admin sees both",
+    adminCalls.includes("call_selfcheck_a") && adminCalls.includes("call_selfcheck_b")
+  );
+
+  // Children first, or the foreign key stops us cleaning up.
+  db()
+    .prepare("DELETE FROM khatas WHERE call_id IN (?, ?)")
+    .run("call_selfcheck_a", "call_selfcheck_b");
+  db()
+    .prepare("DELETE FROM calls WHERE call_id IN (?, ?)")
+    .run("call_selfcheck_a", "call_selfcheck_b");
+}
+
+function authChecks(): void {
+  console.log("\n-- authentication --");
+
+  const hashed = hashPassword("khata-demo-2026");
+  check("a hash is scrypt-formatted", hashed.startsWith("scrypt$"));
+  check("the plaintext is not in the hash", !hashed.includes("khata-demo-2026"));
+  check("the right password verifies", verifyPassword("khata-demo-2026", hashed));
+  check("a wrong password does not", !verifyPassword("khata-demo-2027", hashed));
+  check("an empty password does not", !verifyPassword("", hashed));
+  check(
+    "two hashes of the same password differ (salted)",
+    hashPassword("same") !== hashPassword("same")
+  );
+  check("a malformed stored hash is rejected", !verifyPassword("x", "garbage"));
+
+  const NOW_S = 1_800_000_000;
+  const token = createSessionToken(
+    { id: "rep_nb_04", role: "sales", name: "Nikhil Bhandari" },
+    NOW_S
+  );
+
+  const decoded = readSessionToken(token, NOW_S);
+  check("a fresh token decodes", decoded !== null);
+  if (decoded) {
+    eq("...to the right user", decoded.uid, "rep_nb_04");
+    eq("...with the right role", decoded.role, "sales");
+  }
+
+  // The whole point of signing: an edited payload must not survive.
+  const [payload, signature] = token.split(".");
+  const forgedPayload = Buffer.from(
+    JSON.stringify({
+      uid: "usr_admin_pr",
+      role: "admin",
+      name: "Priya Raghavan",
+      exp: NOW_S + 3600,
+    })
+  )
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  check(
+    "a payload swapped for an admin claim is rejected",
+    readSessionToken(`${forgedPayload}.${signature}`, NOW_S) === null
+  );
+  check(
+    "an unsigned token is rejected",
+    readSessionToken(payload, NOW_S) === null
+  );
+  check(
+    "a token with a mangled signature is rejected",
+    readSessionToken(`${payload}.${signature.slice(0, -1)}x`, NOW_S) === null
+  );
+  check(
+    "an expired token is rejected",
+    readSessionToken(token, NOW_S + 60 * 60 * 13) === null
+  );
+  check("an empty token is rejected", readSessionToken("", NOW_S) === null);
+}
+
+authChecks();
+
+function metricsChecks(): void {
+  console.log("\n-- dashboard metrics --");
+
+  function khataWith(
+    callId: string,
+    statuses: VerdictStatus[],
+    opts: { cost?: number; unchecked?: number; corrections?: number } = {}
+  ) {
+    const claims = statuses.map((_, i) =>
+      makeClaim("processing_fee", 199, "inr", 3, `line ${i}`)
+    );
+    const verdicts = statuses.map((status, i) => ({
+      ...adjudicate(claims[i], truth, { now: NOW }),
+      status,
+      sourceField:
+        status === "WRONG" ? "tenures.6.customerInterestPercent" : "tenures.3.processingFee",
+      correction: i < (opts.corrections ?? 0) ? "say this" : null,
+    }));
+    return buildKhata({
+      callId,
+      customerId: "cus_mn_iyer",
+      consentAt: null,
+      startedAt: "2026-08-08T05:00:00.000Z",
+      endedAt: "2026-08-08T05:05:00.000Z",
+      claims,
+      verdicts,
+      costs: opts.cost
+        ? [
+            {
+              at: "2026-08-08T05:00:00.000Z",
+              stage: "extract" as const,
+              model: "m",
+              inputTokens: 1,
+              outputTokens: 1,
+              inr: opts.cost,
+            },
+          ]
+        : [],
+      coverage: {
+        utterances: statuses.length,
+        checked: statuses.length - (opts.unchecked ?? 0),
+        unchecked: opts.unchecked ?? 0,
+      },
+      customerSignals: [],
+      prevHash: null,
+    });
+  }
+
+  const a = factsFromKhata(
+    khataWith("c_a", ["VERIFIED", "WRONG", "STALE"], { cost: 0.2, corrections: 1 }),
+    "rep_nb_04",
+    true
+  );
+  const bFacts = factsFromKhata(
+    khataWith("c_b", ["VERIFIED", "VERIFIED"], { cost: 0.1, unchecked: 1 }),
+    "rep_sr_11",
+    false
+  );
+
+  eq("verdicts are counted by status", `${a.verified}/${a.wrong}/${a.stale}`, "1/1/1");
+  eq("corrections offered are counted", a.correctionsOffered, 1);
+  eq("approval is recorded", a.approved, true);
+  eq("a misquoted field is captured", a.misquotedFields.length, 1);
+  eq("full coverage is detected", a.coverageComplete, true);
+  eq("partial coverage is detected", bFacts.coverageComplete, false);
+
+  const t = totals([a, bFacts]);
+  eq("calls are summed", t.calls, 2);
+  eq("misquotes are summed", t.misquotes, 1);
+  eq("misquote rate is wrong over verdicts", t.misquoteRate, 1 / 5);
+  eq("cost is summed", Number(t.costInr.toFixed(2)), 0.3);
+  eq("fully checked calls are counted", t.fullyCheckedCalls, 1);
+  eq("approved calls are counted", t.approvedCalls, 1);
+
+  // The rule that keeps a dashboard honest.
+  const empty = totals([]);
+  eq("no verdicts means a null rate, never 0%", empty.misquoteRate, null);
+  eq("no claims means a null cost-per-claim", empty.costPerClaim, null);
+
+  const top = topMisquotedField([a, bFacts]);
+  check("the most-misquoted field is identified", top !== null);
+  if (top) {
+    eq("...as the field the adjudicator cited", top.field, "tenures.6.customerInterestPercent");
+    eq("...with its count", top.count, 1);
+  }
+  eq("no misquotes means no top field", topMisquotedField([bFacts]), null);
+
+  eq(
+    "a dot path reads as something sayable",
+    fieldLabel("tenures.6.customerInterestPercent"),
+    "6-month customer interest percent"
+  );
+  eq("a flat path reads too", fieldLabel("lateFee.flatInr"), "flat");
+
+  // A rep with nothing checked must not top a table sorted by how often
+  // people are wrong — an empty rate is not a good rate.
+  const silent = factsFromKhata(khataWith("c_c", []), "rep_am_07", false);
+  const ranked = byRep([bFacts, a, silent]);
+  eq("worst misquote rate sorts first", ranked[0].userId, "rep_nb_04");
+  eq("a rep with no verdicts sorts last", ranked[ranked.length - 1].userId, "rep_am_07");
+  eq("...and shows a null rate", ranked[ranked.length - 1].misquoteRate, null);
+
+  // Role scoping is a filter on facts, exactly as the page applies it.
+  const mine = [a, bFacts, silent].filter((f) => f.userId === "rep_nb_04");
+  eq("a sales scope sees only its own calls", mine.length, 1);
+  eq("...and its totals reflect only those", totals(mine).calls, 1);
+}
+
+metricsChecks();
+
+function accessChecks(): void {
+  console.log("\n-- role separation --");
+
+  // Two different jobs, not one job with two permission sets.
+  check("a rep places calls", canPlaceCalls("sales"));
+  check("an admin does not place calls", !canPlaceCalls("admin"));
+  check("an admin reads across reps", canReviewOtherReps("admin"));
+  check("a rep does not read across reps", !canReviewOtherReps("sales"));
+
+  eq("a rep lands on the console", homeFor("sales"), "/console");
+  eq("an admin lands on the dashboard", homeFor("admin"), "/dashboard");
+
+  // A role never sees a link it cannot open.
+  const adminNav = navLinks("admin").map((l) => l.href);
+  const salesNav = navLinks("sales").map((l) => l.href);
+  check("the admin nav has no console link", !adminNav.includes("/console"));
+  check("the sales nav has one", salesNav.includes("/console"));
+  check("both navs reach the dashboard", adminNav.includes("/dashboard") && salesNav.includes("/dashboard"));
+
+  // The refusal has to say why. A redirect with no explanation reads as
+  // a bug, and the reason is the design.
+  check("the denial explains itself", CONSOLE_DENIED_MESSAGE.length > 60);
+  check("the read-only note exists", ADMIN_READ_ONLY_NOTE.includes("read-only"));
+}
+
+accessChecks();
+
+function inboundCallChecks(): void {
+  console.log("\n-- inbound call flow --");
+
+  // The guard the whole unidentified-caller path rests on. This is not a
+  // new behaviour; it is the adjudicator already refusing to compute an
+  // EMI it has no basket for. Asserted so it cannot quietly regress.
+  eq(
+    "an EMI claim with no ticket -> UNSUPPORTED",
+    statusOf("emi_amount", 9466.67, "inr", 3, "your emi works out to about nine thousand four hundred"),
+    "UNSUPPORTED"
+  );
+  eq(
+    "a total-payable claim with no ticket -> UNSUPPORTED",
+    statusOf("total_payable", 28634.82, "inr", 3, "you will pay twenty eight thousand six hundred in total"),
+    "UNSUPPORTED"
+  );
+  eq(
+    "a zero ticket is the same as no ticket",
+    statusOf("emi_amount", 9466.67, "inr", 3, "your emi is nine four six six", 0),
+    "UNSUPPORTED"
+  );
+  // ...and the same claim IS checkable once the caller is known, which is
+  // what proves UNSUPPORTED above was about the missing ticket and not a
+  // claim type we simply cannot handle.
+  eq(
+    "the same EMI claim with a ticket -> VERIFIED",
+    statusOf("emi_amount", 9466.67, "inr", 3, "your emi works out to nine four six six point six seven", 28400),
+    "VERIFIED"
+  );
+
+  // Product-terms claims do not depend on who is calling.
+  eq(
+    "a fee claim still adjudicates for an unknown caller",
+    statusOf("processing_fee", 199, "inr", 3, "the processing fee is one ninety nine"),
+    "VERIFIED"
+  );
+  eq(
+    "...including a wrong one",
+    statusOf("interest", 0, "percent", 6, "the six month plan is zero percent interest"),
+    "WRONG"
+  );
+  eq(
+    "...and a stale one",
+    statusOf("processing_fee", 99, "inr", 3, "it is ninety nine rupees processing on the three month"),
+    "STALE"
+  );
+
+  eq("no customer means no ticket", ticketForCall(null), null);
+  eq("a zero ticket reads as no ticket", ticketForCall({ cart: { ticketInr: 0 } }), null);
+  eq("a real ticket passes through", ticketForCall({ cart: { ticketInr: 28400 } }), 28400);
+
+  // Search. The list is already scoped by /api/bootstrap, so these are
+  // about ranking and about what CANNOT appear.
+  const mine = [
+    { id: "cus_mn_iyer", name: "Meenakshi Iyer", city: "Coimbatore" },
+    { id: "cus_fr_qureshi", name: "Farhan Qureshi", city: "Lucknow" },
+  ];
+  const theirs = { id: "cus_rd_deshmukh", name: "Rohit Deshmukh", city: "Nashik" };
+
+  eq("an empty query returns nothing, not everything", searchCustomers(mine, "   ").length, 0);
+  eq("a name prefix matches", searchCustomers(mine, "meen")[0]?.id, "cus_mn_iyer");
+  eq("a surname matches", searchCustomers(mine, "qureshi")[0]?.id, "cus_fr_qureshi");
+  eq("search is case-insensitive", searchCustomers(mine, "FARHAN")[0]?.id, "cus_fr_qureshi");
+  eq("a city matches too", searchCustomers(mine, "lucknow")[0]?.id, "cus_fr_qureshi");
+  eq("a name beats a city", searchCustomers(
+    [{ id: "a", name: "Meera Nair", city: "Kochi" }, { id: "b", name: "Anil Rao", city: "Meerut" }],
+    "mee"
+  )[0]?.id, "a");
+
+  // THE ONE THAT MATTERS. A rep cannot reach another rep's customer by
+  // searching, because that customer was never in the list the browser
+  // holds — /api/bootstrap scoped it away with a WHERE clause.
+  eq(
+    "searching another rep's customer by full name finds nothing",
+    searchCustomers(mine, "Rohit Deshmukh").length,
+    0
+  );
+  eq("...by surname, nothing", searchCustomers(mine, "deshmukh").length, 0);
+  eq("...by their city, nothing", searchCustomers(mine, "nashik").length, 0);
+  check(
+    "...and it is absent because it was never fetched, not filtered out",
+    !mine.some((c) => c.id === theirs.id)
+  );
+
+  eq(
+    "a ringing call cannot be closed",
+    closeBlockedBecause("incoming", false) !== null,
+    true
+  );
+  check(
+    "an answered but unidentified call says why it cannot close",
+    (closeBlockedBecause("answered", false) ?? "").includes("Identify the caller")
+  );
+  eq("an identified call can close", closeBlockedBecause("identified", true), null);
+}
+
+inboundCallChecks();
+
+function liveCallChecks(): void {
+  console.log("\n-- live call: Anjali Bhatt --");
+
+  const TICKET = 53700;
+  const MONTHS = 9;
+  const t = truth.tenures["9"];
+
+  // Her basket, through emi.ts. These are the figures a misquoted EMI on
+  // the call is measured against, so they are pinned here.
+  eq("her EMI over 9 months at 14% is 6320.10", calculateEmi(TICKET, MONTHS, 14), 6320.1);
+  eq(
+    "her total payable is 57469.76",
+    totalPayable(TICKET, MONTHS, 14, t.processingFee, t.gstPercent),
+    57469.76
+  );
+  eq(
+    "she pays 3769.76 above sticker",
+    noCostEmiRealCost(TICKET, MONTHS, 14, t.processingFee, t.gstPercent),
+    3769.76
+  );
+  // The whole point of a fourth customer: her figures must not be
+  // confusable with Meenakshi's, or a misquoted EMI proves nothing.
+  check(
+    "her EMI is nowhere near Meenakshi's 28,400 over 6 months",
+    Math.abs(calculateEmi(TICKET, MONTHS, 14) - calculateEmi(28400, 6, 14)) > 1000,
+    `${calculateEmi(TICKET, MONTHS, 14)} vs ${calculateEmi(28400, 6, 14)}`
+  );
+
+  // Replay must not offer her, and the three scripted customers must be
+  // untouched. Selecting by id rather than iterating keeps this fast and
+  // keeps a fourth customer from changing what the replay tests mean.
+  const script = LIVE_SCRIPT;
+  check("the live script has both sides", script.some((l) => l.speaker === "rep") && script.some((l) => l.speaker === "customer"));
+
+  // Every rep line, through the real pipeline. Nothing here asserts a
+  // per-line expectation; it asserts the shape the demo needs.
+  const seen: Record<string, number> = {};
+  for (const line of script) {
+    if (line.speaker !== "rep") continue;
+    const { redacted } = redact(line.text, { name: "Anjali Bhatt" });
+    for (const claim of stubExtractAll(redacted, "sc")) {
+      const v = adjudicate(claim, truth, { ticketInr: TICKET });
+      seen[v.status] = (seen[v.status] ?? 0) + 1;
+    }
+  }
+  eq("the script produces exactly one STALE", seen.STALE ?? 0, 1);
+  eq("...exactly two WRONG", seen.WRONG ?? 0, 2);
+  check("...and at least two VERIFIED", (seen.VERIFIED ?? 0) >= 2, String(seen.VERIFIED));
+  eq("...and nothing UNSUPPORTED, because her basket is known", seen.UNSUPPORTED ?? 0, 0);
+
+  // One of the two WRONG verdicts must be the basket-dependent one.
+  let basketMisquote = false;
+  for (const line of script) {
+    if (line.speaker !== "rep") continue;
+    const { redacted } = redact(line.text, { name: "Anjali Bhatt" });
+    for (const claim of stubExtractAll(redacted, "sc")) {
+      const v = adjudicate(claim, truth, { ticketInr: TICKET });
+      if (v.status === "WRONG" && claim.type === "emi_amount") basketMisquote = true;
+    }
+  }
+  check("one WRONG verdict is an EMI figure, not a price-list figure", basketMisquote);
+
+  // ...and that same line is UNSUPPORTED without her, which is what makes
+  // it a claim about her rather than about the product.
+  let unsupportedWithoutTicket = false;
+  for (const line of script) {
+    if (line.speaker !== "rep") continue;
+    const { redacted } = redact(line.text, { name: "Anjali Bhatt" });
+    for (const claim of stubExtractAll(redacted, "sc")) {
+      if (claim.type !== "emi_amount") continue;
+      if (adjudicate(claim, truth, { ticketInr: null }).status === "UNSUPPORTED") {
+        unsupportedWithoutTicket = true;
+      }
+    }
+  }
+  check("...and it is UNSUPPORTED without her basket", unsupportedWithoutTicket);
+
+  eq("the script targets the live customer", LIVE_CUSTOMER_ID, "cus_ab_bhatt");
+}
+
+liveCallChecks();
+
+asyncChecks()
+  .then(dbChecks)
+  .catch((e) => {
+    failed++;
+    console.log(`FAIL  async checks threw\n        ${String(e)}`);
+  })
+  .then(() => {
+    console.log(
+      `\n${passed + failed} checks — ${passed} passed, ${failed} failed.\n`
+    );
+    process.exitCode = failed > 0 ? 1 : 0;
+  });

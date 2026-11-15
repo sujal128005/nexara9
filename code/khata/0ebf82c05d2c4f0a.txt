@@ -1,0 +1,414 @@
+/**
+ * Read-only product reference at /product.
+ *
+ * Server component. Reads the SAME data/product_truth.json the adjudicator
+ * reads, and computes every worked example with the SAME lib/emi.ts the
+ * verdicts use.
+ *
+ * The rule for this file: no product value is written into JSX. Every
+ * figure below comes out of the imported object or out of a function in
+ * emi.ts. Column headings and field labels are prose; numbers are not.
+ * That is what stops the reference page and the verification engine
+ * drifting apart — there is nowhere for a stale number to hide, because
+ * there are no numbers here to go stale.
+ */
+
+import { AppHeader } from "@/app/header";
+import { TABLE, TD, TD_NUM, TD_NUM_MUTED, TH, TH_NUM, THEAD_ROW, TR } from "@/app/table";
+import { currentSession } from "@/lib/session";
+import truthJson from "@/data/product_truth.json";
+import type { ProductTruth, TenureTerms } from "@/lib/adjudicate";
+import {
+  calculateEmi,
+  effectiveApr,
+  noCostEmiRealCost,
+  totalPayable,
+} from "@/lib/emi";
+
+const truth = truthJson as unknown as ProductTruth;
+
+/**
+ * Illustrative basket size for the worked examples. This is an INPUT to
+ * the maths, not a product term — it is the only number typed into this
+ * file, and nothing is verified against it.
+ */
+const SAMPLE_TICKET_INR = 28400;
+
+function inr(n: number): string {
+  const fixed = Number.isInteger(n) ? n.toFixed(0) : n.toFixed(2);
+  const [whole, paise] = fixed.split(".");
+  return "₹" + Number(whole).toLocaleString("en-IN") + (paise ? "." + paise : "");
+}
+
+function pct(n: number): string {
+  return `${n}%`;
+}
+
+/** Tenure keys in numeric order, straight off the file. */
+function tenureEntries(
+  source: Record<string, TenureTerms>
+): Array<[string, TenureTerms]> {
+  return Object.entries(source).sort(([a], [b]) => Number(a) - Number(b));
+}
+
+/**
+ * What actually changed between an archived version and the one in force.
+ * Computed by comparing the two objects rather than read from a prose
+ * note, so it cannot describe a change that did not happen.
+ */
+function tenureDiffs(
+  old: Record<string, TenureTerms>,
+  current: Record<string, TenureTerms>
+): Array<{ tenure: string; field: string; from: string; to: string }> {
+  const out: Array<{ tenure: string; field: string; from: string; to: string }> = [];
+  for (const [key, oldTerms] of tenureEntries(old)) {
+    const now = current[key];
+    if (!now) continue;
+    if (oldTerms.processingFee !== now.processingFee) {
+      out.push({
+        tenure: key,
+        field: "processing fee",
+        from: inr(oldTerms.processingFee),
+        to: inr(now.processingFee),
+      });
+    }
+    if (oldTerms.customerInterestPercent !== now.customerInterestPercent) {
+      out.push({
+        tenure: key,
+        field: "customer interest",
+        from: pct(oldTerms.customerInterestPercent),
+        to: pct(now.customerInterestPercent),
+      });
+    }
+    if (oldTerms.gstPercent !== now.gstPercent) {
+      out.push({
+        tenure: key,
+        field: "GST",
+        from: pct(oldTerms.gstPercent),
+        to: pct(now.gstPercent),
+      });
+    }
+  }
+  return out;
+}
+
+const LABEL = "font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40";
+const CELL = "py-3 pr-6 font-mono text-xs text-ink last:pr-0";
+const CELL_MUTED = "py-3 pr-6 font-mono text-xs text-ink/50 last:pr-0";
+
+export default async function ProductPage() {
+  const tenures = tenureEntries(truth.tenures);
+  const session = await currentSession();
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-12 bg-paper px-8 py-12">
+      {session && (
+        <AppHeader
+          role={session.role}
+          name={session.name}
+          page="product terms"
+          current="/product"
+        />
+      )}
+
+      <section className={session ? "-mt-4" : ""}>
+        <h1 className="font-sans text-xl font-semibold tracking-tight text-ink">
+          {truth.product}
+        </h1>
+        <p className="mt-1 font-mono text-xs text-ink/45">
+          v{truth.version}
+          <span className="mx-2 text-ink/30">&middot;</span>
+          effective {truth.effectiveFrom}
+        </p>
+      </section>
+
+      <p className="max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+        This page renders <span className="font-mono text-xs">product_truth.json</span>{" "}
+        directly. It is the same file the adjudicator checks every spoken claim
+        against, and the worked examples below are computed by the same
+        functions that produce the verdicts. Nothing here is transcribed by
+        hand, so this page cannot disagree with what the console decides.
+      </p>
+
+      <section>
+        <h2 className={LABEL}>Tenures</h2>
+        <table className={TABLE}>
+          <thead>
+            <tr className={THEAD_ROW}>
+              {[
+                { label: "Plan", align: "text-left" },
+                { label: "Processing fee", align: "text-right" },
+                { label: "GST", align: "text-right" },
+                { label: "Customer interest", align: "text-right" },
+                { label: "Merchant-subsidised", align: "text-right" },
+              ].map((h) => (
+                <th
+                  key={h.label}
+                  className={h.align === "text-right" ? TH_NUM : TH}
+                >
+                  {h.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tenures.map(([key, t]) => (
+              <tr key={key} className={TR}>
+                <td className={TD}>{t.label}</td>
+                <td className={TD_NUM}>
+                  {inr(t.processingFee)}
+                </td>
+                <td className={TD_NUM_MUTED}>
+                  {pct(t.gstPercent)}
+                </td>
+                <td className={TD_NUM}>
+                  {pct(t.customerInterestPercent)}
+                </td>
+                <td className={TD_NUM_MUTED}>
+                  {t.merchantSubsidised ? "yes" : "no"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2 className={LABEL}>Worked example — {inr(SAMPLE_TICKET_INR)} basket</h2>
+        <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+          Computed by <span className="font-mono text-xs">lib/emi.ts</span> at page
+          render. Effective APR accounts for the processing fee and its GST, which
+          is why a plan quoted at zero percent still carries a real annual cost.
+        </p>
+        <table className={TABLE}>
+          <thead>
+            <tr className={THEAD_ROW}>
+              {[
+                { label: "Plan", align: "text-left" },
+                { label: "Monthly EMI", align: "text-right" },
+                { label: "Total payable", align: "text-right" },
+                { label: "Above sticker", align: "text-right" },
+                { label: "Effective APR", align: "text-right" },
+              ].map((h) => (
+                <th
+                  key={h.label}
+                  className={h.align === "text-right" ? TH_NUM : TH}
+                >
+                  {h.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tenures.map(([key, t]) => {
+              const months = Number(key);
+              return (
+                <tr key={key} className={TR}>
+                  <td className={TD}>{t.label}</td>
+                  <td className={TD_NUM}>
+                    {inr(
+                      calculateEmi(
+                        SAMPLE_TICKET_INR,
+                        months,
+                        t.customerInterestPercent
+                      )
+                    )}
+                  </td>
+                  <td className={TD_NUM}>
+                    {inr(
+                      totalPayable(
+                        SAMPLE_TICKET_INR,
+                        months,
+                        t.customerInterestPercent,
+                        t.processingFee,
+                        t.gstPercent
+                      )
+                    )}
+                  </td>
+                  <td className={TD_NUM}>
+                    {inr(
+                      noCostEmiRealCost(
+                        SAMPLE_TICKET_INR,
+                        months,
+                        t.customerInterestPercent,
+                        t.processingFee,
+                        t.gstPercent
+                      )
+                    )}
+                  </td>
+                  <td className={TD_NUM}>
+                    {pct(
+                      effectiveApr(
+                        SAMPLE_TICKET_INR,
+                        months,
+                        t.customerInterestPercent,
+                        t.processingFee,
+                        t.gstPercent
+                      )
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+
+      <div className="grid grid-cols-1 gap-10 md:grid-cols-3">
+        <section>
+          <h2 className={LABEL}>Late payment</h2>
+          <table className="mt-3 w-full border-collapse">
+            <tbody>
+              <tr className={TR}>
+                <td className={CELL_MUTED}>flat fee</td>
+                <td className={TD_NUM}>
+                  {inr(truth.lateFee.flatInr)}
+                </td>
+              </tr>
+              <tr className={TR}>
+                <td className={CELL_MUTED}>per month overdue</td>
+                <td className={TD_NUM}>
+                  {pct(truth.lateFee.monthlyPercentOnOverduePrincipal)}
+                </td>
+              </tr>
+              <tr className={TR}>
+                <td className={CELL_MUTED}>grace period</td>
+                <td className={TD_NUM}>
+                  {truth.lateFee.gracePeriodDays} days
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section>
+          <h2 className={LABEL}>Eligibility</h2>
+          <table className="mt-3 w-full border-collapse">
+            <tbody>
+              <tr className={TR}>
+                <td className={CELL_MUTED}>minimum age</td>
+                <td className={TD_NUM}>
+                  {truth.eligibility.minAgeYears}
+                </td>
+              </tr>
+              <tr className={TR}>
+                <td className={CELL_MUTED}>minimum basket</td>
+                <td className={TD_NUM}>
+                  {inr(truth.eligibility.minTicketInr)}
+                </td>
+              </tr>
+              <tr className={TR}>
+                <td className={CELL_MUTED}>maximum basket</td>
+                <td className={TD_NUM}>
+                  {inr(truth.eligibility.maxTicketInr)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section>
+          <h2 className={LABEL}>KYC</h2>
+          <table className="mt-3 w-full border-collapse">
+            <tbody>
+              {truth.kyc.methods.map((method) => (
+                <tr key={method} className={TR}>
+                  <td className={CELL_MUTED}>accepted</td>
+                  <td className={TD_NUM}>
+                    {method}
+                  </td>
+                </tr>
+              ))}
+              <tr className={TR}>
+                <td className={CELL_MUTED}>PAN required</td>
+                <td className={TD_NUM}>
+                  {truth.kyc.panRequired ? "yes" : "no"}
+                </td>
+              </tr>
+              <tr className={TR}>
+                <td className={CELL_MUTED}>physical documents</td>
+                <td className={TD_NUM}>
+                  {truth.kyc.physicalDocsRequired ? "yes" : "no"}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <section className="border-t border-ink/30 pt-8">
+        <h2 className="font-sans text-lg font-semibold tracking-tight text-ink">
+          Version history
+        </h2>
+        <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+          A figure that was correct under an earlier version is not the same
+          mistake as one that was never correct. The console marks the first as
+          STALE and names the version it came from — this is that list.
+        </p>
+
+        <div className="mt-6 space-y-8">
+          <article>
+            <div className="flex flex-wrap items-baseline gap-x-5 font-mono text-xs">
+              <span className="text-ink">v{truth.version}</span>
+              <span className="text-ink/50">
+                {truth.effectiveFrom} — in force
+              </span>
+              {truth.supersedes && (
+                <span className="text-ink/50">supersedes v{truth.supersedes}</span>
+              )}
+            </div>
+          </article>
+
+          {truth.archive
+            .slice()
+            .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))
+            .map((entry) => {
+              const diffs = tenureDiffs(entry.tenures, truth.tenures);
+              return (
+                <article key={entry.version} className="border-t border-hairline pt-5">
+                  <div className="flex flex-wrap items-baseline gap-x-5 font-mono text-xs">
+                    <span className="text-ink">v{entry.version}</span>
+                    <span className="text-ink/50">
+                      {entry.effectiveFrom} — {entry.effectiveTo}
+                    </span>
+                    <span className="text-ink/50">superseded</span>
+                  </div>
+
+                  <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+                    {entry.changeNote}
+                  </p>
+
+                  {diffs.length > 0 && (
+                    <table className="mt-3 w-full max-w-xl border-collapse">
+                      <tbody>
+                        {diffs.map((d) => (
+                          <tr
+                            key={`${d.tenure}-${d.field}`}
+                            className={TR}
+                          >
+                            <td className={CELL_MUTED}>
+                              {d.tenure}-month {d.field}
+                            </td>
+                            <td className={CELL}>
+                              {d.from}
+                              <span className="mx-2 text-ink/30">&rarr;</span>
+                              {d.to}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </article>
+              );
+            })}
+        </div>
+      </section>
+
+      <footer className="border-t border-hairline pt-5 font-mono text-[11px] text-ink/40">
+        Rendered from data/product_truth.json v{truth.version}. Examples computed
+        by lib/emi.ts on a {inr(SAMPLE_TICKET_INR)} basket.
+      </footer>
+    </main>
+  );
+}

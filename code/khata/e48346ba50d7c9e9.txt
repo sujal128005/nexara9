@@ -1,0 +1,2183 @@
+"use client";
+
+/**
+ * The call console.
+ *
+ *   finalised utterance -> redact -> triage -> extract -> adjudicate -> screen
+ *   WRONG verdict       -> draft correction -> RE-ADJUDICATE IT -> screen
+ *   call end            -> khata (written) + proposal (needs approval)
+ *
+ * Two rules here are load-bearing rather than cosmetic:
+ *   1. Raw text never leaves this component. redact() runs before the
+ *      first fetch; only `redacted` is ever POSTed.
+ *   2. No model output is displayed as fact. Verdicts are computed
+ *      locally by adjudicate(); corrections are re-checked before display;
+ *      CRM writes wait for a human.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { LogoutButton } from "@/app/logout-button";
+import { navLinks } from "@/lib/access";
+import {
+  AUDIO_PATH_NOTE,
+  closeBlockedBecause,
+  searchCustomers,
+  ticketForCall,
+  UNIDENTIFIED_NOTE,
+} from "@/lib/callflow";
+import type { CallPhase } from "@/lib/callflow";
+import { useListener } from "@/lib/useListener";
+import { redact, unredact } from "@/lib/redact";
+import type { RedactionMap } from "@/lib/redact";
+import { adjudicate } from "@/lib/adjudicate";
+import type { ProductTruth } from "@/lib/adjudicate";
+import type {
+  CallCoverage,
+  Claim,
+  CostEntry,
+  CustomerIntent,
+  CustomerSentiment,
+  CustomerSignal,
+  KhataRecord,
+  Utterance,
+  Verdict,
+} from "@/lib/types";
+
+// product_truth.json stays a static import: it is a spec, not a dataset,
+// and the adjudicator running in this file must read the identical bytes.
+// Customers and deals now live in SQLite and arrive via /api/bootstrap.
+import truthJson from "@/data/product_truth.json";
+
+// data shapes
+
+interface DemoCustomer {
+  id: string;
+  name: string;
+  city: string;
+  cart: { item: string; ticketInr: number };
+  interestedTenureMonths: number;
+  demoScript: ScriptLine[];
+  assignedUserId: string | null;
+}
+
+/**
+ * One line of the simulated call. Web Speech gives a single undiarized
+ * channel, so a customer side cannot exist on a live call — this is
+ * replay only, and is labelled as simulated wherever it appears.
+ */
+interface ScriptLine {
+  speaker: "rep" | "customer";
+  text: string;
+}
+
+interface DemoDeal {
+  customerId: string;
+  callId: string;
+  stage: string;
+  assignedRep: string;
+  quotedTenureMonths: number;
+  openObjection: string;
+}
+
+interface SignedInUser {
+  name: string;
+  role: "admin" | "sales";
+  authDisabled: boolean;
+}
+
+interface BootstrapWire {
+  ok: boolean;
+  customers: DemoCustomer[];
+  deals: DemoDeal[];
+  user: SignedInUser | null;
+  message: string | null;
+}
+
+const truth = truthJson as unknown as ProductTruth;
+
+/**
+ * REPLAY PACING — tune these on stage.
+ *
+ * Replay exists because Web Speech ships audio to Google's servers. If
+ * the venue wifi dies the mic produces nothing, and offline stub mode
+ * cannot rescue that: there are no utterances to process in the first
+ * place. Replay feeds the scripted lines in as finalised Utterances so
+ * a fully disconnected laptop still runs the entire demo.
+ */
+const REPLAY_GAP_MS = 3500;
+/** First line fires sooner, so pressing the button feels responsive. */
+const REPLAY_FIRST_LINE_MS = 700;
+/**
+ * Gap after a spoken line finishes before the next one starts. With
+ * Speak on, the line's own duration sets the pace and this is only the
+ * breath between sentences — REPLAY_GAP_MS would stack on top of the
+ * speech and drag the demo out.
+ */
+const REPLAY_SPEECH_TAIL_MS = 900;
+/**
+ * Hard cap on how long one spoken line may hold up the replay. Browsers
+ * drop `onend` when the tab loses focus, and without this the driver
+ * waits on a flag that will never clear.
+ */
+const REPLAY_SPEECH_MAX_MS = 12000;
+
+/**
+ * Wire shapes, declared here rather than imported from app/api/** or
+ * lib/closer.ts — both pull server-only code (node:fs, the API key path)
+ * into the browser bundle if imported from a client component.
+ */
+interface TriageWire {
+  status: "ok" | "rate_limited" | "error";
+  hasClaim: boolean;
+  mode: "llm" | "stub";
+  cost: CostEntry | null;
+  message: string | null;
+}
+
+interface ExtractWire {
+  status: "ok" | "rate_limited" | "error";
+  claims: Claim[];
+  mode: "llm" | "stub";
+  cost: CostEntry | null;
+  message: string | null;
+}
+
+interface CorrectWire {
+  status: "ok" | "rate_limited" | "error";
+  correction: string | null;
+  correctionSelfChecked: boolean;
+  correctionSource: "model" | "template" | null;
+  selfCheckNote: string | null;
+  suppressedReason: string | null;
+  mode: "llm" | "stub";
+  cost: CostEntry | null;
+  message: string | null;
+}
+
+interface ClassifyWire {
+  intent: CustomerIntent;
+  sentiment: CustomerSentiment;
+  source: "llm" | "stub";
+  cost: CostEntry | null;
+}
+
+interface CrmFieldDiff {
+  field: string;
+  from: string | number | null;
+  to: string | number | null;
+  reason: string;
+}
+
+interface RejectedField {
+  field: string;
+  value: string | number | null;
+  reason: string;
+}
+
+interface CloseProposal {
+  dropOffReason: string;
+  crmDiff: CrmFieldDiff[];
+  followUpDraft: string;
+  rejected: RejectedField[];
+  blockedFields: string[];
+  coverageNote: string | null;
+}
+
+interface ProposeWire {
+  status: "ok" | "rate_limited" | "error";
+  khata: KhataRecord | null;
+  proposal: CloseProposal | null;
+  mode: "llm" | "stub";
+  message: string | null;
+}
+
+interface ApproveWire {
+  status: "ok" | "error";
+  applied: CrmFieldDiff[];
+  skipped: string[];
+  followUpSent: string | null;
+  message: string | null;
+}
+
+// row state
+
+type RowState =
+  | "triaging"
+  | "extracting"
+  | "correcting"
+  | "skipped"
+  | "pending"
+  | "done"
+  | "error";
+
+interface Row {
+  id: string;
+  utterance: Utterance;
+  redacted: string;
+  map: RedactionMap;
+  state: RowState;
+  note: string | null;
+  /** Replayed lines are labelled in the transcript. They must never be
+   *  mistaken for something a microphone actually heard. */
+  origin: "mic" | "replay";
+}
+
+/**
+ * One adjudicated claim. A single utterance produces several of these —
+ * nobody pauses between claims, so "the fee is 349 on the 6 month plan
+ * your EMI is 4928 and the late fee is 500" is three verdicts off one
+ * transcript row.
+ */
+interface VerdictItem {
+  rowId: string;
+  claim: Claim;
+  verdict: Verdict;
+  /** Set when the self-check rejected the model's draft and the verified
+   *  template is being shown instead. A correction IS displayed; this is
+   *  the safety mechanism working, not a failure. */
+  selfCheckNote: string | null;
+  /** Set only when NO correction is being shown, and says why. */
+  suppressedReason: string | null;
+}
+
+// helpers
+
+function clockTime(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function rupees(n: number): string {
+  return "₹" + n.toFixed(2);
+}
+
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return (await res.json()) as T;
+}
+
+/**
+ * Signal red marks exactly one thing on this page: a WRONG verdict.
+ *
+ * VERIFIED gets a transparent rule rather than no rule, so every entry
+ * shares one left margin and the red mark is the only thing that
+ * changes. The absence of alarm is the signal — a page of quiet entries
+ * with one red rule down the side reads faster than any badge system.
+ * STALE takes a neutral ink rule: archival, not alarming.
+ */
+function verdictClasses(v: Verdict): string {
+  switch (v.status) {
+    case "WRONG":
+      return "border-l-2 border-signal pl-5";
+    case "STALE":
+      return "border-l-2 border-ink/25 pl-5";
+    default:
+      return "border-l-2 border-transparent pl-5";
+  }
+}
+
+/** The status word itself. VERIFIED gets a thin ink underline, nothing more. */
+function statusClasses(v: Verdict): string {
+  switch (v.status) {
+    case "WRONG":
+      return "font-semibold text-signal";
+    case "STALE":
+      return "text-ink/60";
+    case "VERIFIED":
+      return "border-b border-ink/25 pb-px text-ink/45";
+    default:
+      return "text-ink/45";
+  }
+}
+
+// page
+
+export default function ConsolePage() {
+  // Customers and deals are fetched rather than imported, because they
+  // live in SQLite now. Everything below treats `customer` as possibly
+  // null until the first fetch lands; nothing else about the pipeline
+  // changed.
+  const [customers, setCustomers] = useState<DemoCustomer[]>([]);
+  const [deals, setDeals] = useState<DemoDeal[]>([]);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [user, setUser] = useState<SignedInUser | null>(null);
+  const [customerId, setCustomerId] = useState<string>("");
+
+  /**
+   * Inbound call state.
+   *
+   * The console used to open with customers[0] already selected, which
+   * assumed the rep knew who was ringing before they picked up. A real
+   * inbound call arrives from a number, not from a chosen row: answer
+   * first, find out who it is second.
+   */
+  const [phase, setPhase] = useState<CallPhase>("idle");
+  /** Rep answered and could not find the caller. The call still runs. */
+  const [unidentified, setUnidentified] = useState(false);
+  const [search, setSearch] = useState("");
+  const [searchIndex, setSearchIndex] = useState(0);
+
+  // Explicitly nullable: nothing is selected until the rep selects it.
+  const customer = useMemo<DemoCustomer | null>(
+    () => customers.find((c) => c.id === customerId) ?? null,
+    [customers, customerId]
+  );
+
+  /**
+   * Scoped already. /api/bootstrap ran listCustomersForUser, so this
+   * array is only ever this rep's customers — search filters what the
+   * browser was given rather than asking the server again, which is why
+   * there is no second scoping path to keep correct.
+   */
+  const matches = useMemo(
+    () => searchCustomers(customers, search),
+    [customers, search]
+  );
+  const deal = useMemo(
+    () => deals.find((d) => d.customerId === customerId) ?? null,
+    [deals, customerId]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/bootstrap")
+      .then((r) => r.json() as Promise<BootstrapWire>)
+      .then((d) => {
+        if (cancelled) return;
+        setCustomers(d.customers);
+        setDeals(d.deals);
+        setUser(d.user);
+        setBootstrapError(d.ok ? d.message : d.message ?? "Bootstrap failed.");
+        // Deliberately does NOT select a customer. The call is ringing;
+        // nobody knows who it is yet.
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setBootstrapError(
+            e instanceof Error ? e.message : "Could not reach /api/bootstrap."
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const [consentAt, setConsentAt] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [items, setItems] = useState<VerdictItem[]>([]);
+  const [signals, setSignals] = useState<CustomerSignal[]>([]);
+  const [costs, setCosts] = useState<CostEntry[]>([]);
+  const [mode, setMode] = useState<"llm" | "stub" | "unknown">("unknown");
+
+  // Replay
+  const [replayOn, setReplayOn] = useState(false);
+  const [replayActive, setReplayActive] = useState(false);
+  const [replayPlaying, setReplayPlaying] = useState(false);
+  const [replayIndex, setReplayIndex] = useState(0);
+  const replayRunRef = useRef(0);
+
+  // Speech synthesis for replayed lines. Replay only — the mic path has
+  // a human doing the talking.
+  const [speakOn, setSpeakOn] = useState(true);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const customerVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  // Close / approval state
+  const [closing, setClosing] = useState(false);
+  const [khata, setKhata] = useState<KhataRecord | null>(null);
+  const [proposal, setProposal] = useState<CloseProposal | null>(null);
+  const [closeMessage, setCloseMessage] = useState<string | null>(null);
+  const [acceptedFields, setAcceptedFields] = useState<Set<string>>(new Set());
+  const [followUpText, setFollowUpText] = useState("");
+  const [approval, setApproval] = useState<ApproveWire | null>(null);
+  const [approving, setApproving] = useState(false);
+
+  const { utterances, interim, isListening, isSupported, start, stop, error } =
+    useListener();
+
+  const processedRef = useRef<Set<string>>(new Set());
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const railRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/triage")
+      .then((r) => r.json() as Promise<{ mode: "llm" | "stub" }>)
+      .then((d) => {
+        if (cancelled) return;
+        setMode(d.mode);
+        if (d.mode === "stub") {
+          console.warn(
+            "KHATA: running in OFFLINE STUB mode — no LLM calls. Claims are parsed by lib/stub.ts. Verdicts are unaffected."
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMode("unknown");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Feature-detect and pick a voice. getVoices() is commonly empty on the
+   * first call — Chrome loads the list asynchronously — so the same
+   * selection runs again on voiceschanged.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const synth = window.speechSynthesis;
+    setSpeechSupported(true);
+
+    const pickVoice = () => {
+      const voices = synth.getVoices();
+      if (voices.length === 0) return;
+      voiceRef.current =
+        voices.find((v) => v.lang === "en-IN") ??
+        voices.find((v) => v.lang.replace("_", "-").startsWith("en-IN")) ??
+        voices.find((v) => v.lang.startsWith("en-GB")) ??
+        voices.find((v) => v.lang.startsWith("en")) ??
+        null;
+
+      // A different voice for the customer. Some machines have only one
+      // English voice installed, which is why pitch is also shifted
+      // below — the two sides must be distinguishable by ear even then.
+      const repName = voiceRef.current?.name;
+      customerVoiceRef.current =
+        voices.find((v) => v.lang.startsWith("en") && v.name !== repName) ??
+        voiceRef.current ??
+        null;
+    };
+
+    pickVoice();
+    synth.addEventListener("voiceschanged", pickVoice);
+    return () => {
+      synth.removeEventListener("voiceschanged", pickVoice);
+      synth.cancel();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!speaking) return;
+    const timer = setTimeout(() => setSpeaking(false), REPLAY_SPEECH_MAX_MS);
+    return () => clearTimeout(timer);
+  }, [speaking]);
+
+  const cancelSpeech = useCallback(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    setSpeaking(false);
+  }, []);
+
+  const patchRow = useCallback((id: string, patch: Partial<Row>) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }, []);
+
+  const patchItem = useCallback((claimId: string, patch: Partial<VerdictItem>) => {
+    setItems((prev) =>
+      prev.map((i) => (i.claim.id === claimId ? { ...i, ...patch } : i))
+    );
+  }, []);
+
+  const addCost = useCallback((cost: CostEntry | null) => {
+    if (cost) setCosts((prev) => [...prev, cost]);
+  }, []);
+
+  /** redact -> triage -> extract -> adjudicate -> correct. Also the retry path. */
+  const runPipeline = useCallback(
+    async (rowId: string, redactedText: string) => {
+      patchRow(rowId, { state: "triaging", note: null });
+
+      let triage: TriageWire;
+      try {
+        triage = await postJson<TriageWire>("/api/triage", { redactedText });
+      } catch (e) {
+        patchRow(rowId, {
+          state: "error",
+          note: e instanceof Error ? e.message : "Triage request failed.",
+        });
+        return;
+      }
+
+      addCost(triage.cost);
+      if (triage.mode) setMode(triage.mode);
+
+      if (triage.status === "rate_limited") {
+        patchRow(rowId, { state: "pending", note: triage.message });
+        return;
+      }
+      if (triage.status === "error") {
+        patchRow(rowId, { state: "error", note: triage.message });
+        return;
+      }
+      if (!triage.hasClaim) {
+        patchRow(rowId, { state: "skipped", note: "No checkable claim." });
+        return;
+      }
+
+      patchRow(rowId, { state: "extracting" });
+
+      let extracted: ExtractWire;
+      try {
+        extracted = await postJson<ExtractWire>("/api/extract", {
+          redactedText,
+          utteranceId: rowId,
+        });
+      } catch (e) {
+        patchRow(rowId, {
+          state: "error",
+          note: e instanceof Error ? e.message : "Extraction request failed.",
+        });
+        return;
+      }
+
+      addCost(extracted.cost);
+
+      if (extracted.status === "rate_limited") {
+        patchRow(rowId, { state: "pending", note: extracted.message });
+        return;
+      }
+      if (extracted.status === "error") {
+        patchRow(rowId, { state: "error", note: extracted.message });
+        return;
+      }
+      if (extracted.claims.length === 0) {
+        patchRow(rowId, { state: "skipped", note: "Nothing parseable." });
+        return;
+      }
+
+      // THE VERDICTS. Local, synchronous, deterministic, LLM-free —
+      // one per claim, and one utterance can carry several.
+      // Null for an unidentified caller, which makes adjudicate() return
+      // UNSUPPORTED for emi_amount and total_payable rather than guessing.
+      const ticketInr = ticketForCall(customer);
+      const fresh: VerdictItem[] = extracted.claims.map((claim) => ({
+        rowId,
+        claim,
+        verdict: adjudicate(claim, truth, { ticketInr }),
+        selfCheckNote: null,
+        suppressedReason: null,
+      }));
+
+      setItems((prev) => [...prev, ...fresh]);
+      patchRow(rowId, {
+        state: "done",
+        note: `${fresh.length} claim${fresh.length === 1 ? "" : "s"}`,
+      });
+
+      // Corrections fire on misquotes only, one per wrong claim.
+      const wrong = fresh.filter((i) => i.verdict.status === "WRONG");
+      if (wrong.length === 0) return;
+
+      patchRow(rowId, { state: "correcting" });
+
+      for (const item of wrong) {
+        try {
+          const corrected = await postJson<CorrectWire>("/api/correct", {
+            claim: item.claim,
+            verdict: item.verdict,
+            ticketInr,
+          });
+          addCost(corrected.cost);
+          patchItem(item.claim.id, {
+            verdict: {
+              ...item.verdict,
+              correction: corrected.correction,
+              correctionSelfChecked: corrected.correctionSelfChecked,
+            },
+            selfCheckNote: corrected.selfCheckNote,
+            suppressedReason: corrected.suppressedReason,
+          });
+        } catch {
+          // Leave that claim uncorrected; the verdict still stands.
+        }
+      }
+
+      patchRow(rowId, {
+        state: "done",
+        note: `${fresh.length} claim${fresh.length === 1 ? "" : "s"}`,
+      });
+    },
+    [addCost, patchRow, patchItem, customer]
+  );
+
+  /**
+   * A customer line gets a read, not a verdict. No claim is extracted, no
+   * verdict is produced, and nothing here can write to the khata's claims
+   * or verdicts arrays.
+   */
+  const classifyCustomerLine = useCallback(
+    async (utteranceId: string, redactedText: string) => {
+      patchRow(utteranceId, { state: "extracting" });
+      try {
+        const result = await postJson<ClassifyWire>("/api/classify", {
+          redactedText,
+        });
+        addCost(result.cost);
+        setSignals((prev) => [
+          ...prev,
+          {
+            utteranceId,
+            redactedText,
+            intent: result.intent,
+            sentiment: result.sentiment,
+            source: result.source,
+            at: new Date().toISOString(),
+          },
+        ]);
+        patchRow(utteranceId, {
+          state: "done",
+          note: `${result.intent} · ${result.sentiment}`,
+        });
+      } catch {
+        patchRow(utteranceId, { state: "error", note: "not classified" });
+      }
+    },
+    [patchRow, addCost]
+  );
+
+  /**
+   * THE ONLY WAY INTO THE PIPELINE. The microphone and replay both call
+   * this with an `Utterance`, so everything downstream — redaction,
+   * triage, extraction, adjudication, correction, close — is byte
+   * identical between a live call and a replayed one. There is no
+   * second code path to keep in sync, and no way for replay to quietly
+   * skip a step the live path performs.
+   */
+  const ingest = useCallback(
+    (utterance: Utterance, origin: Row["origin"]) => {
+      // An unidentified caller is still a call worth checking. redact()
+      // takes a null customer and simply skips name substitution; every
+      // other rule (phone, Aadhaar, PAN, email) still applies. Before the
+      // rep answers there is nothing to capture at all.
+      if (!customer && !unidentified) return;
+      if (processedRef.current.has(utterance.id)) return;
+      processedRef.current.add(utterance.id);
+
+      const { redacted, map } = redact(utterance.text, customer);
+      setRows((prev) => [
+        ...prev,
+        {
+          id: utterance.id,
+          utterance,
+          redacted,
+          map,
+          state: "triaging",
+          note: null,
+          origin,
+        },
+      ]);
+
+      // THE GUARD. Khata audits what the REP asserted about the product.
+      // A customer saying "so it's ninety nine?" is a question, and
+      // adjudicating it would file a STALE misquote against a rep who
+      // never said it. Customer lines take the classify path instead and
+      // never touch runPipeline, so they can never reach adjudicate().
+      if (utterance.speaker === "customer") {
+        void classifyCustomerLine(utterance.id, redacted);
+        return;
+      }
+
+      void runPipeline(utterance.id, redacted);
+    },
+    [customer, unidentified, runPipeline, classifyCustomerLine]
+  );
+
+  // Microphone feed. Inert while replay is armed — replay never touches
+  // useListener, and useListener never feeds a replayed call.
+  useEffect(() => {
+    if (replayOn) return;
+    const next = utterances.find((u) => !processedRef.current.has(u.id));
+    if (!next) return;
+    ingest(next, "mic");
+  }, [utterances, replayOn, ingest]);
+
+  // replay driver
+
+  const script = customer?.demoScript ?? [];
+
+  const emitReplayLine = useCallback(
+    (index: number) => {
+      const line = script[index];
+      if (line === undefined) return;
+
+      // The pipeline goes first and speech is never awaited. A voice that
+      // stalls, or a browser that refuses to speak at all, must not delay
+      // a verdict by a single millisecond.
+      ingest(
+        {
+          id: `utt_replay_${replayRunRef.current}_${index}`,
+          speaker: line.speaker,
+          text: line.text,
+          redactedText: "", // redact() fills this, same as the mic path
+          isFinal: true,
+          at: new Date().toISOString(),
+        },
+        "replay"
+      );
+      setReplayIndex(index + 1);
+
+      if (!speakOn || !speechSupported || typeof window === "undefined") return;
+
+      const isCustomer = line.speaker === "customer";
+      const synth = window.speechSynthesis;
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(line.text);
+      const voice = isCustomer ? customerVoiceRef.current : voiceRef.current;
+      if (voice) utterance.voice = voice;
+      utterance.lang = voice?.lang ?? "en-IN";
+      // Pitch shift as well as a different voice, so the two sides are
+      // still distinguishable on a machine with one English voice.
+      utterance.pitch = isCustomer ? 1.35 : 0.95;
+      setSpeaking(true);
+      utterance.onend = () => setSpeaking(false);
+      // A speech failure must not wedge the replay. Falling to false lets
+      // the driver below schedule the next line as if it had finished.
+      utterance.onerror = () => setSpeaking(false);
+      synth.speak(utterance);
+    },
+    [script, ingest, speakOn, speechSupported]
+  );
+
+  useEffect(() => {
+    if (!replayActive || !replayPlaying) return;
+    if (replayIndex >= script.length) {
+      setReplayPlaying(false);
+      return;
+    }
+    // A line is being read. Its onend flips `speaking` and re-runs this
+    // effect, which is what makes the speech duration set the pace.
+    if (speaking) return;
+
+    const voiced = speakOn && speechSupported;
+    const delay =
+      replayIndex === 0
+        ? REPLAY_FIRST_LINE_MS
+        : voiced
+          ? REPLAY_SPEECH_TAIL_MS
+          : REPLAY_GAP_MS;
+
+    const timer = setTimeout(() => emitReplayLine(replayIndex), delay);
+    return () => clearTimeout(timer);
+  }, [
+    replayActive,
+    replayPlaying,
+    replayIndex,
+    script.length,
+    emitReplayLine,
+    speaking,
+    speakOn,
+    speechSupported,
+  ]);
+
+  const resetCall = useCallback(() => {
+    stop();
+    cancelSpeech();
+    processedRef.current = new Set();
+    setRows([]);
+    setItems([]);
+    setSignals([]);
+    setCosts([]);
+    setConsentAt(null);
+    setStartedAt(null);
+    setKhata(null);
+    setProposal(null);
+    setApproval(null);
+    setCloseMessage(null);
+    setAcceptedFields(new Set());
+    setFollowUpText("");
+    setReplayActive(false);
+    setReplayPlaying(false);
+    setReplayIndex(0);
+  }, [stop, cancelSpeech]);
+
+  const goLive = useCallback(() => {
+    setStartedAt(new Date().toISOString());
+    if (replayOn) {
+      // useListener is never started, never asked for permission, and
+      // never consulted. A laptop with no network and no microphone
+      // still runs the whole demo from here.
+      replayRunRef.current += 1;
+      setReplayIndex(0);
+      setReplayActive(true);
+      setReplayPlaying(true);
+      return;
+    }
+    start();
+  }, [replayOn, start]);
+
+  /** Merged redaction maps, so the follow-up can be read with real names. */
+  const mergedMap = useMemo(() => {
+    const merged: RedactionMap = {};
+    for (const row of rows) Object.assign(merged, row.map);
+    if (!merged["[CUST_NAME]"] && customer) merged["[CUST_NAME]"] = customer.name;
+    return merged;
+  }, [rows, customer]);
+
+  const endCall = useCallback(async () => {
+    stop();
+    cancelSpeech();
+    setReplayActive(false);
+    setReplayPlaying(false);
+    setClosing(true);
+    setCloseMessage(null);
+
+    const claims = items.map((i) => i.claim);
+    const verdicts = items.map((i) => i.verdict);
+
+    // Coverage measures REP utterances only. It answers "did we
+    // fact-check everything the rep asserted", and customer lines are
+    // never fact-checked by design, so counting them would dilute the
+    // one number the coverage guard depends on.
+    const repRows = rows.filter((r) => r.utterance.speaker === "rep");
+    const checked = repRows.filter(
+      (r) => r.state === "done" || r.state === "skipped" || r.state === "correcting"
+    ).length;
+    const coverage: CallCoverage = {
+      utterances: repRows.length,
+      checked,
+      unchecked: repRows.length - checked,
+    };
+
+    try {
+      if (!customer) return;
+      const res = await postJson<ProposeWire>("/api/close", {
+        action: "propose",
+        coverage,
+        callId: deal ? deal.callId : `call_${Date.now()}`,
+        customerId: customer.id,
+        consentAt,
+        startedAt: startedAt ?? new Date().toISOString(),
+        endedAt: new Date().toISOString(),
+        claims,
+        verdicts,
+        costs,
+        transcript: rows.map((r) => r.redacted),
+        quotedTenureMonths: customer.interestedTenureMonths,
+        customerSignals: signals,
+      });
+
+      setKhata(res.khata);
+      setProposal(res.proposal);
+      setCloseMessage(res.message);
+      if (res.proposal) {
+        // Default to accepting everything, but every field is a checkbox
+        // the rep can clear before approving.
+        setAcceptedFields(new Set(res.proposal.crmDiff.map((d) => d.field)));
+        setFollowUpText(unredact(res.proposal.followUpDraft, mergedMap));
+      }
+    } catch (e) {
+      setCloseMessage(
+        e instanceof Error ? e.message : "Could not close the call."
+      );
+    } finally {
+      setClosing(false);
+    }
+  }, [
+    stop,
+    cancelSpeech,
+    rows,
+    items,
+    signals,
+    deal,
+    customer,
+    consentAt,
+    startedAt,
+    costs,
+    mergedMap,
+  ]);
+
+  const approve = useCallback(async () => {
+    if (!khata || !proposal) return;
+    setApproving(true);
+    try {
+      const res = await postJson<ApproveWire>("/api/close", {
+        action: "approve",
+        callId: khata.callId,
+        customerId: khata.customerId,
+        khataHash: khata.hash,
+        approvedBy: deal ? deal.assignedRep : "rep",
+        crmDiff: proposal.crmDiff.filter((d) => acceptedFields.has(d.field)),
+        followUpDraft: followUpText,
+      });
+      setApproval(res);
+    } catch (e) {
+      setApproval({
+        status: "error",
+        applied: [],
+        skipped: [],
+        followUpSent: null,
+        message: e instanceof Error ? e.message : "Approval failed.",
+      });
+    } finally {
+      setApproving(false);
+    }
+  }, [khata, proposal, acceptedFields, followUpText, deal]);
+
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [rows.length, interim]);
+
+  useEffect(() => {
+    const el = railRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [items]);
+
+  /** A call is running either from the mic or from the replay driver. */
+  const callActive = replayOn ? replayActive : isListening;
+
+  const totalCost = costs.reduce((sum, c) => sum + c.inr, 0);
+  const costPerClaim = items.length > 0 ? totalCost / items.length : 0;
+  const wrongCount = items.filter((i) => i.verdict.status !== "VERIFIED").length;
+
+  /**
+   * Why the primary action is unavailable, or null when it is available.
+   *
+   * One value decides both the disabled attribute and the sentence
+   * printed beside it. Computing them separately is how a button ends up
+   * greyed out with the wrong explanation under it, or with none.
+   */
+  /** Why the khata cannot be written, or null. See lib/callflow.ts. */
+  const closeBlocked = closeBlockedBecause(phase, customer !== null);
+
+  const goLiveBlockedBecause: string | null = callActive
+    ? null
+    : consentAt === null
+      ? "Tick the consent box first. Khata records a consent timestamp into the khata, and a call should not be adjudicated without one."
+      : !replayOn && !isSupported
+        ? "This browser has no webkitSpeechRecognition, so the microphone cannot start. Use Chrome, or tick Replay to run the scripted call through the same pipeline."
+        : replayOn && script.length === 0
+          ? "There is no script to replay. Replay reads a seeded customer's demo script, and this call has no customer attached — identify the caller, or untick Replay and use the microphone."
+          : null;
+
+  // Every hook above this point has already run, so early returns here
+  // are safe.
+  if (bootstrapError !== null && customers.length === 0) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-8 bg-paper px-8 py-12">
+        <header className="flex flex-wrap items-baseline gap-x-4 border-b border-ink/30 pb-4">
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink">
+            Khata
+          </h1>
+          <p className="font-sans text-sm text-ink/60">call console</p>
+        </header>
+        <p className="max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+          {bootstrapError}
+        </p>
+        <p className="max-w-2xl border-l-2 border-ink/30 pl-4 font-mono text-[11px] leading-relaxed text-ink/60">
+          npm run db:init &nbsp;then&nbsp; npm run reset:demo
+        </p>
+      </main>
+    );
+  }
+
+  /*
+    Idle. The line is not armed and nothing is listening.
+
+    Arming is a separate, deliberate act so the ring panel appears when
+    the operators want it to, rather than the console pretending a call
+    is already coming in the moment the page loads.
+  */
+  if (phase === "idle") {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 bg-paper px-8 py-12">
+        <header className="flex flex-wrap items-baseline gap-x-4 gap-y-2 border-b border-ink/30 pb-3">
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink">
+            Khata
+          </h1>
+          <p className="font-sans text-sm text-ink/60">call console</p>
+          <div className="ml-auto flex items-center gap-4">
+            {user && (
+              <>
+                <span className="font-mono text-xs text-ink/60">
+                  {user.name}
+                </span>
+                <span className="border border-hairline px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                  {user.role}
+                </span>
+              </>
+            )}
+            <LogoutButton />
+          </div>
+        </header>
+
+        <section className="border-y border-hairline py-10">
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+            Line idle
+          </span>
+          <p className="mt-3 font-sans text-2xl font-semibold tracking-tight text-ink">
+            Not listening
+          </p>
+          <p className="mt-4 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+            The microphone is off and nothing is being captured. Arm the line
+            when you are ready to take a call.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setPhase("incoming")}
+              className="self-start border border-ink bg-ink px-7 py-3 font-sans text-sm font-medium text-paper transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              Wait for incoming call
+            </button>
+            <p className="max-w-xl font-sans text-xs leading-relaxed text-ink/50">
+              {AUDIO_PATH_NOTE}
+            </p>
+          </div>
+        </section>
+
+        {bootstrapError && (
+          <p className="max-w-2xl font-sans text-sm leading-relaxed text-ink/60">
+            {bootstrapError}
+          </p>
+        )}
+      </main>
+    );
+  }
+
+  /*
+    Armed and ringing.
+
+    Nothing is captured here either: no microphone, no consent timestamp,
+    no row. A call that has not been answered has not happened, and a
+    console that opens with a customer already loaded is telling the
+    audience the rep knew who was calling.
+  */
+  if (phase === "incoming") {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 bg-paper px-8 py-12">
+        <header className="flex flex-wrap items-baseline gap-x-4 gap-y-2 border-b border-ink/30 pb-3">
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink">
+            Khata
+          </h1>
+          <p className="font-sans text-sm text-ink/60">call console</p>
+          <div className="ml-auto flex items-center gap-4">
+            {user && (
+              <>
+                <span className="font-mono text-xs text-ink/60">
+                  {user.name}
+                </span>
+                <span className="border border-hairline px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                  {user.role}
+                </span>
+              </>
+            )}
+            <LogoutButton />
+          </div>
+        </header>
+
+        <section className="border-y border-hairline py-10">
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+            Incoming call
+          </span>
+          <p className="mt-3 font-sans text-3xl font-semibold tracking-tight text-ink">
+            Unknown number
+          </p>
+          <p className="mt-4 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+            Khata is not listening yet. Nothing is recorded, no consent is
+            stamped and no customer is loaded, because none of that is true
+            until you pick up.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPhase("answered")}
+                className="border border-ink bg-ink px-7 py-3 font-sans text-sm font-medium text-paper transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+              >
+                Answer
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhase("idle");
+                  setConsentAt(null);
+                  setSearch("");
+                }}
+                className="border border-hairline px-5 py-3 font-sans text-sm text-ink transition-colors hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+              >
+                Decline
+              </button>
+            </div>
+            <p className="max-w-md font-sans text-xs leading-relaxed text-ink/50">
+              Answering moves to consent. You identify the caller after that,
+              from whatever name they give you — which is the order a real
+              inbound call happens in. Declining returns the line to idle.
+            </p>
+            <p className="max-w-xl font-sans text-xs leading-relaxed text-ink/50">
+              {AUDIO_PATH_NOTE}
+            </p>
+          </div>
+        </section>
+
+        {bootstrapError && (
+          <p className="max-w-2xl font-sans text-sm leading-relaxed text-ink/60">
+            {bootstrapError}
+          </p>
+        )}
+      </main>
+    );
+  }
+
+  /*
+    Answered, caller not yet identified.
+
+    Consent is taken here because consent is about recording the call,
+    not about which record it lands in. Identification comes next.
+  */
+  if (!customer && !unidentified) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-10 bg-paper px-8 py-12">
+        <header className="flex flex-wrap items-baseline gap-x-4 gap-y-2 border-b border-ink/30 pb-3">
+          <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink">
+            Khata
+          </h1>
+          <p className="font-sans text-sm text-ink/60">call console</p>
+          <span className="border border-hairline px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink/60">
+            on call
+          </span>
+          <div className="ml-auto flex items-center gap-4">
+            {user && (
+              <>
+                <span className="font-mono text-xs text-ink/60">
+                  {user.name}
+                </span>
+                <span className="border border-hairline px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                  {user.role}
+                </span>
+              </>
+            )}
+            <LogoutButton />
+          </div>
+        </header>
+
+        <section className="border-y border-hairline py-7">
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+            Consent
+          </span>
+          <label className="mt-2 flex items-center gap-2 font-sans text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={consentAt !== null}
+              onChange={(e) =>
+                setConsentAt(e.target.checked ? new Date().toISOString() : null)
+              }
+            />
+            Customer consented to recording
+          </label>
+          <p className="mt-1 font-mono text-[11px] text-ink/50">
+            {consentAt ? `recorded ${clockTime(consentAt)}` : "not captured"}
+          </p>
+        </section>
+
+        <section>
+          <label
+            htmlFor="caller-search"
+            className="block font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40"
+          >
+            Who is calling?
+          </label>
+          <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+            Type the name they give you. This searches only the customers
+            assigned to you — a colleague&rsquo;s customer is not in this
+            list to be found.
+          </p>
+
+          <input
+            id="caller-search"
+            type="text"
+            autoFocus
+            value={search}
+            placeholder="name or city"
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setSearchIndex(0);
+            }}
+            onKeyDown={(e) => {
+              if (matches.length === 0) return;
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSearchIndex((i) => Math.min(i + 1, matches.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSearchIndex((i) => Math.max(i - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                const pick = matches[searchIndex];
+                if (pick) {
+                  setCustomerId(pick.id);
+                  setPhase("identified");
+                }
+              }
+            }}
+            className="mt-4 w-full max-w-md border border-hairline bg-paper px-3 py-2.5 font-sans text-sm text-ink placeholder:text-ink/30 focus:border-ink focus:outline-2 focus:outline-offset-2 focus:outline-ink"
+          />
+
+          {search.trim() !== "" && (
+            <ul className="mt-3 flex max-w-md flex-col">
+              {matches.length === 0 ? (
+                <li className="border-t border-hairline py-3 font-sans text-sm text-ink/60">
+                  No customer of yours matches &ldquo;{search.trim()}&rdquo;.
+                </li>
+              ) : (
+                matches.map((c, i) => (
+                  <li key={c.id} className="border-t border-hairline">
+                    <button
+                      type="button"
+                      onMouseEnter={() => setSearchIndex(i)}
+                      onClick={() => {
+                        setCustomerId(c.id);
+                        setPhase("identified");
+                      }}
+                      className={`flex w-full items-baseline gap-3 px-2 py-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink ${
+                        i === searchIndex ? "bg-hairline/50" : "hover:bg-hairline/30"
+                      }`}
+                    >
+                      <span className="font-sans text-sm text-ink">{c.name}</span>
+                      <span className="font-mono text-xs text-ink/50">
+                        {c.city}
+                      </span>
+                      <span className="ml-auto font-mono text-xs text-ink/50">
+                        ₹{c.cart.ticketInr.toLocaleString("en-IN")}
+                      </span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </section>
+
+        <section className="border-t border-hairline pt-7">
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+            Not on your list
+          </span>
+          <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+            {UNIDENTIFIED_NOTE}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setUnidentified(true);
+              setPhase("identified");
+            }}
+            className="mt-5 self-start border border-hairline px-4 py-2 font-sans text-sm text-ink transition-colors hover:border-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            Continue without identifying
+          </button>
+        </section>
+
+        <button
+          type="button"
+          onClick={() => {
+            setPhase("idle");
+            setConsentAt(null);
+            setSearch("");
+          }}
+          className="self-start font-mono text-xs text-ink/60 underline underline-offset-4 hover:text-ink"
+        >
+          Hang up
+        </button>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-12 bg-paper px-8 py-12">
+      {/* header + cost meter */}
+      <header className="flex flex-wrap items-baseline gap-x-4 gap-y-2 border-b border-ink/30 pb-3">
+        <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink">
+          Khata
+        </h1>
+        <p className="font-sans text-sm text-ink/60">call console</p>
+
+        {mode === "stub" && (
+          <span className="border border-[#A9761B] px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-[#A9761B]">
+            offline stub
+          </span>
+        )}
+
+        {!customer && (
+          <span className="border border-[#A9761B] px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-[#A9761B]">
+            unidentified caller
+          </span>
+        )}
+
+        {replayOn && (
+          // Same treatment as the offline-stub badge, deliberately. The
+          // audience must never be able to mistake a replayed call for
+          // something the microphone actually heard.
+          <span className="border border-[#A9761B] px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide text-[#A9761B]">
+            replay
+          </span>
+        )}
+
+        <div className="ml-auto flex items-center gap-5">
+          {user && (
+            <>
+              <span className="font-mono text-xs text-ink/60">{user.name}</span>
+              <span className="border border-hairline px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink/60">
+                {user.role}
+              </span>
+              {user.authDisabled && (
+                <span className="border border-[#A9761B] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[#A9761B]">
+                  auth off
+                </span>
+              )}
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              void fetch("/api/auth/logout", { method: "POST" }).then(() => {
+                // Full navigation, not router.push — the cookie was just
+                // cleared and every protected page reads it server-side.
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+                window.location.href = "/login";
+              });
+            }}
+            className="border border-hairline px-2.5 py-1 font-mono text-xs text-ink/70 transition-colors hover:border-ink hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+          >
+            Logout
+          </button>
+          {/* Same list as every other page, from navLinks(role) — the
+              console does not keep its own copy. New tab, always: a rep
+              checking the terms mid-call must not lose the transcript to
+              a navigation, which is why this is an <a> and not the shared
+              header's <Link>. */}
+          {user &&
+            navLinks(user.role)
+              .filter((link) => link.href !== "/console")
+              .map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-sans text-sm text-ink/55 underline underline-offset-4 decoration-hairline hover:text-ink hover:decoration-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                >
+                  {link.label}
+                </a>
+              ))}
+          <span className="font-mono text-xs text-ink/60">
+            {deal ? deal.callId : "no call"}
+          </span>
+
+          {mode === "stub" ? (
+            <span className="font-mono text-xs text-ink/60">
+              ₹0.00 <span className="text-ink/40">stub — no API calls</span>
+            </span>
+          ) : (
+            <span className="font-mono text-xs text-ink/60">
+              {rupees(totalCost)}
+              <span className="ml-2 text-ink/40">
+                {rupees(costPerClaim)}/claim · {costs.length} call
+                {costs.length === 1 ? "" : "s"}
+              </span>
+            </span>
+          )}
+        </div>
+      </header>
+
+      {/* customer panel */}
+      {!customer && (
+        <p className="max-w-3xl border-l-2 border-ink pl-4 font-sans text-sm leading-relaxed text-ink">
+          {UNIDENTIFIED_NOTE}
+        </p>
+      )}
+
+      {/* Ruled band, not a card. Rules above and below, nothing on the sides. */}
+      <section className="border-y border-hairline py-7">
+        <div className="flex flex-wrap items-start gap-x-12 gap-y-6">
+          <div>
+            <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Caller
+            </span>
+            <p className="mt-1 font-sans text-sm text-ink">
+              {customer ? `${customer.name} — ${customer.city}` : "Unidentified"}
+            </p>
+            {!callActive && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomerId("");
+                  setUnidentified(false);
+                  setSearch("");
+                  resetCall();
+                  setPhase("answered");
+                }}
+                className="mt-1 font-mono text-[11px] text-ink/50 underline underline-offset-4 hover:text-ink"
+              >
+                {customer ? "not them, search again" : "identify the caller"}
+              </button>
+            )}
+          </div>
+
+          <div className="max-w-xs">
+            <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Cart
+            </span>
+            {customer ? (
+              <>
+                <p className="mt-1 font-sans text-sm text-ink">
+                  {customer.cart.item}
+                </p>
+                <p className="font-mono text-sm text-ink">
+                  ₹{customer.cart.ticketInr.toLocaleString("en-IN")}
+                  <span className="ml-2 text-ink/50">
+                    {customer.interestedTenureMonths}-month
+                  </span>
+                </p>
+              </>
+            ) : (
+              <p className="mt-1 font-sans text-sm text-ink/60">
+                Unknown. EMI and total-payable claims will return UNSUPPORTED
+                rather than be checked against a basket we do not have.
+              </p>
+            )}
+          </div>
+
+          <div className="max-w-sm">
+            <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Objection on file
+            </span>
+            <p className="mt-1 font-sans text-sm text-ink/80">
+              {deal ? deal.openObjection : "—"}
+            </p>
+          </div>
+
+          <div className="ml-auto">
+            <span className="block font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Consent
+            </span>
+            <label className="mt-1 flex items-center gap-2 font-sans text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={consentAt !== null}
+                onChange={(e) =>
+                  setConsentAt(e.target.checked ? new Date().toISOString() : null)
+                }
+              />
+              Customer consented to recording
+            </label>
+            <p className="mt-1 font-mono text-[11px] text-ink/50">
+              {consentAt ? `recorded ${clockTime(consentAt)}` : "not captured"}
+            </p>
+            <p className="mt-2 max-w-[17rem] font-sans text-xs leading-relaxed text-ink/50">
+              {consentAt === null
+                ? "Ticking this records the timestamp and enables the call."
+                : replayOn
+                  ? "Start replay reads the script aloud and checks each claim as it lands."
+                  : "Go live starts the microphone and checks each claim as you speak."}
+            </p>
+          </div>
+        </div>
+
+        {customer && customer.demoScript.length > 0 && (
+        <div className="mt-7 border-t border-hairline pt-5">
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+            Read aloud
+          </span>
+          <ol className="mt-3 space-y-2">
+            {customer.demoScript.map((line, i) => (
+              <li key={i} className="flex gap-4 font-sans text-sm">
+                <span className="w-4 shrink-0 text-right font-mono text-xs text-ink/35">
+                  {i + 1}
+                </span>
+                <span className="w-16 shrink-0 font-mono text-[11px] uppercase tracking-[0.14em] text-ink/35">
+                  {line.speaker}
+                </span>
+                <span
+                  className={
+                    line.speaker === "customer" ? "text-ink/45" : "text-ink/70"
+                  }
+                >
+                  &ldquo;{line.text}&rdquo;
+                </span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 font-mono text-[11px] leading-relaxed text-ink/40">
+            Simulated customer channel, replay only. Web Speech provides one
+            undiarized microphone, so a real second channel is not possible
+            live. Customer lines are never adjudicated.
+          </p>
+        </div>
+        )}
+      </section>
+
+      {/*
+        The primary action, and the reason it is unavailable.
+
+        A disabled button with the reason in a title attribute is a
+        disabled button with no reason: the tooltip needs a mouse, a
+        hover and a wait, and on a projector nobody sees it at all. So
+        the reason is printed next to the control, always.
+      */}
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={callActive ? () => void endCall() : goLive}
+            disabled={
+              goLiveBlockedBecause !== null ||
+              closing ||
+              (callActive && closeBlocked !== null)
+            }
+            className="border border-ink bg-ink px-6 py-2.5 font-sans text-sm font-medium text-paper transition-opacity hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:border-hairline disabled:bg-transparent disabled:font-normal disabled:text-ink/40"
+          >
+            {closing
+              ? "Closing…"
+              : callActive
+                ? "End call"
+                : replayOn
+                  ? "Start replay"
+                  : "Go live"}
+          </button>
+          {goLiveBlockedBecause !== null && !closing && (
+            <p className="max-w-[19rem] font-sans text-xs leading-relaxed text-ink/60">
+              {goLiveBlockedBecause}
+            </p>
+          )}
+          {callActive && closeBlocked !== null && !closing && (
+            <p className="max-w-[19rem] font-sans text-xs leading-relaxed text-ink/60">
+              {closeBlocked}
+            </p>
+          )}
+        </div>
+
+        {/* Replay arming. Disabled mid-call so the input source cannot
+            change underneath a call that is already being adjudicated. */}
+        <label className="flex flex-col gap-1 font-sans text-sm text-ink/70">
+          <span className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={replayOn}
+            disabled={callActive || closing}
+            onChange={(e) => {
+              setReplayOn(e.target.checked);
+              stop();
+              cancelSpeech();
+              setReplayActive(false);
+              setReplayPlaying(false);
+              setReplayIndex(0);
+            }}
+          />
+          Replay
+          </span>
+          {(callActive || closing) && (
+            <span className="max-w-[15rem] text-xs leading-relaxed text-ink/50">
+              Locked while a call is running — the input source must not
+              change underneath a call already being adjudicated.
+            </span>
+          )}
+        </label>
+
+        {/* Hidden entirely when the browser has no speechSynthesis; the
+            replay driver falls back to the fixed timer with no warning. */}
+        {replayOn && speechSupported && (
+          <label
+            className="flex items-center gap-2 font-sans text-sm text-ink/70"
+            title="Read each replayed line aloud. Pacing follows the voice instead of the fixed gap."
+          >
+            <input
+              type="checkbox"
+              checked={speakOn}
+              onChange={(e) => {
+                setSpeakOn(e.target.checked);
+                if (!e.target.checked) cancelSpeech();
+              }}
+            />
+            Speak
+          </label>
+        )}
+
+        {replayActive && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                setReplayPlaying((p) => {
+                  if (p) cancelSpeech();
+                  return !p;
+                });
+              }}
+              title={
+                replayPlaying
+                  ? "Hold the script where it is"
+                  : "Continue from the next line"
+              }
+              className="border border-hairline px-3 py-2 font-sans text-sm text-ink/70"
+            >
+              {replayPlaying ? "Pause" : "Resume"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                cancelSpeech();
+                emitReplayLine(replayIndex);
+              }}
+              disabled={replayIndex >= script.length}
+              title="Send the next scripted line now, without waiting"
+              className="border border-hairline px-3 py-2 font-sans text-sm text-ink/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:border-hairline/60 disabled:text-ink/30"
+            >
+              Next line
+            </button>
+            {replayIndex >= script.length && (
+              <span className="font-sans text-xs text-ink/50">
+                Script finished — no line left to send.
+              </span>
+            )}
+          </>
+        )}
+
+        {!callActive && rows.length > 0 && khata === null && (
+          <div className="flex flex-col gap-1.5">
+            <button
+              type="button"
+              onClick={() => void endCall()}
+              disabled={closing || closeBlocked !== null}
+              className="border border-hairline px-3 py-2 font-sans text-sm text-ink/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink disabled:border-hairline/60 disabled:text-ink/30"
+            >
+              Close &amp; write khata
+            </button>
+            {closeBlocked !== null && !closing && (
+              <p className="max-w-[19rem] font-sans text-xs leading-relaxed text-ink/60">
+                {closeBlocked}
+              </p>
+            )}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={resetCall}
+          className="border border-hairline px-3 py-2 font-sans text-sm text-ink/70"
+        >
+          Reset
+        </button>
+
+        {/* Input source is stated first and always, so there is never a
+            moment where it is unclear whether the mic is live. */}
+        <span className="font-mono text-xs text-ink/60">
+          <span className="text-ink">{replayOn ? "replay" : "microphone"}</span>
+          <span className="mx-2 text-ink/30">&middot;</span>
+          {consentAt === null
+            ? "consent required"
+            : replayOn
+              ? replayActive
+                ? `${Math.min(replayIndex, script.length)}/${script.length} ${
+                    replayIndex >= script.length
+                      ? "script finished"
+                      : replayPlaying
+                        ? "playing"
+                        : "paused"
+                  }`
+                : "armed, microphone will not be used"
+              : !isSupported
+                ? "webkitSpeechRecognition unavailable"
+                : isListening
+                  ? "listening"
+                  : "idle"}
+        </span>
+
+        {/* Signal red is NOT used here. If the counter is red, red stops
+            meaning "this specific claim is wrong" and starts meaning
+            "something somewhere needs attention" — which is exactly the
+            dashboard reflex this product is trying not to have. */}
+        <span className="ml-auto font-mono text-xs text-ink/60">
+          {items.length} claim{items.length === 1 ? "" : "s"}
+          {wrongCount > 0 && (
+            <span className="ml-3 text-ink">{wrongCount} to correct</span>
+          )}
+        </span>
+      </div>
+
+      {error !== null && (
+        <p className="border-l-2 border-ink/40 pl-4 font-sans text-sm text-ink">
+          {error}
+        </p>
+      )}
+
+      {/* transcript | verdict rail */}
+      {/* Asymmetric on purpose: the transcript is evidence, the rail is
+          the product. A 50/50 split says they matter equally. */}
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[0.78fr_1.22fr]">
+        <section className="flex min-h-0 flex-col">
+          <h2 className="border-b border-hairline pb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+            Transcript
+          </h2>
+          <div ref={transcriptRef} className="h-[30rem] overflow-y-auto pt-4">
+            {rows.length === 0 && interim === "" && (
+              <p className="font-sans text-sm text-ink/40">
+                {replayOn
+                  ? "Flip consent and press Start replay. The mic will not be used."
+                  : "Flip consent, press Go live, and read line 1 aloud."}
+              </p>
+            )}
+
+            <ul>
+              {rows.map((row) => {
+                const isCustomer = row.utterance.speaker === "customer";
+                return (
+                <li
+                  key={row.id}
+                  className={`border-b border-hairline py-3.5 ${
+                    isCustomer ? "border-l border-l-hairline pl-4" : ""
+                  }`}
+                >
+                  <div className="flex gap-4">
+                    <span className="shrink-0 font-mono text-xs text-ink/40">
+                      {clockTime(row.utterance.at)}
+                    </span>
+                    <span
+                      className={
+                        isCustomer
+                          ? "font-sans text-sm italic leading-relaxed text-ink/55"
+                          : "font-sans text-sm leading-relaxed text-ink"
+                      }
+                    >
+                      {isCustomer && (
+                        <span className="mr-2 font-mono text-[11px] not-italic uppercase tracking-[0.14em] text-ink/35">
+                          customer
+                        </span>
+                      )}
+                      {row.utterance.text}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-3 pl-[4.75rem]">
+                    <span className="font-mono text-[11px] text-ink/40">
+                      {row.state}
+                    </span>
+                    {row.origin === "replay" && (
+                      <span className="font-mono text-[11px] uppercase tracking-wide text-[#A9761B]">
+                        replay
+                      </span>
+                    )}
+                    {row.state === "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => void runPipeline(row.id, row.redacted)}
+                        className="border border-hairline px-2 font-mono text-[11px] text-ink/70"
+                      >
+                        retry
+                      </button>
+                    )}
+                    {row.note && (
+                      <span className="font-mono text-[11px] text-ink/40">
+                        {row.note}
+                      </span>
+                    )}
+                  </div>
+                  {row.redacted !== row.utterance.text && (
+                    <p className="mt-1.5 pl-[4.75rem] font-mono text-[11px] text-ink/40">
+                      sent: {row.redacted}
+                    </p>
+                  )}
+                </li>
+                );
+              })}
+            </ul>
+
+            {interim !== "" && (
+              <p className="flex gap-3 py-2">
+                <span className="shrink-0 font-mono text-xs text-ink/30">
+                  --:--:--
+                </span>
+                <span className="font-sans text-sm italic text-ink/40">
+                  {interim}
+                </span>
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="flex min-h-0 flex-col lg:border-l lg:border-hairline lg:pl-10">
+          <h2 className="border-b border-hairline pb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+            Verdicts
+          </h2>
+          <div ref={railRef} className="h-[30rem] overflow-y-auto pt-4">
+            {items.length === 0 && (
+              <p className="font-sans text-sm text-ink/40">
+                Nothing adjudicated yet.
+              </p>
+            )}
+
+            <ul className="space-y-7">
+              {items.map((item) => {
+                const v = item.verdict;
+                const c = item.claim;
+                return (
+                  <li key={c.id} className={verdictClasses(v)}>
+                    <div className="flex items-baseline gap-4">
+                      <span
+                        className={`font-mono text-xs tracking-[0.1em] ${statusClasses(v)}`}
+                      >
+                        {v.status}
+                      </span>
+                      <span className="font-mono text-[11px] text-ink/40">
+                        {c.type}
+                        {c.tenureMonths ? ` · ${c.tenureMonths}m` : ""}
+                      </span>
+                      <span className="ml-auto font-mono text-[11px] text-ink/40">
+                        {v.latencyMs}ms
+                      </span>
+                    </div>
+
+                    <p className="mt-2.5 font-sans text-[15px] leading-relaxed text-ink">
+                      {v.explanation}
+                    </p>
+
+                    {/* Only ever shown after re-adjudication passed. */}
+                    {v.correction && (
+                      <div className="mt-3.5 border-l border-hairline pl-4">
+                        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+                          Say this
+                          {v.correctionSelfChecked && (
+                            <span className="ml-2 normal-case tracking-normal">
+                              self-checked
+                            </span>
+                          )}
+                        </span>
+                        <p className="mt-1.5 font-sans text-[15px] leading-relaxed text-ink">
+                          &ldquo;{v.correction}&rdquo;
+                        </p>
+                      </div>
+                    )}
+
+                    {/* The self-check rejected the model's sentence and
+                        swapped in the verified template. A correction is on
+                        screen and it is right — this line says the safety
+                        mechanism fired, not that something failed. */}
+                    {item.selfCheckNote && (
+                      <p className="mt-2 border-l border-ink/25 pl-4 font-mono text-[11px] leading-relaxed text-ink/60">
+                        {item.selfCheckNote}
+                      </p>
+                    )}
+
+                    {/* No correction is being shown at all. */}
+                    {item.suppressedReason && (
+                      <p className="mt-3 font-mono text-[11px] leading-relaxed text-ink/40">
+                        {item.suppressedReason}
+                      </p>
+                    )}
+
+                    {/* A rule above the provenance line: this is where the
+                        entry stops being a sentence and starts being a
+                        citation. STALE leans on it hardest — it is the
+                        version number that makes the verdict archival. */}
+                    <div className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-t border-hairline pt-2 font-mono text-[11px] text-ink/40">
+                      <span>
+                        said {String(v.stated)} · truth {String(v.expected)}
+                      </span>
+                      <span>{v.sourceField}</span>
+                      <span>v{v.sourceVersion}</span>
+                      <span>
+                        {c.source === "stub" ? "stub-parsed" : "llm-parsed"} ·{" "}
+                        {c.confidence.toFixed(2)}
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      {/* post-call */}
+      {closeMessage && (
+        <p className="max-w-3xl border-l-2 border-ink/30 pl-4 font-sans text-sm leading-relaxed text-ink/70">
+          {closeMessage}
+        </p>
+      )}
+
+      {khata && (
+        <section className="border-t border-ink/30 pt-8">
+          <h2 className="font-sans text-lg font-semibold tracking-tight text-ink">
+            Khata — {khata.callId}
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-x-7 gap-y-1 font-mono text-[11px] text-ink/50">
+            <span>consent {khata.consentAt ? clockTime(khata.consentAt) : "NONE"}</span>
+            <span>
+              {clockTime(khata.startedAt)} →{" "}
+              {khata.endedAt ? clockTime(khata.endedAt) : "—"}
+            </span>
+            <span>{khata.claims.length} claims</span>
+            {/* Incomplete coverage is a caveat, not an alarm. Ink, not signal. */}
+            <span className={khata.coverage.unchecked > 0 ? "text-ink" : undefined}>
+              {khata.coverage.checked}/{khata.coverage.utterances} checked
+            </span>
+            {khata.customerSignals.length > 0 && (
+              <span>
+                {khata.customerSignals.length} customer signal
+                {khata.customerSignals.length === 1 ? "" : "s"} (simulated)
+              </span>
+            )}
+            <span>hash {khata.hash.slice(0, 16)}…</span>
+            <span>prev {khata.prevHash ? khata.prevHash.slice(0, 16) + "…" : "genesis"}</span>
+          </div>
+
+          {/* every claim, verdict, source, timestamp */}
+          <table className="mt-6 w-full border-collapse">
+            <thead>
+              <tr className="border-b border-ink/30">
+                {[
+                  { label: "Time", align: "text-left" },
+                  { label: "Claim", align: "text-left" },
+                  { label: "Said", align: "text-right" },
+                  { label: "Truth", align: "text-right" },
+                  { label: "Verdict", align: "text-left" },
+                  { label: "Source", align: "text-left" },
+                  { label: "Parsed by", align: "text-right" },
+                ].map((h) => (
+                  <th
+                    key={h.label}
+                    className={`${h.align} py-2 pr-5 font-mono text-[11px] font-normal uppercase tracking-[0.14em] text-ink/40 last:pr-0`}
+                  >
+                    {h.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {khata.verdicts.map((v) => {
+                const c = khata.claims.find((x) => x.id === v.claimId);
+                return (
+                  <tr key={v.claimId} className="border-b border-hairline align-top">
+                    <td className="py-2 pr-5 font-mono text-xs text-ink/50">
+                      {clockTime(v.adjudicatedAt)}
+                    </td>
+                    <td className="py-2 pr-5 font-mono text-xs text-ink/70">
+                      {c ? c.type : "—"}
+                      {c && c.tenureMonths ? ` ${c.tenureMonths}m` : ""}
+                    </td>
+                    {/* Figures right-aligned so said and truth stack under
+                        each other and a mismatch is visible before it is read. */}
+                    <td className="py-2 pr-5 text-right font-mono text-xs text-ink">
+                      {String(v.stated)}
+                    </td>
+                    <td className="py-2 pr-5 text-right font-mono text-xs text-ink">
+                      {String(v.expected)}
+                    </td>
+                    <td
+                      className={`py-2 pr-5 font-mono text-xs ${
+                        v.status === "WRONG"
+                          ? "font-semibold text-signal"
+                          : "text-ink/60"
+                      }`}
+                    >
+                      {v.status}
+                    </td>
+                    <td className="py-2 pr-5 font-mono text-[11px] text-ink/50">
+                      {v.sourceField} v{v.sourceVersion}
+                    </td>
+                    <td className="py-2 text-right font-mono text-[11px] text-ink/50">
+                      {c ? c.source : "—"} · {c ? c.confidence.toFixed(2) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {/* approval gate */}
+      {proposal && (
+        // A heavier top rule marks the point where the page stops
+        // reporting and starts asking. No box: this is a section of the
+        // ledger, not a modal.
+        <section className="border-t-2 border-ink pt-8">
+          <h2 className="font-sans text-lg font-semibold tracking-tight text-ink">
+            Needs your approval
+          </h2>
+          <p className="mt-1.5 max-w-2xl font-sans text-sm leading-relaxed text-ink/60">
+            Nothing below has been written. The CRM changes and the follow-up
+            are applied only when you press approve.
+          </p>
+
+          {proposal.coverageNote && (
+            <p className="mt-5 max-w-2xl border-l-2 border-ink pl-4 font-sans text-sm leading-relaxed text-ink">
+              <span className="font-semibold">Partially verified. </span>
+              {proposal.coverageNote}
+            </p>
+          )}
+
+          <div className="mt-7">
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Drop-off reason
+            </span>
+            <p className="mt-2 max-w-2xl font-sans text-[15px] leading-relaxed text-ink">
+              {proposal.dropOffReason}
+            </p>
+          </div>
+
+          <div className="mt-7">
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Proposed CRM changes
+            </span>
+            {proposal.crmDiff.length === 0 ? (
+              <p className="mt-1 font-sans text-sm text-ink/50">
+                No changes proposed.
+              </p>
+            ) : (
+              <ul className="mt-3 border-t border-hairline">
+                {proposal.crmDiff.map((d) => (
+                  <li
+                    key={d.field}
+                    className="flex gap-4 border-b border-hairline py-3.5"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={acceptedFields.has(d.field)}
+                      disabled={approval !== null}
+                      onChange={(e) => {
+                        setAcceptedFields((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(d.field);
+                          else next.delete(d.field);
+                          return next;
+                        });
+                      }}
+                    />
+                    <div className="min-w-0">
+                      <span className="font-mono text-xs text-ink">{d.field}</span>
+                      <p className="mt-0.5 font-mono text-[11px] text-ink/50">
+                        {String(d.from ?? "—")}
+                        <span className="mx-2 text-ink/30">→</span>
+                        <span className="text-ink">{String(d.to ?? "—")}</span>
+                      </p>
+                      {d.reason && (
+                        <p className="mt-1 font-sans text-xs text-ink/60">
+                          {d.reason}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Oversight, not error. These read as a record of what the
+                system refused to do — which is the point being made. */}
+            {proposal.rejected.length > 0 && (
+              <div className="mt-6 border-l-2 border-ink/30 pl-4">
+                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+                  Rejected before you saw them
+                </span>
+                <ul className="mt-2 space-y-1.5">
+                  {proposal.rejected.map((r, i) => (
+                    <li
+                      key={`${r.field}-${i}`}
+                      className="font-mono text-[11px] leading-relaxed text-ink/70"
+                    >
+                      <span className="text-ink">{r.field}</span>
+                      {r.value !== null && (
+                        <span className="text-ink/45"> = {String(r.value)}</span>
+                      )}
+                      <span className="mx-1.5 text-ink/30">—</span>
+                      {r.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {proposal.blockedFields.length > 0 && (
+              <div className="mt-6 border-l-2 border-ink/30 pl-4">
+                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+                  Withheld
+                </span>
+                <p className="mt-2 max-w-2xl font-mono text-[11px] leading-relaxed text-ink/70">
+                  These state a conclusion about a call that was not fully
+                  checked:{" "}
+                  <span className="text-ink">
+                    {proposal.blockedFields.join(", ")}
+                  </span>
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-7">
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink/40">
+              Follow-up message (editable)
+            </span>
+            <textarea
+              value={followUpText}
+              onChange={(e) => setFollowUpText(e.target.value)}
+              disabled={approval !== null}
+              rows={3}
+              className="mt-2 w-full max-w-2xl border border-hairline bg-paper p-3 font-sans text-sm leading-relaxed text-ink"
+            />
+          </div>
+
+          <div className="mt-7 flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => void approve()}
+              disabled={approving || approval !== null}
+              className="border border-ink px-4 py-2 font-sans text-sm text-ink disabled:border-hairline disabled:text-ink/40"
+            >
+              {approval !== null
+                ? "Approved"
+                : approving
+                  ? "Writing…"
+                  : "Approve & write to CRM"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setProposal(null)}
+              disabled={approval !== null}
+              className="border border-hairline px-3 py-2 font-sans text-sm text-ink/70 disabled:text-ink/30"
+            >
+              Discard
+            </button>
+            <span className="font-mono text-[11px] text-ink/40">
+              {acceptedFields.size} of {proposal.crmDiff.length} changes selected
+            </span>
+          </div>
+
+          {approval && (
+            <div className="mt-7 border-t border-hairline pt-5">
+              {approval.status === "ok" ? (
+                <>
+                  <p className="font-mono text-[11px] leading-relaxed text-ink/60">
+                    Wrote {approval.applied.length} field
+                    {approval.applied.length === 1 ? "" : "s"} to data/crm.json.
+                    Approval recorded against khata {khata?.hash.slice(0, 12)}…
+                  </p>
+                  {approval.followUpSent && (
+                    <p className="mt-2 max-w-2xl font-sans text-sm leading-relaxed text-ink/70">
+                      Follow-up queued: &ldquo;{approval.followUpSent}&rdquo;
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="max-w-2xl border-l-2 border-ink pl-4 font-sans text-sm leading-relaxed text-ink">
+                  {approval.message}
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+    </main>
+  );
+}

@@ -1,0 +1,223 @@
+/**
+ * THE CONTRACT.
+ *
+ * Every field here is what the two of you code against independently.
+ * If you need a field that isn't here, add it here first and tell your
+ * teammate — don't invent shapes ad hoc in a component or route.
+ */
+
+/** The kinds of factual claims Khata knows how to verify. */
+export type ClaimType =
+  | "processing_fee"
+  | "tenure"
+  | "apr"
+  | "interest"
+  | "late_fee"
+  | "eligibility"
+  | "total_payable"
+  | "emi_amount"
+  | "kyc_requirement";
+
+/**
+ * One chunk of transcript from the rep's mic, as produced by the Web
+ * Speech API. `isFinal` mirrors the SpeechRecognition result flag —
+ * interim results should still flow through the UI, but claim
+ * extraction only runs once `isFinal` is true.
+ */
+export interface Utterance {
+  /** Stable id for this utterance, e.g. `utt_${crypto.randomUUID()}`. */
+  id: string;
+  /**
+   * Who said it.
+   *
+   * "rep" is the only value a microphone ever produces: Web Speech gives
+   * one channel with no diarization, so a live call cannot separate
+   * speakers. "customer" exists solely for the simulated channel in
+   * replay mode and is labelled as simulated everywhere it surfaces.
+   *
+   * Customer utterances are NEVER adjudicated. Khata audits what the rep
+   * asserted about the product; a customer asking "so it's ninety nine?"
+   * is a question, not a claim, and running it through adjudicate() would
+   * put a misquote in the rep's audit record that the rep never made.
+   * The guard lives in ingest() and is asserted in selfcheck. Added in
+   * Task 8B stage 5.
+   */
+  speaker: "rep" | "customer";
+  /** Raw recognized text, exactly as Web Speech API returned it. */
+  text: string;
+  /** `text` after lib/redact.ts has stripped PII. This is what gets
+   *  persisted and what gets sent to the LLM — never the raw `text`. */
+  redactedText: string;
+  /** False while Web Speech API is still revising this result. */
+  isFinal: boolean;
+  /** ISO 8601 timestamp of when this utterance was captured. */
+  at: string;
+}
+
+/**
+ * A single factual assertion the LLM extracted from an utterance.
+ * The LLM's only job is producing this object — it does not judge
+ * whether the claim is true.
+ */
+export interface Claim {
+  /** Stable id for this claim, e.g. `clm_${crypto.randomUUID()}`. */
+  id: string;
+  /** Foreign key to the Utterance this claim was extracted from. */
+  utteranceId: string;
+  /** The redacted text span this claim was extracted from — kept
+   *  alongside the claim so the UI can show "what was actually said". */
+  redactedText: string;
+  type: ClaimType;
+  /** The number or string the rep stated, as parsed. Null if the LLM
+   *  detected a claim type but couldn't parse a concrete value
+   *  (e.g. "there's basically no fee" for eligibility-style hedging). */
+  value: number | string | null;
+  /** Unit for `value`. "boolean" is for yes/no claims like eligibility
+   *  or kyc_requirement; "text" is for anything non-numeric. */
+  unit: "inr" | "percent" | "months" | "boolean" | "text" | null;
+  /** Which tenure bucket this claim applies to, if the rep specified
+   *  or implied one. Null if tenure-agnostic or not yet known — the
+   *  adjudicator may need to check all three buckets in that case. */
+  tenureMonths: 3 | 6 | 9 | null;
+  /** LLM's self-reported confidence in the extraction, 0–1. Does NOT
+   *  affect the verdict — it's for UI/debug display only. */
+  confidence: number;
+  /** Which parser produced this claim: a real model call, or the
+   *  deterministic offline stub used when no API key is present.
+   *  The khata has to show which claims a model actually parsed —
+   *  a stub-parsed claim is weaker evidence, even though the verdict
+   *  on it is every bit as deterministic. Added in Task 3. */
+  source: "llm" | "stub";
+  /** ISO 8601 timestamp of when extraction ran. */
+  extractedAt: string;
+}
+
+/** Outcome of checking a Claim against data/product_truth.json. */
+export type VerdictStatus =
+  | "VERIFIED"    // claim matches source-of-truth
+  | "WRONG"       // claim contradicts source-of-truth
+  | "STALE"       // claim was true under a previous product_truth version
+  | "UNSUPPORTED"; // claim type/value couldn't be checked (e.g. missing source field)
+
+/**
+ * The deterministic result of running lib/adjudicate.ts on a Claim.
+ * This is the object of record — everything the UI shows and the
+ * final khata (audit receipt) is built from is a Verdict.
+ */
+export interface Verdict {
+  /** Foreign key to the Claim being adjudicated. */
+  claimId: string;
+  status: VerdictStatus;
+  /** What the rep said (copied from Claim.value for convenience). */
+  stated: number | string | null;
+  /** What product_truth.json says the correct value is. */
+  expected: number | string | null;
+  /** Dot path into product_truth.json that produced `expected`,
+   *  e.g. "tenures.6.aprPercent" — lets the UI/khata cite its source. */
+  sourceField: string;
+  /** product_truth.json's `version` at adjudication time. */
+  sourceVersion: string;
+  /** product_truth.json's `effectiveFrom` at adjudication time. */
+  sourceEffectiveFrom: string;
+  /** Human-readable reason for the verdict, e.g. "Rep said 2% APR;
+   *  6-month tenure is actually 0% APR with a flat processing fee." */
+  explanation: string;
+  /** Suggested corrective sentence for the rep to say, or null when
+   *  status is VERIFIED and no correction is needed. */
+  correction: string | null;
+  /** True once the correction itself has been checked against
+   *  product_truth.json (so we never surface a wrong correction). */
+  correctionSelfChecked: boolean;
+  /** ISO 8601 timestamp of when this verdict was produced. */
+  adjudicatedAt: string;
+  /** Wall-clock time from claim extraction to verdict, in ms —
+   *  this is the number the demo needs to show is under ~1s. */
+  latencyMs: number;
+}
+
+/** One priced LLM call, logged for the running cost-per-call display. */
+export interface CostEntry {
+  at: string;
+  /** Which stage of the pipeline this call served. */
+  stage: "triage" | "extract" | "correct" | "close";
+  /** Model identifier string, e.g. "claude-haiku-4-5". */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** Cost of this call converted to INR, for the on-screen running total. */
+  inr: number;
+}
+
+/** What a customer line was about. Not a claim, so never adjudicated. */
+export type CustomerIntent =
+  | "interested"
+  | "confused"
+  | "price_concern"
+  | "eligibility_query"
+  | "callback_request"
+  | "other";
+
+export type CustomerSentiment = "positive" | "neutral" | "negative";
+
+/**
+ * The lightweight read on one customer utterance. Deliberately much
+ * thinner than a Claim: there is no verdict, no source field and nothing
+ * to verify, because nothing the customer says is checkable against
+ * product terms. Added in Task 8B stage 5.
+ */
+export interface CustomerSignal {
+  utteranceId: string;
+  redactedText: string;
+  intent: CustomerIntent;
+  sentiment: CustomerSentiment;
+  /** Which classifier produced it, same convention as Claim.source. */
+  source: "llm" | "stub";
+  at: string;
+}
+
+/**
+ * How much of the call Khata was actually able to check.
+ *
+ * Without this, a khata reading "0 claims" is ambiguous in the worst
+ * possible way: it looks identical whether the rep said nothing
+ * checkable or whether the pipeline was down and checked nothing. Those
+ * are opposite facts, and an audit receipt that cannot tell them apart
+ * is worse than none. Added in Task 6.
+ */
+export interface CallCoverage {
+  /** Finalised utterances captured on the call. */
+  utterances: number;
+  /** Utterances that completed triage, claim or no claim. */
+  checked: number;
+  /** Utterances that errored, stalled, or were still in flight at close. */
+  unchecked: number;
+}
+
+/**
+ * The full audit record for one call — the "khata" itself. Written to
+ * disk (flat JSON) when the call ends. `prevHash`/`hash` form a simple
+ * hash chain so a khata can't be silently edited after the fact.
+ */
+export interface KhataRecord {
+  callId: string;
+  customerId: string;
+  /** ISO timestamp of recorded consent, or null if consent hasn't
+   *  been captured yet — a call shouldn't be adjudicated without it. */
+  consentAt: string | null;
+  startedAt: string;
+  /** Null while the call is still in progress. */
+  endedAt: string | null;
+  claims: Claim[];
+  verdicts: Verdict[];
+  costs: CostEntry[];
+  /** What this khata is and isn't evidence of. See CallCoverage. */
+  coverage: CallCoverage;
+  /** Read on the customer's side, when a simulated channel was present.
+   *  Empty on any live call. These are not claims and carry no verdict. */
+  customerSignals: CustomerSignal[];
+  /** Hash of the previous KhataRecord in the chain, or null if this
+   *  is the first record. */
+  prevHash: string | null;
+  /** Hash of this record's own content, computed at close time. */
+  hash: string;
+}

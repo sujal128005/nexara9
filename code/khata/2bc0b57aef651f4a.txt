@@ -1,0 +1,27 @@
+{
+  "_note": "Published list prices, per MILLION tokens, in USD. Sujal fills these in — lib/llm.ts hardcodes no pricing and will report a cost of 0 for any model whose rates are still null. Source: ai.google.dev/gemini-api/docs/pricing. Add a key here for any model string you put in KHATA_TRIAGE_MODEL / KHATA_EXTRACT_MODEL.",
+  "_freeTierNote": "Free-tier quota does not bill you, but the meter still shows NOTIONAL cost at these list rates — the point of the meter is unit economics at scale, not your credit card.",
+
+  "_verify": "Filled in on 2026-08-07 from published list prices. VERIFY BEFORE QUOTING THESE ON STAGE — provider pricing and the FX rate both move. Set any value back to null and lib/llm.ts will report 0 for that model rather than guess.",
+
+  "usdToInr": 95.1,
+
+  "models": {
+    "llama-3.1-8b-instant": {
+      "inputPerMillionUsd": 0.05,
+      "outputPerMillionUsd": 0.08
+    },
+    "llama-3.3-70b-versatile": {
+      "inputPerMillionUsd": 0.59,
+      "outputPerMillionUsd": 0.79
+    },
+    "gemini-2.0-flash-lite": {
+      "inputPerMillionUsd": null,
+      "outputPerMillionUsd": null
+    },
+    "gemini-2.0-flash": {
+      "inputPerMillionUsd": null,
+      "outputPerMillionUsd": null
+    }
+  }
+}

@@ -1,0 +1,155 @@
+/**
+ * lib/redact.ts — the PII boundary.
+ *
+ * Nothing reaches a model until it has been through here. Raw
+ * `Utterance.text` never leaves the browser tab; `Utterance.redactedText`
+ * is what gets POSTed, persisted, and logged.
+ *
+ * THE TRAP THIS FILE EXISTS TO AVOID
+ * The obvious implementation — "strip long runs of digits" — destroys the
+ * product. "₹199", "14%", "3 months" and "28,400" are the *claims we
+ * verify*. Redact those and there is nothing left to fact-check.
+ *
+ * So every numeric pattern here is anchored tightly:
+ *   - Aadhaar is exactly 12 digits (optionally 4-4-4 grouped)
+ *   - Indian mobiles are exactly 10 digits starting 6–9
+ *   - Neither may begin part-way through a longer number, and neither
+ *     may sit directly after ₹ or a digit or a decimal point
+ * A three-digit fee, a two-digit percentage and a five-digit ticket
+ * price cannot satisfy any of them. lib/selfcheck.ts asserts this
+ * explicitly, because it is the failure that would silently gut Khata.
+ */
+
+export type RedactionMap = Record<string, string>;
+
+export interface RedactionResult {
+  /** Text safe to send across the LLM boundary. */
+  redacted: string;
+  /** token -> original value, for unredact(). */
+  map: RedactionMap;
+}
+
+/** The only bit of the customer record redaction needs. */
+export interface RedactableCustomer {
+  name?: string | null;
+}
+
+// patterns
+
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/** PAN: five letters, four digits, one letter. Case-insensitive because
+ *  speech-to-text and CRM paste-ins are inconsistent about case. */
+const PAN_RE = /\b[A-Za-z]{5}[0-9]{4}[A-Za-z]\b/g;
+
+/**
+ * Aadhaar: 12 digits, optionally grouped 4-4-4 with spaces or hyphens.
+ * Lookbehind blocks a match that starts inside a longer number or right
+ * after a currency symbol; lookahead blocks one that runs into more digits.
+ * Commas are deliberately NOT accepted as separators — that is what keeps
+ * "28,400" and "1,28,400" out of reach.
+ */
+const AADHAAR_RE = /(?<![\d₹.,])\d{4}[ -]?\d{4}[ -]?\d{4}(?![\d.,]?\d)/g;
+
+/**
+ * Indian mobile: optional +91 / 91 / 0 prefix, then exactly 10 digits
+ * starting 6–9, with spaces or hyphens allowed anywhere between them.
+ * Same anchoring rules as Aadhaar.
+ */
+const PHONE_RE = /(?<![\d₹.,])(?:\+?91[ -]?|0)?[6-9](?:[ -]?\d){9}(?![\d])/g;
+
+// token allocation
+
+class TokenAllocator {
+  private counters = new Map<string, number>();
+  private seen = new Map<string, string>();
+  readonly map: RedactionMap = {};
+
+  /** Same value always yields the same token, so a phone number
+   *  mentioned twice reads as [PHONE_1] both times. */
+  tokenFor(kind: string, value: string): string {
+    const memoKey = `${kind}|${value}`;
+    const existing = this.seen.get(memoKey);
+    if (existing) return existing;
+
+    let token: string;
+    if (kind === "CUST_NAME") {
+      // Unnumbered by spec. Every part of the customer's name collapses
+      // to this one token; the map keeps the first value seen, which is
+      // the full name because we try longest-first.
+      token = "[CUST_NAME]";
+    } else {
+      const n = (this.counters.get(kind) ?? 0) + 1;
+      this.counters.set(kind, n);
+      token = `[${kind}_${n}]`;
+    }
+
+    this.seen.set(memoKey, token);
+    if (!(token in this.map)) this.map[token] = value;
+    return token;
+  }
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// redact
+
+/**
+ * Scrub PII from a transcript line.
+ *
+ * Order matters. Email and PAN are letter-anchored and unambiguous, so
+ * they go first. Aadhaar runs before phone because a 12-digit run
+ * contains 10-digit substrings — resolve the longer pattern first or the
+ * phone regex eats half an Aadhaar number and leaves the rest exposed.
+ * The customer's name goes last so it cannot corrupt tokens already
+ * inserted.
+ */
+export function redact(
+  text: string,
+  customer?: RedactableCustomer | null
+): RedactionResult {
+  const alloc = new TokenAllocator();
+  let out = text;
+
+  out = out.replace(EMAIL_RE, (m) => alloc.tokenFor("EMAIL", m));
+  out = out.replace(PAN_RE, (m) => alloc.tokenFor("PAN", m));
+  out = out.replace(AADHAAR_RE, (m) => alloc.tokenFor("AADHAAR", m));
+  out = out.replace(PHONE_RE, (m) => alloc.tokenFor("PHONE", m));
+
+  const name = customer?.name?.trim();
+  if (name) {
+    // Full name first, then each part, so "Meenakshi Iyer" collapses as
+    // one token rather than two. Parts under 3 characters are skipped —
+    // initials and particles ("K", "de") produce absurd false positives.
+    const variants = [name, ...name.split(/\s+/)]
+      .map((v) => v.trim())
+      .filter((v) => v.length >= 3);
+    const unique = Array.from(new Set(variants)).sort(
+      (a, b) => b.length - a.length
+    );
+
+    for (const variant of unique) {
+      const re = new RegExp(`\\b${escapeRegExp(variant)}\\b`, "gi");
+      out = out.replace(re, () => alloc.tokenFor("CUST_NAME", name));
+    }
+  }
+
+  return { redacted: out, map: alloc.map };
+}
+
+/**
+ * Put the real values back. Used when a correction drafted from redacted
+ * text has to be read aloud to an actual human with an actual name.
+ *
+ * Longest tokens first so [PHONE_11] is not clobbered by [PHONE_1].
+ */
+export function unredact(text: string, map: RedactionMap): string {
+  let out = text;
+  const tokens = Object.keys(map).sort((a, b) => b.length - a.length);
+  for (const token of tokens) {
+    out = out.split(token).join(map[token]);
+  }
+  return out;
+}

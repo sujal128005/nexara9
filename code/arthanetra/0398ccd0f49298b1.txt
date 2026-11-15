@@ -1,0 +1,14 @@
+ArthaNetra. Copyright (c) 2026 the ArthaNetra team. All rights reserved.
+
+This source code is made available for evaluation by the Arthaton 2026 judges and for
+personal, non-commercial review. No licence is granted to copy, modify, distribute,
+sub-license or use this software, or the methods described in docs/IPR.md, for any
+commercial purpose without prior written permission from the authors.
+
+The names "ArthaNetra", "Trap Score" and "Disclosure Gap Index" are used by the authors
+as product identifiers.
+
+Third-party open-source components retain their own licences (see README, "Credits").
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. ArthaNetra is a
+financial-literacy tool and does not provide legal, tax or investment advice.

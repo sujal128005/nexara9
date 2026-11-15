@@ -1,0 +1,444 @@
+/**
+ * Deterministic extractor, used when no API key is set. Same job as the
+ * model, regexes instead of inference, and worse at it — which is why
+ * claims from here carry source: "stub" and the UI says so.
+ *
+ * Same rule as the model: it does not judge whether a claim is true.
+ * adjudicate.ts doesn't know or care which extractor ran, so verdicts
+ * are as genuine offline as online.
+ *
+ * Chrome already converts most spoken numbers to digits, so the numeral
+ * parsing below is a safety net rather than the main path.
+ */
+
+import type {
+  Claim,
+  ClaimType,
+  CustomerIntent,
+  CustomerSentiment,
+} from "./types";
+
+/**
+ * A customer line gets a read, not a verdict. Nothing the customer says
+ * is checkable against product terms — "so it's ninety nine?" is a
+ * question, and adjudicating it would file a misquote against a rep who
+ * never made one. Keyword rules, so offline mode still classifies.
+ */
+export interface CustomerClassification {
+  intent: CustomerIntent;
+  sentiment: CustomerSentiment;
+}
+
+export function stubClassifyCustomer(
+  redactedText: string
+): CustomerClassification {
+  const t = redactedText.toLowerCase();
+
+  // Most specific first: a callback request outranks the price talk that
+  // usually precedes it in the same breath.
+  // An explicit "why" outranks price wording: "why is the EMI more than
+  // X divided by six" is someone not following the maths, not someone
+  // objecting to the price, even though "more than" appears in it.
+  const intent: CustomerIntent = /call me back|call you back|think about it|get back to you|tomorrow|later|not now/.test(t)
+    ? "callback_request"
+    : /pan|aadhaar|aadhar|kyc|document|proof|eligible|qualify|age|old enough|salary/.test(t)
+      ? "eligibility_query"
+      : /\bwhy\b|how come|does not make sense|doesn't make sense|but you said/.test(t)
+        ? "confused"
+        : /expensive|costly|higher than|more than|cheaper|budget|total|how much|charges|hidden|fee|price/.test(t)
+          ? "price_concern"
+          : /confused|correct\?|confirmed then|means/.test(t)
+            ? "confused"
+            : /okay|ok |fine|good|go ahead|sounds good|should be fine|yes|sure|let's do|lets do/.test(t)
+              ? "interested"
+              : "other";
+
+  const sentiment: CustomerSentiment =
+    /expensive|costly|higher than|more than i|hidden|problem|not happy|too much|no thanks|forget it|misleading/.test(t)
+      ? "negative"
+      : /should be fine|sounds good|go ahead|yes|great|perfect|happy|let's do|lets do|okay let/.test(t)
+        ? "positive"
+        : "neutral";
+
+  return { intent, sentiment };
+}
+
+// spoken numerals -> digits
+
+const SMALL: Record<string, number> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+};
+
+const TENS: Record<string, number> = {
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
+  seventy: 70,
+  eighty: 80,
+  ninety: 90,
+};
+
+const SMALL_WORDS = Object.keys(SMALL).join("|");
+const TENS_WORDS = Object.keys(TENS).join("|");
+const UNIT_WORDS =
+  "one|two|three|four|five|six|seven|eight|nine";
+
+/**
+ * Rewrite spoken numbers as digits so one number parser handles
+ * everything downstream.
+ *
+ * The first rule is the important one. Indian sales speech says prices
+ * as "one ninety nine", "three forty nine", "two fifty" — which is
+ * hundreds-plus-remainder, not two separate numbers. Getting this wrong
+ * turns a ₹199 fee claim into a ₹1 claim, so it runs before anything else.
+ */
+export function digitise(input: string): string {
+  let text = input.toLowerCase();
+
+  // "one ninety nine" -> 199   "two fifty" -> 250   "three forty nine" -> 349
+  text = text.replace(
+    new RegExp(
+      `\\b(${UNIT_WORDS})[\\s-]+(${TENS_WORDS})(?:[\\s-]+(${UNIT_WORDS}))?\\b`,
+      "g"
+    ),
+    (_m, h: string, t: string, u: string | undefined) =>
+      String(SMALL[h] * 100 + TENS[t] + (u ? SMALL[u] : 0))
+  );
+
+  // "ninety nine" -> 99, "twenty one" -> 21
+  text = text.replace(
+    new RegExp(`\\b(${TENS_WORDS})[\\s-]+(${UNIT_WORDS})\\b`, "g"),
+    (_m, t: string, u: string) => String(TENS[t] + SMALL[u])
+  );
+
+  // bare tens and small numbers
+  text = text.replace(new RegExp(`\\b(${TENS_WORDS})\\b`, "g"), (m) =>
+    String(TENS[m])
+  );
+  text = text.replace(new RegExp(`\\b(${SMALL_WORDS})\\b`, "g"), (m) =>
+    String(SMALL[m])
+  );
+
+  // "5 hundred" -> 500, "28 thousand" -> 28000
+  text = text.replace(/\b(\d+)\s+hundred\b/g, (_m, n: string) =>
+    String(Number(n) * 100)
+  );
+  text = text.replace(/\b(\d+)\s+thousand\b/g, (_m, n: string) =>
+    String(Number(n) * 1000)
+  );
+
+  return text;
+}
+
+// triage
+
+const OFFER_KEYWORDS =
+  /fee|process|emi|instal|interest|apr|percent|%|month|tenure|late|charge|eligib|age|aadhaar|aadhar|digilocker|digi locker|kyc|pan|total|rupee|\brs\b|₹|plan|zero.?cost|no.?cost|subsid/;
+
+const IDENTITY_KEYWORDS = /aadhaar|aadhar|digilocker|digi locker|kyc|pan/;
+
+/**
+ * Does this utterance plausibly contain a checkable claim about the
+ * offer? Cheap and slightly over-eager — a false positive costs one
+ * extraction, a false negative loses a misquote.
+ */
+export function stubTriage(redactedText: string): boolean {
+  const text = digitise(redactedText);
+  if (!OFFER_KEYWORDS.test(text)) return false;
+  // Identity claims are checkable without a number ("just an Aadhaar OTP").
+  if (IDENTITY_KEYWORDS.test(text)) return true;
+  return /\d/.test(text);
+}
+
+// extraction
+
+function newId(prefix: string): string {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === "function") return `${prefix}_${c.randomUUID()}`;
+  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Number sitting directly before "month(s)" — the tenure, if stated. */
+function findTenure(text: string): { months: 3 | 6 | 9 | null; matched: number | null } {
+  const m = /\b(\d{1,2})\s*(?:-|\s)?\s*month/.exec(text);
+  if (!m) return { months: null, matched: null };
+  const n = Number(m[1]);
+  if (n === 3 || n === 6 || n === 9) return { months: n, matched: n };
+  // A stated-but-unoffered tenure (12) is a real claim; keep the number
+  // so `tenure` claims can be adjudicated WRONG rather than dropped.
+  return { months: null, matched: n };
+}
+
+/** All bare numbers, commas stripped, in order of appearance. */
+function findNumbers(text: string): number[] {
+  const out: number[] = [];
+  const re = /\d[\d,]*(?:\.\d+)?/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const n = Number(m[0].replace(/,/g, ""));
+    if (Number.isFinite(n)) out.push(n);
+  }
+  return out;
+}
+
+/** Number attached to a percent sign or the word "percent". */
+function findPercent(text: string): number | null {
+  const m = /(\d+(?:\.\d+)?)\s*(?:%|percent|per cent)/.exec(text);
+  return m ? Number(m[1]) : null;
+}
+
+function classify(text: string): ClaimType | null {
+  if (/\blate\b|overdue|bounce/.test(text)) return "late_fee";
+  if (IDENTITY_KEYWORDS.test(text)) return "kyc_requirement";
+  // "process" and not "processing fee": Chrome regularly hears
+  // "the processing FEE is" as "the processing P is".
+  if (/process/.test(text)) return "processing_fee";
+  if (/eligib|\bage\b|years old|older than|ticket|minimum|maximum|at least/.test(text))
+    return "eligibility";
+  if (/total|altogether|all in|end up paying/.test(text)) return "total_payable";
+  if (/\bemi\b|instal/.test(text)) return "emi_amount";
+  if (/interest|apr|percent|per cent|%|annum|p\.a\.|zero.?cost|no.?cost/.test(text))
+    return "interest";
+  if (/month|tenure/.test(text)) return "tenure";
+  return null;
+}
+
+// segmentation — one utterance can hold several claims
+
+/**
+ * A word that signals which KIND of claim is being made, and where in
+ * the sentence it sits. Nobody speaks one claim per breath, so a single
+ * finalised utterance routinely contains three or four.
+ */
+interface Anchor {
+  type: ClaimType;
+  index: number;
+}
+
+const ANCHOR_PATTERNS: Array<{ type: ClaimType; re: RegExp }> = [
+  { type: "late_fee", re: /\blate\b|overdue|bounce/ },
+  { type: "kyc_requirement", re: /aadhaar|aadhar|digilocker|digi locker|\bkyc\b|\bpan\b/ },
+  { type: "processing_fee", re: /process/ },
+  { type: "eligibility", re: /eligib|\bage\b|years old|older than|at least/ },
+  { type: "total_payable", re: /total|altogether|all in/ },
+  { type: "emi_amount", re: /\bemi\b|instal/ },
+  { type: "interest", re: /interest|\bapr\b|percent|per cent|%|annum|zero.?cost|no.?cost/ },
+];
+
+function findAnchors(text: string): Anchor[] {
+  const found: Anchor[] = [];
+  for (const { type, re } of ANCHOR_PATTERNS) {
+    const m = re.exec(text);
+    if (m) found.push({ type, index: m.index });
+  }
+  return found.sort((a, b) => a.index - b.index);
+}
+
+/**
+ * Two windows per anchor, because values sit on different sides of
+ * different keywords:
+ *
+ *   value  — starts a few characters BEFORE the anchor (a percentage
+ *            precedes its "%") and runs to the next anchor. Clamped so
+ *            it can never reach back past the previous anchor and steal
+ *            its number — that is how "late fee is 500" ends up being
+ *            read as the "0%" from the clause before it.
+ *   tenure — allowed a much longer look-back, because "on the 6 month
+ *            plan" is usually said once and then implied.
+ */
+function windowsFor(
+  text: string,
+  anchors: Anchor[],
+  i: number
+): { value: string; tenure: string } {
+  const here = anchors[i].index;
+  const prevEnd = i > 0 ? anchors[i - 1].index + 1 : 0;
+  const nextStart = i + 1 < anchors.length ? anchors[i + 1].index : text.length;
+
+  const valueStart = Math.max(here - 12, prevEnd, 0);
+  const tenureStart = Math.max(here - 60, 0);
+
+  return {
+    value: text.slice(valueStart, nextStart),
+    tenure: text.slice(tenureStart, nextStart),
+  };
+}
+
+/**
+ * Every claim in one utterance, in the order they were spoken.
+ * Best-effort: this is the offline fallback, and a model does this job
+ * better. Returns [] rather than throwing.
+ */
+export function stubExtractAll(
+  redactedText: string,
+  utteranceId: string
+): Claim[] {
+  const text = digitise(redactedText);
+  const anchors = findAnchors(text);
+
+  // No typed anchor at all — fall back to whole-sentence classification,
+  // which is what catches bare tenure claims ("stretch it to 12 months").
+  if (anchors.length === 0) {
+    const single = extractOne(text, text, redactedText, utteranceId, classify(text));
+    return single ? [single] : [];
+  }
+
+  const claims: Claim[] = [];
+  const seen = new Set<ClaimType>();
+
+  const hasLateFee = anchors.some((a) => a.type === "late_fee");
+
+  for (let i = 0; i < anchors.length; i++) {
+    const { type } = anchors[i];
+    if (seen.has(type)) continue; // one claim per type per utterance
+    const w = windowsFor(text, anchors, i);
+
+    // "late fee is 250 flat plus 2% a month on the overdue amount" holds
+    // ONE claim, not two. The 2% is the late-fee rate; read as a product
+    // interest rate it adjudicates WRONG and accuses the rep of a
+    // misquote they never made. A false accusation is the worst output
+    // this system can produce, so the percentage defers to the late fee.
+    if (type === "interest" && hasLateFee && /overdue|\blate\b/.test(w.value)) {
+      continue;
+    }
+
+    const claim = extractOne(w.value, w.tenure, redactedText, utteranceId, type);
+    if (claim) {
+      seen.add(type);
+      claims.push(claim);
+    }
+  }
+
+  return claims;
+}
+
+/**
+ * Parse a redacted utterance into a single Claim — the first one found.
+ * Kept for callers that want exactly one, such as re-checking a drafted
+ * correction. Returns null when there is nothing checkable.
+ */
+export function stubExtract(
+  redactedText: string,
+  utteranceId: string
+): Claim | null {
+  const all = stubExtractAll(redactedText, utteranceId);
+  return all.length > 0 ? all[0] : null;
+}
+
+function extractOne(
+  valueText: string,
+  tenureText: string,
+  redactedText: string,
+  utteranceId: string,
+  forcedType: ClaimType | null
+): Claim | null {
+  const type = forcedType;
+  if (type === null) return null;
+
+  const text = valueText;
+  const tenure = findTenure(tenureText);
+  const percent = findPercent(text);
+  const numbers = findNumbers(text);
+
+  let value: number | string | null = null;
+  let unit: Claim["unit"] = null;
+
+  switch (type) {
+    case "kyc_requirement": {
+      const m = /aadhaar|aadhar|digilocker|digi locker|pan/.exec(text);
+      value = m
+        ? m[0] === "pan"
+          ? "PAN card"
+          : m[0].startsWith("digi")
+            ? "DigiLocker"
+            : "Aadhaar OTP"
+        : null;
+      unit = "text";
+      break;
+    }
+
+    case "tenure": {
+      value = tenure.matched;
+      unit = "months";
+      break;
+    }
+
+    case "interest": {
+      value = percent ?? (/zero.?cost|no.?cost/.test(text) ? 0 : null);
+      unit = "percent";
+      break;
+    }
+
+    case "late_fee": {
+      if (percent !== null) {
+        value = percent;
+        unit = "percent";
+      } else {
+        value = numbers.length > 0 ? numbers[0] : null;
+        unit = "inr";
+      }
+      break;
+    }
+
+    case "eligibility": {
+      // Drop the tenure number so "21 on the 3 month plan" reads 21.
+      const candidates = numbers.filter((n) => n !== tenure.matched);
+      value = candidates.length > 0 ? candidates[0] : null;
+      unit = "text";
+      break;
+    }
+
+    default: {
+      // processing_fee, emi_amount, total_payable — all rupee amounts.
+      // The tenure is a number in the same sentence and must not be
+      // mistaken for the amount: "the processing fee is 199 on the
+      // 3 month plan" has to yield 199, not 3.
+      const candidates = numbers.filter((n) => n !== tenure.matched);
+      value = candidates.length > 0 ? candidates[0] : null;
+      unit = "inr";
+      break;
+    }
+  }
+
+  if (value === null && type !== "kyc_requirement") {
+    // A claim type with no parseable value is still a claim — the
+    // adjudicator returns UNSUPPORTED for it, which is the honest answer.
+    unit = unit ?? null;
+  }
+
+  return {
+    id: newId("clm"),
+    utteranceId,
+    redactedText,
+    type,
+    value,
+    unit,
+    tenureMonths: tenure.months,
+    // Deliberately below anything a model would report. This is a
+    // regex guessing, and the UI should show it as such.
+    confidence: 0.55,
+    extractedAt: new Date().toISOString(),
+    source: "stub",
+  };
+}

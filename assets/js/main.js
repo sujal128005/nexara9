@@ -236,6 +236,7 @@
       const li = document.getElementById(hash.slice(1));
       const det = li && li.querySelector(':scope > details');
       if (det) det.open = true;
+      for (let p = li && li.parentElement; p; p = p.parentElement) if (p.tagName === 'DETAILS') p.open = true;
       if (li) li.classList.add('flash');
       setTimeout(() => li && li.classList.remove('flash'), 1600);
     };

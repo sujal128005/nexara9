@@ -1,0 +1,224 @@
+/**
+ * The operators' crib sheet at /script. Sales role only.
+ *
+ * NOT in navLinks() and not linked from the console. Two people open it
+ * on a second screen before a live phone demo, read it, and close it.
+ * A judge should never see this page.
+ *
+ * THE VERDICT COLUMN IS COMPUTED, NOT WRITTEN. Every rep line is run
+ * through redact -> stubExtractAll -> adjudicate at render time, against
+ * Anjali's real basket, using the same modules the console uses. Nothing
+ * here records an expected verdict, so this page cannot claim a line
+ * behaves in a way it does not. If a line stops producing what we
+ * rehearsed, this page says so.
+ */
+
+import { notFound } from "next/navigation";
+
+import { PrintButton } from "./print-button";
+
+import { adjudicate } from "@/lib/adjudicate";
+import type { ProductTruth } from "@/lib/adjudicate";
+import { canPlaceCalls } from "@/lib/access";
+import { calculateEmi, noCostEmiRealCost, totalPayable } from "@/lib/emi";
+import { LIVE_CUSTOMER_ID, LIVE_SCRIPT } from "@/lib/livescript";
+import { redact } from "@/lib/redact";
+import { currentSession } from "@/lib/session";
+import { getCustomer, isInitialised } from "@/lib/db";
+import { stubExtractAll } from "@/lib/stub";
+import truthJson from "@/data/product_truth.json";
+import type { Verdict } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
+
+const truth = truthJson as unknown as ProductTruth;
+const LABEL = "font-mono text-[10px] uppercase tracking-[0.14em] text-ink/45";
+
+function inr(n: number): string {
+  return "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+}
+
+interface Checked {
+  claimText: string;
+  verdict: Verdict;
+}
+
+/**
+ * The same three steps the console performs, in the same order, with the
+ * same modules. The only difference is that this runs on the server at
+ * render time instead of in the browser during a call.
+ */
+function checkLine(text: string, name: string, ticketInr: number): Checked[] {
+  const { redacted } = redact(text, { name });
+  const claims = stubExtractAll(redacted, "script");
+  return claims.map((claim) => ({
+    claimText: `${claim.type} = ${claim.value ?? "—"}${
+      claim.tenureMonths ? ` @ ${claim.tenureMonths}mo` : ""
+    }`,
+    verdict: adjudicate(claim, truth, { ticketInr }),
+  }));
+}
+
+export default async function ScriptPage() {
+  const session = await currentSession();
+  if (!session) notFound();
+  // Rehearsal material for the person who places the call. An admin does
+  // not place calls, so this is not their page either.
+  if (!canPlaceCalls(session.role)) notFound();
+  if (!isInitialised()) notFound();
+
+  const customer = getCustomer(LIVE_CUSTOMER_ID);
+  if (!customer) notFound();
+
+  const ticket = customer.ticket_inr;
+  const months = customer.tenure_months;
+  const terms = truth.tenures[String(months)];
+
+  const rows = LIVE_SCRIPT.map((line) => ({
+    line,
+    checks:
+      line.speaker === "rep" ? checkLine(line.text, customer.name, ticket) : [],
+  }));
+
+  const tally = rows
+    .flatMap((r) => r.checks)
+    .reduce<Record<string, number>>((acc, c) => {
+      acc[c.verdict.status] = (acc[c.verdict.status] ?? 0) + 1;
+      return acc;
+    }, {});
+
+  return (
+    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 bg-paper px-8 py-10 print:max-w-none print:px-0 print:py-0">
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 9mm; }
+          html, body { background: #fff !important; color: #000 !important; }
+          .no-print { display: none !important; }
+          .sheet { font-size: 7.6pt; line-height: 1.28; }
+          .sheet h1 { font-size: 12pt; }
+          .sheet tr { page-break-inside: avoid; }
+          .sheet td, .sheet th { padding-top: 1.6pt; padding-bottom: 1.6pt; }
+        }
+      `}</style>
+
+      <div className="sheet">
+        <header className="flex flex-wrap items-baseline gap-x-4 border-b border-ink pb-2">
+          <h1 className="font-sans text-xl font-semibold tracking-tight text-ink">
+            Live call script — {customer.name}
+          </h1>
+          <span className="font-mono text-[11px] text-ink/60">
+            {customer.city} · {inr(ticket)} · {months}-month
+          </span>
+          <span className="ml-auto font-mono text-[11px] text-ink/60">
+            {Object.entries(tally)
+              .sort()
+              .map(([k, v]) => `${v} ${k}`)
+              .join(" · ")}
+          </span>
+        </header>
+
+        <p className="mt-2 font-sans text-xs leading-relaxed text-ink/70">
+          Rehearsal only. Every verdict below was computed by running the rep
+          line through redact, stub extraction and the adjudicator against this
+          basket — none of them is typed in. Speak naturally; say the numbers
+          the way you would on a call. Chrome renders spoken figures as digits,
+          which is what the extractor sees.
+        </p>
+
+        <table className="mt-4 w-full border-collapse">
+          <thead>
+            <tr className="border-b border-ink/40">
+              <th className={`${LABEL} w-8 py-1.5 pr-2 text-left`}>#</th>
+              <th className={`${LABEL} py-1.5 pr-3 text-left`}>Rep says</th>
+              <th className={`${LABEL} py-1.5 pr-3 text-left`}>Customer says</th>
+              <th className={`${LABEL} w-40 py-1.5 text-left`}>Khata shows</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ line, checks }, i) => (
+              <tr key={i} className="border-b border-hairline align-top">
+                <td className="py-2 pr-2 font-mono text-[10px] text-ink/35">
+                  {i + 1}
+                </td>
+                <td className="py-2 pr-3 font-sans text-xs text-ink">
+                  {line.speaker === "rep" ? (
+                    <>
+                      <span>{line.text}</span>
+                      {line.note && (
+                        <span className="mt-1 block font-mono text-[10px] italic text-ink/45">
+                          {line.note}
+                        </span>
+                      )}
+                    </>
+                  ) : null}
+                </td>
+                <td className="py-2 pr-3 font-sans text-xs text-ink/65">
+                  {line.speaker === "customer" ? line.text : null}
+                </td>
+                <td className="py-2">
+                  {line.speaker !== "rep" ? null : checks.length === 0 ? (
+                    <span className="font-mono text-[10px] text-ink/35">
+                      no claim — stays quiet
+                    </span>
+                  ) : (
+                    checks.map((c, j) => (
+                      <div key={j} className="mb-1 last:mb-0">
+                        <span
+                          className={`border px-1 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] ${
+                            c.verdict.status === "VERIFIED"
+                              ? "border-hairline text-ink/60"
+                              : "border-ink font-semibold text-ink"
+                          }`}
+                        >
+                          {c.verdict.status}
+                        </span>
+                        <span className="mt-0.5 block font-mono text-[9px] text-ink/45">
+                          {c.claimText} → {String(c.verdict.expected)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <section className="mt-4 border-t border-ink/40 pt-2">
+          <span className={LABEL}>Her numbers, computed by lib/emi.ts</span>
+          <p className="mt-1 font-mono text-[11px] text-ink">
+            EMI {inr(calculateEmi(ticket, months, terms.customerInterestPercent))}
+            {" · total "}
+            {inr(
+              totalPayable(
+                ticket,
+                months,
+                terms.customerInterestPercent,
+                terms.processingFee,
+                terms.gstPercent
+              )
+            )}
+            {" · above sticker "}
+            {inr(
+              noCostEmiRealCost(
+                ticket,
+                months,
+                terms.customerInterestPercent,
+                terms.processingFee,
+                terms.gstPercent
+              )
+            )}
+          </p>
+        </section>
+      </div>
+
+      <div className="no-print flex flex-wrap items-center gap-4 border-t border-hairline pt-5">
+        <PrintButton />
+        <p className="max-w-xl font-sans text-xs leading-relaxed text-ink/50">
+          Not linked from the navigation and not reachable from the console.
+          Read it, print it, close the tab before you present.
+        </p>
+      </div>
+    </main>
+  );
+}

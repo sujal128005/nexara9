@@ -1,0 +1,99 @@
+/**
+ * POST /api/auth/login
+ *
+ * One deliberate detail: a wrong email and a wrong password return the
+ * same message. Distinguishing them tells an attacker which addresses
+ * exist, and the user gains nothing from the difference.
+ */
+
+import { NextResponse } from "next/server";
+
+import {
+  createSessionToken,
+  SESSION_COOKIE,
+  SESSION_TTL_SECONDS,
+  verifyPassword,
+} from "@/lib/auth";
+import { getUserByEmail, isInitialised } from "@/lib/db";
+import { homeFor } from "@/lib/access";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export interface LoginResponse {
+  ok: boolean;
+  message: string | null;
+  redirectTo: string | null;
+}
+
+const GENERIC_FAILURE = "That email and password do not match an account.";
+
+export async function POST(request: Request) {
+  if (!isInitialised()) {
+    return NextResponse.json({
+      ok: false,
+      message: "Database not initialised. Run npm run db:init then npm run reset:demo.",
+      redirectTo: null,
+    } satisfies LoginResponse);
+  }
+
+  let email = "";
+  let password = "";
+  try {
+    const body = (await request.json()) as {
+      email?: unknown;
+      password?: unknown;
+    };
+    if (typeof body.email === "string") email = body.email.trim();
+    if (typeof body.password === "string") password = body.password;
+  } catch {
+    // handled below
+  }
+
+  if (email === "" || password === "") {
+    return NextResponse.json({
+      ok: false,
+      message: "Enter an email and a password.",
+      redirectTo: null,
+    } satisfies LoginResponse);
+  }
+
+  const user = getUserByEmail(email);
+
+  // Run the comparison even when the user is missing, against a throwaway
+  // hash, so a non-existent account does not answer noticeably faster
+  // than a wrong password.
+  const stored =
+    user?.password_hash ??
+    "scrypt$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
+  const passwordOk = verifyPassword(password, stored);
+
+  if (!user || !passwordOk) {
+    return NextResponse.json({
+      ok: false,
+      message: GENERIC_FAILURE,
+      redirectTo: null,
+    } satisfies LoginResponse);
+  }
+
+  const response = NextResponse.json({
+    ok: true,
+    message: null,
+    // Each role lands on its own home. A rep starts at the console; an
+    // admin has nothing to do there.
+    redirectTo: homeFor(user.role),
+  } satisfies LoginResponse);
+
+  response.cookies.set({
+    name: SESSION_COOKIE,
+    value: createSessionToken({ id: user.id, role: user.role, name: user.name }),
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_TTL_SECONDS,
+    // Off in development so the cookie survives plain http on localhost.
+    secure: process.env.NODE_ENV === "production",
+  });
+
+  return response;
+}

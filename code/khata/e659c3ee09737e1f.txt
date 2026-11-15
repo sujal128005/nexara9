@@ -1,0 +1,128 @@
+/**
+ * The conversation the two operators rehearse before a live phone demo.
+ *
+ * The lines are data. The verdicts are NOT: nothing in this file records
+ * what a line is supposed to adjudicate to. /script runs each rep line
+ * through the same redact -> stub extraction -> adjudicate path the
+ * console uses and prints whatever comes back.
+ *
+ * That is the point. A crib sheet that asserts "this one goes STALE"
+ * is a claim about the system written by hand, which is exactly the kind
+ * of thing this product exists to catch. If a line stops producing the
+ * verdict we wanted, the page will say so on stage rather than in
+ * rehearsal.
+ *
+ * The customer is Anjali Bhatt: Indore, LG washing machine, Rs 53,700
+ * over 9 months. Her EMI figures are nowhere near Meenakshi's Rs 28,400
+ * over 6 months, so a misquoted EMI here is visibly about her basket.
+ */
+
+export interface ScriptLine {
+  speaker: "rep" | "customer";
+  text: string;
+  /** Stage direction for the operators. Never shown as dialogue. */
+  note?: string;
+}
+
+/** The customer this script is written against. */
+export const LIVE_CUSTOMER_ID = "cus_ab_bhatt";
+
+/**
+ * Numbers are written as digits because that is what Chrome's speech
+ * recognition emits for spoken figures, and the extractor sees the
+ * recognizer's output rather than this page. Say them naturally —
+ * "four ninety-nine", not "four hundred ninety-nine point zero".
+ */
+export const LIVE_SCRIPT: ScriptLine[] = [
+  {
+    speaker: "rep",
+    text: "Hello, am I speaking with Anjali? This is Nikhil calling from the finance desk about the washing machine you were looking at.",
+    note: "Opening. No claim here — Khata should stay quiet, which is worth pointing out.",
+  },
+  {
+    speaker: "customer",
+    text: "Yes, speaking. I did put it in the cart but then I saw the EMI thing and I wasn't sure.",
+  },
+  {
+    speaker: "rep",
+    text: "That's exactly why I called. Before anything, is it alright if I record this call for quality purposes?",
+    note: "Tick the consent box now, on screen, while she answers.",
+  },
+  { speaker: "customer", text: "Yeah, that's fine." },
+  {
+    speaker: "rep",
+    text: "Thank you. So you were looking at the 9 month plan on a basket of 53700.",
+  },
+  {
+    speaker: "customer",
+    text: "Right, and honestly I just want to know what I pay every month. Is it interest free?",
+    note: "The interruption. She cuts in before he finishes the setup.",
+  },
+  {
+    speaker: "rep",
+    text: "The 9 month plan is 0 percent interest, so you only pay the fee.",
+    note: "First misquote. He is thinking of the Pay-in-3, which genuinely is 0%.",
+  },
+  {
+    speaker: "customer",
+    text: "So nothing extra at all? My sister said she paid something extra on hers.",
+  },
+  {
+    speaker: "rep",
+    text: "Let me just check that... sorry, I had that wrong. The 9 month plan carries 14 percent a year.",
+    note: "The hesitation, and the correction Khata put on his screen.",
+  },
+  {
+    speaker: "customer",
+    text: "Okay. And the fee you mentioned, how much is that?",
+  },
+  {
+    speaker: "rep",
+    text: "The processing fee on the 9 month plan is 499, plus GST on that.",
+  },
+  {
+    speaker: "customer",
+    text: "And if I wanted to pay it off faster, over three months instead?",
+    note: "She asks something back before he can move on.",
+  },
+  {
+    speaker: "rep",
+    text: "On the 3 month plan the processing fee is just 99 rupees.",
+    note: "Second misquote, and a different kind: 99 was genuinely correct until 13 July.",
+  },
+  {
+    speaker: "customer",
+    text: "That sounds better. But three months would be a big amount each time, no?",
+  },
+  {
+    speaker: "rep",
+    text: "It would. On 9 months your emi is about 5400.",
+    note: "Third misquote, and the one that depends on her basket rather than the price list.",
+  },
+  {
+    speaker: "customer",
+    text: "Hmm. That's a bit more than I was hoping. What if I'm late one month?",
+  },
+  {
+    speaker: "rep",
+    text: "The late fee is 250 flat, plus 2 percent a month on the overdue amount.",
+    note: "Correct, and deliberately the sentence that used to trip the extractor.",
+  },
+  {
+    speaker: "customer",
+    text: "Fine. What documents do you need from me?",
+  },
+  {
+    speaker: "rep",
+    text: "kyc is aadhaar otp or digilocker, nothing physical.",
+  },
+  {
+    speaker: "customer",
+    text: "Good, I don't have my PAN handy anyway. Let me talk to my husband and I'll call you back this evening.",
+  },
+  {
+    speaker: "rep",
+    text: "Of course. I'll send the details across. Thanks for your time, Anjali.",
+    note: "End the call here and let Khata write the khata.",
+  },
+];

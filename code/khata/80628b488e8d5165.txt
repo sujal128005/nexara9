@@ -1,0 +1,24 @@
+/**
+ * npm run db:init — applies db/schema.sql.
+ *
+ * Idempotent: every statement in the schema is CREATE ... IF NOT EXISTS,
+ * so running it against a populated database is a no-op rather than a
+ * data loss event. Seeding is a separate command on purpose.
+ */
+
+import { applySchema, db } from "../lib/db";
+
+applySchema();
+
+const tables = db()
+  .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+  .all() as Array<{ name: string }>;
+
+console.log(`Schema applied to db/khata.db — ${tables.length} tables:`);
+for (const t of tables) {
+  const count = db()
+    .prepare(`SELECT count(*) AS n FROM "${t.name}"`)
+    .get() as { n: number };
+  console.log(`  ${t.name.padEnd(12)} ${count.n} row${count.n === 1 ? "" : "s"}`);
+}
+console.log("\nRun npm run reset:demo to seed users, customers and deals.\n");

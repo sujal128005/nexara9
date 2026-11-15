@@ -1,0 +1,128 @@
+/**
+ * What the console is allowed to load, as a pure function of the session.
+ *
+ * Split out of app/api/bootstrap/route.ts so the rule can be asserted in
+ * lib/selfcheck.ts. The route reads the cookie and serialises; the
+ * decision about what a role may see is here, and it is the same code
+ * path in both places rather than a check written twice.
+ */
+
+import { assertInitialised, listCustomersForUser, listDeals } from "./db";
+import { canPlaceCalls, CONSOLE_DENIED_MESSAGE } from "./access";
+import type { Session } from "./auth";
+
+interface ScriptLine {
+  speaker: "rep" | "customer";
+  text: string;
+}
+
+export interface BootstrapCustomer {
+  id: string;
+  name: string;
+  city: string;
+  cart: { item: string; ticketInr: number };
+  interestedTenureMonths: number;
+  demoScript: ScriptLine[];
+  assignedUserId: string | null;
+}
+
+export interface BootstrapDeal {
+  customerId: string;
+  callId: string;
+  stage: string;
+  openObjection: string;
+  assignedRep: string;
+  quotedTenureMonths: number;
+}
+
+export interface BootstrapUser {
+  name: string;
+  role: "admin" | "sales";
+  authDisabled: boolean;
+}
+
+export interface BootstrapResponse {
+  ok: boolean;
+  customers: BootstrapCustomer[];
+  deals: BootstrapDeal[];
+  user: BootstrapUser | null;
+  message: string | null;
+}
+
+function empty(): { customers: BootstrapCustomer[]; deals: BootstrapDeal[] } {
+  return { customers: [], deals: [] };
+}
+
+export function buildBootstrap(
+  session: Session | null,
+  authOff: boolean
+): BootstrapResponse {
+  try {
+    assertInitialised();
+  } catch (error) {
+    return {
+      ok: false,
+      ...empty(),
+      user: null,
+      message: error instanceof Error ? error.message : "Database unavailable.",
+    };
+  }
+
+  if (!session) {
+    return { ok: false, ...empty(), user: null, message: "Not signed in." };
+  }
+
+  const user: BootstrapUser = {
+    name: session.name,
+    role: session.role,
+    authDisabled: authOff,
+  };
+
+  // An admin gets nothing here, not a filtered everything. The console is
+  // a rep tool; a call placed from an admin session would be attributed
+  // to a user with no customers and would land in the per-rep figures the
+  // admin exists to read. Refusing at the data source means the console
+  // is empty for an admin even if the layout guard is bypassed.
+  if (!canPlaceCalls(session.role)) {
+    return { ok: false, ...empty(), user, message: CONSOLE_DENIED_MESSAGE };
+  }
+
+  // Scoped in the WHERE clause: another rep's customers never leave the
+  // database, so there is nothing in this response to un-hide.
+  const customers: BootstrapCustomer[] = listCustomersForUser(
+    session.uid,
+    session.role
+  ).map((c) => ({
+    id: c.id,
+    name: c.name,
+    city: c.city,
+    cart: { item: c.product, ticketInr: c.ticket_inr },
+    interestedTenureMonths: c.tenure_months,
+    demoScript: JSON.parse(c.demo_script) as ScriptLine[],
+    assignedUserId: c.assigned_user_id,
+  }));
+
+  const visible = new Set(customers.map((c) => c.id));
+  const deals: BootstrapDeal[] = listDeals()
+    .filter((d) => visible.has(d.customer_id))
+    .map((d) => ({
+      customerId: d.customer_id,
+      // Deterministic per customer, and stable across resets so a khata
+      // written today is findable tomorrow.
+      callId: `call_${d.customer_id}`,
+      stage: d.stage,
+      openObjection: d.open_objection ?? "",
+      // Display name for the approval panel; the authoritative id is
+      // resolved server-side at approve time, never posted by the client.
+      assignedRep: d.approved_by_user_id ?? "",
+      quotedTenureMonths: d.quoted_tenure_months ?? 0,
+    }));
+
+  return {
+    ok: true,
+    customers,
+    deals,
+    user,
+    message: customers.length === 0 ? "No customers are assigned to you." : null,
+  };
+}

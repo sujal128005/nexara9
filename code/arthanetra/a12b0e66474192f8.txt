@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ArthaNetra. See the real price.</title>
+  <meta name="description" content="ArthaNetra reads any loan offer, EMI deal, credit card bill or insurance pitch and shows what it will actually cost you." />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+</head>
+<body>
+
+<nav class="gnav" aria-label="Main">
+  <div class="gnav-inner">
+    <a class="logo" href="#top" aria-label="ArthaNetra home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M2.5 16C6.8 9.2 11.2 6.5 16 6.5S25.2 9.2 29.5 16C25.2 22.8 20.8 25.5 16 25.5S6.8 22.8 2.5 16Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="16" cy="16" r="4.6" fill="currentColor"/></svg>
+      <span>ArthaNetra</span>
+    </a>
+    <div class="gnav-links">
+      <a href="#try" data-i18n="nav.try">Try it</a>
+      <a href="#how" data-i18n="nav.how">How it works</a>
+      <a href="#security" data-i18n="nav.security">Security</a>
+    </div>
+    <div class="gnav-right">
+      <label class="lang-select">
+        <span class="sr">Language</span>
+        <select id="lang">
+          <option value="en">English</option><option value="hi">हिन्दी</option><option value="hinglish">Hinglish</option>
+          <option value="ta">தமிழ்</option><option value="te">తెలుగు</option><option value="bn">বাংলা</option>
+          <option value="mr">मराठी</option><option value="kn">ಕನ್ನಡ</option><option value="gu">ગુજરાતી</option>
+          <option value="ml">മലയാളം</option><option value="pa">ਪੰਜਾਬੀ</option><option value="or">ଓଡ଼ିଆ</option>
+        </select>
+      </label>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <p class="hero-eyebrow">ArthaNetra <span class="deva">अर्थनेत्र</span></p>
+  <h1 data-i18n="hero.title">See the real price.</h1>
+  <p class="hero-sub" data-i18n="hero.sub">Loan apps, EMI offers, card bills and insurance pitches all show you one number. ArthaNetra reads the fine print and shows you the one you will actually pay.</p>
+  <div class="hero-ctas">
+    <a class="btn btn-blue" href="#try" data-i18n="hero.cta">Check an offer</a>
+    <a class="link-more" href="#how"><span data-i18n="hero.how">How it works</span> <svg class="chev" viewBox="0 0 8 14" aria-hidden="true"><path d="M1 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  </div>
+
+  <div class="showcase" aria-label="Example">
+    <div class="showcase-col">
+      <p class="showcase-label" data-i18n="show.says">The loan app says</p>
+      <p class="showcase-num muted-num">0.1%<span data-i18n="show.day"> a day</span></p>
+    </div>
+    <div class="showcase-divider" aria-hidden="true"></div>
+    <div class="showcase-col">
+      <p class="showcase-label" data-i18n="show.costs">What it really costs</p>
+      <p class="showcase-num red-num">807%<span data-i18n="show.year"> a year</span></p>
+    </div>
+    <p class="showcase-foot" data-i18n="show.foot">A ₹5,000 loan where only ₹3,938 reaches your account and ₹5,075 is due in 15 days.</p>
+  </div>
+</header>
+
+<section class="section alt" id="try">
+  <div class="wrap">
+    <h2 class="section-title" data-i18n="try.title">Check an offer.</h2>
+    <p class="section-sub" data-i18n="try.sub">Pick an example, paste the text, or upload a PDF or screenshot.</p>
+
+    <div class="panel">
+      <div class="segmented" role="tablist" aria-label="Input method">
+        <button class="seg active" data-tab="samples" role="tab" aria-selected="true" data-i18n="tab.examples">Examples</button>
+        <button class="seg" data-tab="paste" role="tab" aria-selected="false" data-i18n="tab.paste">Paste text</button>
+        <button class="seg" data-tab="upload" role="tab" aria-selected="false" data-i18n="tab.upload">Upload</button>
+      </div>
+
+      <div class="tab-body" data-body="samples">
+        <div id="samples" class="samples"></div>
+        <p class="fineprint" data-i18n="try.fine">All examples are fictional and written to mirror patterns seen in real Indian offers.</p>
+      </div>
+      <div class="tab-body hidden" data-body="paste">
+        <textarea id="doc" rows="11" data-i18n-ph="paste.placeholder" placeholder="Paste the offer, SMS, WhatsApp message, Key Facts Statement or terms and conditions here."></textarea>
+      </div>
+      <div class="tab-body hidden" data-body="upload">
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept=".pdf,.txt,.png,.jpg,.jpeg,.webp" hidden />
+          <svg class="drop-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0l-4.5 4.5M12 4l4.5 4.5M4 15v3.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="drop-title" data-i18n="upload.title">Drop a file here, or choose one</span>
+          <span class="drop-sub" data-i18n="upload.sub">PDF, PNG, JPG or text. Up to 8 MB.</span>
+          <span id="file-name" class="drop-file"></span>
+        </label>
+      </div>
+
+      <div class="panel-foot">
+        <div class="options">
+          <label class="opt"><span data-i18n="opt.compare">Compare investments with</span>
+            <input id="benchmark" type="number" step="0.1" value="7.1" min="0" max="20" /> %
+          </label>
+          <label class="switch-row">
+            <span data-i18n="opt.offline">Offline mode</span>
+            <input type="checkbox" id="offline" class="switch" />
+          </label>
+        </div>
+        <button id="go" class="btn btn-blue btn-lg" data-i18n="btn.analyze">Analyze</button>
+      </div>
+    </div>
+
+    <div id="progress" class="progress hidden" aria-live="polite">
+      <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+      <p id="progress-text">Reading the document</p>
+    </div>
+    <div id="error" class="error hidden" role="alert"></div>
+  </div>
+</section>
+
+<main id="results" class="hidden">
+
+  <section class="section verdict-section">
+    <div class="wrap verdict">
+      <div class="ring-wrap"><svg id="ring" viewBox="0 0 200 200" role="img" aria-label="Trap Score"></svg></div>
+      <div class="verdict-text">
+        <p class="band" id="band"></p>
+        <h2 id="headline"></h2>
+        <p id="advice" class="verdict-advice"></p>
+        <p id="meta" class="verdict-meta"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap">
+      <h2 class="section-title" id="truth-title">What they show. What you pay.</h2>
+      <div class="compare" id="truth"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2 class="section-title" data-i18n="res.money_title">Follow the money.</h2>
+      <p class="section-sub" data-i18n="res.money_sub">Every rupee, with a date. Calculated by the engine, not by the AI.</p>
+      <div id="money"></div>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap narrow">
+      <h2 class="section-title" id="findings-title">What is wrong with this offer.</h2>
+      <p class="section-sub" id="rulepack"></p>
+      <div id="findings" class="findings"></div>
+      <div id="patterns"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2 class="section-title" data-i18n="res.proof_title">Every number, proven.</h2>
+      <p class="section-sub" data-i18n="res.proof_sub">Each value is tied to the exact words in your document. Click a row to see it highlighted.</p>
+      <div class="proof">
+        <div class="proof-col">
+          <p id="evidence-summary" class="evidence-summary"></p>
+          <div id="ledger" class="ledger"></div>
+        </div>
+        <div class="proof-col">
+          <p class="doc-legend"><span class="hl hl-ev" data-i18n="legend.used">Used in the calculation</span><span class="hl hl-dp" data-i18n="legend.pressure">Pressure tactic</span></p>
+          <pre id="docview" class="docview"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap">
+      <h2 class="section-title" data-i18n="res.sim_title">Try different terms.</h2>
+      <p class="section-sub" data-i18n="res.sim_sub">Move the sliders to see what changes if you negotiate, prepay or pay more each month.</p>
+      <div class="sim">
+        <div id="sim-controls" class="sim-controls"></div>
+        <div id="sim-out" class="sim-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap narrow">
+      <h2 class="section-title" data-i18n="res.explain_title">In plain words.</h2>
+      <div class="actions-row">
+        <button class="text-btn" id="listen" data-i18n="act.listen">Listen</button>
+        <button class="text-btn" id="share" data-i18n="act.share">Share on WhatsApp</button>
+        <button class="text-btn" id="print" data-i18n="act.pdf">Save as PDF</button>
+      </div>
+      <article id="explain-body" class="article"></article>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap narrow">
+      <h2 class="section-title" data-i18n="res.ask_title">Ask a question.</h2>
+      <p class="section-sub" data-i18n="res.ask_sub">Type or speak, in any language.</p>
+      <div id="chat" class="chat"></div>
+      <div class="chips" id="suggest"></div>
+      <div class="composer">
+        <input id="question" data-i18n-ph="ask.placeholder" placeholder="Ask about this offer" autocomplete="off" />
+        <button class="icon-btn" id="mic" title="Ask by voice" aria-label="Ask by voice">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon-btn send" id="askbtn" aria-label="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m0 0l-6 6m6-6l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2 class="section-title" data-i18n="res.method_title">How we got this result.</h2>
+      <div class="method">
+        <div id="anatomy" class="anatomy"></div>
+        <dl id="engine-info" class="engine-info"></dl>
+      </div>
+    </div>
+  </section>
+</main>
+
+<section class="section alt" id="how">
+  <div class="wrap">
+    <h2 class="section-title center" data-i18n="how.title">The AI reads. The maths is done by code.</h2>
+    <p class="section-sub center" data-i18n="how.sub">Language models are good at reading and bad at arithmetic. So we never let them do the arithmetic.</p>
+    <div class="steps">
+      <div class="step">
+        <span class="step-num">1</span>
+        <h3 data-i18n="how.1.title">It reads</h3>
+        <p data-i18n="how.1.text">An AI model pulls out every term, and it has to quote the exact words from your document for each one. A second, rule-based reader checks the same document independently.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <h3 data-i18n="how.2.title">It checks</h3>
+        <p data-i18n="how.2.text">Quotes that are not in the document are thrown out. The verified terms go into a calculation engine that works out the true yearly cost, then into 21 checks based on RBI and IRDAI rules.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        <h3 data-i18n="how.3.title">It explains</h3>
+        <p data-i18n="how.3.text">You get the result in plain words, in 12 Indian languages, with questions to ask and a message you can send back. Any number in that text is matched against the calculation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section dark" id="security">
+  <div class="wrap">
+    <h2 class="section-title center" data-i18n="sec.title">Your documents stay yours.</h2>
+    <p class="section-sub center" data-i18n="sec.sub">Financial papers carry personal details. ArthaNetra is built so they never leave your control.</p>
+    <div class="sec-grid">
+      <div class="sec-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.5-6 9-6c1.6 0 3 .5 4.2 1.2M21 12s-3.5 6-9 6c-1.6 0-3-.5-4.2-1.2M4 20L20 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <h3 data-i18n="sec.1.title">Personal details masked</h3>
+        <p data-i18n="sec.1.text">Phone, PAN, Aadhaar, account, card and UPI numbers are masked before any text reaches an AI service.</p>
+      </div>
+      <div class="sec-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 10.5V8a4 4 0 018 0v2.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        <h3 data-i18n="sec.2.title">Nothing is stored</h3>
+        <p data-i18n="sec.2.text">Documents are processed in memory and discarded. There is no database and no account to hack.</p>
+      </div>
+      <div class="sec-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.4-3 8.2-7 9.5-4-1.3-7-5.1-7-9.5V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.8 12.2l2.2 2.2 4.3-4.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h3 data-i18n="sec.3.title">Cannot be talked into a result</h3>
+        <p data-i18n="sec.3.text">Text inside a document is treated as data. Hidden instructions cannot change the maths or the verdict.</p>
+      </div>
+      <div class="sec-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 12.3l2.4 2.4 4.6-5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h3 data-i18n="sec.4.title">No invented numbers</h3>
+        <p data-i18n="sec.4.text">Every figure must be found in your document or computed from it. Anything else is flagged.</p>
+      </div>
+      <div class="sec-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="18" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        <h3 data-i18n="sec.5.title">Abuse protection</h3>
+        <p data-i18n="sec.5.text">Rate limits, size limits, and file checks based on the real file contents, not the name.</p>
+      </div>
+      <div class="sec-item">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v5h5M9 14l2 2 4-4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h3 data-i18n="sec.6.title">Tamper-evident reports</h3>
+        <p data-i18n="sec.6.text">Each report carries an ID derived from the document and the result, so a shared report can be checked.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <p id="footer-disclaimer">ArthaNetra helps people understand financial offers. It is not legal, tax or investment advice.</p>
+    <p class="footer-line"><span data-i18n="footer.built">Built for Arthaton 2026</span><span id="engine-pill">Connecting</span></p>
+  </div>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

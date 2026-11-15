@@ -1,0 +1,30 @@
+/**
+ * Server guard around /console.
+ *
+ * The console itself is a client component, so the role check cannot
+ * live in it — a client can be told anything. This layout runs on the
+ * server, before the console renders, and redirects an admin away.
+ *
+ * middleware.ts also gates /console, but middleware only decides whether
+ * a page renders. This decides whether it renders for THIS role, and
+ * /api/bootstrap independently refuses an admin, so the console has no
+ * data to show even if this layout were bypassed.
+ */
+
+import { redirect } from "next/navigation";
+
+import { canPlaceCalls } from "@/lib/access";
+import { currentSession } from "@/lib/session";
+
+export const dynamic = "force-dynamic";
+
+export default async function ConsoleLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const session = await currentSession();
+  if (!session) redirect("/login");
+  if (!canPlaceCalls(session.role)) redirect("/dashboard?denied=console");
+  return <>{children}</>;
+}

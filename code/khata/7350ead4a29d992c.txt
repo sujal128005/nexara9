@@ -1,0 +1,152 @@
+/**
+ * Session cookie authentication. No NextAuth, no provider, no dependency.
+ *
+ * Passwords: scrypt from node:crypto, compared with timingSafeEqual.
+ * Sessions: a signed cookie, HMAC-SHA256 over a small JSON payload. The
+ * cookie carries no secret — it carries a claim plus a signature, and an
+ * unsigned or altered cookie is rejected.
+ *
+ * WHERE THE BOUNDARY ACTUALLY IS: middleware.ts redirects unauthenticated
+ * requests, but middleware is routing, not security. Every page and route
+ * that returns data re-reads the session server-side and scopes its query
+ * to the user. Hiding UI is not access control.
+ */
+
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+
+import {
+  DEV_FALLBACK_SECRET,
+  SESSION_COOKIE,
+  SESSION_TTL_SECONDS,
+} from "./auth-shared";
+
+export { SESSION_COOKIE, SESSION_TTL_SECONDS };
+
+export type Role = "admin" | "sales";
+
+export interface Session {
+  uid: string;
+  role: Role;
+  name: string;
+  /** Epoch seconds. */
+  exp: number;
+}
+
+let warnedAboutSecret = false;
+
+export function sessionSecret(): string {
+  const fromEnv = process.env.KHATA_SESSION_SECRET?.trim();
+  if (fromEnv) return fromEnv;
+  if (!warnedAboutSecret) {
+    warnedAboutSecret = true;
+    console.warn(
+      "KHATA: KHATA_SESSION_SECRET not set — signing sessions with a public development fallback. Anyone who reads the source can forge a session. Set the variable before this is exposed to anything real."
+    );
+  }
+  return DEV_FALLBACK_SECRET;
+}
+
+/** True when the middleware gate is switched off for the demo. */
+export function authDisabled(): boolean {
+  return process.env.KHATA_DISABLE_AUTH === "1";
+}
+
+/* passwords */
+
+export function hashPassword(plain: string): string {
+  const salt = randomBytes(16).toString("hex");
+  return `scrypt$${salt}$${scryptSync(plain, salt, 32).toString("hex")}`;
+}
+
+/**
+ * Constant-time comparison. A plain `===` on the derived key leaks how
+ * much of the hash matched through timing, which is the one thing a
+ * password check must not do.
+ */
+export function verifyPassword(plain: string, stored: string): boolean {
+  const parts = stored.split("$");
+  if (parts.length !== 3 || parts[0] !== "scrypt") return false;
+  const [, salt, expected] = parts;
+  try {
+    const derived = scryptSync(plain, salt, 32);
+    const expectedBuf = Buffer.from(expected, "hex");
+    if (derived.length !== expectedBuf.length) return false;
+    return timingSafeEqual(derived, expectedBuf);
+  } catch {
+    return false;
+  }
+}
+
+/* session tokens */
+
+function b64url(input: Buffer | string): string {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function sign(payload: string): string {
+  return b64url(createHmac("sha256", sessionSecret()).update(payload).digest());
+}
+
+export function createSessionToken(
+  user: { id: string; role: Role; name: string },
+  now = Math.floor(Date.now() / 1000)
+): string {
+  const session: Session = {
+    uid: user.id,
+    role: user.role,
+    name: user.name,
+    exp: now + SESSION_TTL_SECONDS,
+  };
+  const payload = b64url(JSON.stringify(session));
+  return `${payload}.${sign(payload)}`;
+}
+
+/**
+ * Verify and decode. Returns null for anything not exactly right: bad
+ * shape, bad signature, expired. There is no partial success here.
+ */
+export function readSessionToken(
+  token: string | undefined | null,
+  now = Math.floor(Date.now() / 1000)
+): Session | null {
+  if (!token) return null;
+  const dot = token.lastIndexOf(".");
+  if (dot <= 0) return null;
+
+  const payload = token.slice(0, dot);
+  const signature = token.slice(dot + 1);
+
+  const expected = sign(payload);
+  if (expected.length !== signature.length) return null;
+  if (
+    !timingSafeEqual(Buffer.from(expected), Buffer.from(signature))
+  ) {
+    return null;
+  }
+
+  let session: Session;
+  try {
+    session = JSON.parse(
+      Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString(
+        "utf8"
+      )
+    ) as Session;
+  } catch {
+    return null;
+  }
+
+  if (
+    typeof session.uid !== "string" ||
+    (session.role !== "admin" && session.role !== "sales") ||
+    typeof session.exp !== "number"
+  ) {
+    return null;
+  }
+  if (session.exp <= now) return null;
+
+  return session;
+}

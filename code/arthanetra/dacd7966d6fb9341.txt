@@ -1,0 +1,16 @@
+ShopEase Checkout - Aurora X5 Smartphone  (FICTIONAL DEMO SAMPLE)
+====================================================================
+MRP: ₹30,000
+Pay with No-Cost EMI, 0% interest! Just ₹5,000/month for 6 months.
+
+Payment options
+1) Pay in full now: get instant discount of ₹2,500 and pay only ₹27,500.
+   (Instant discount not applicable on EMI transactions.)
+2) No-Cost EMI: 6 monthly instalments of ₹5,000 on your credit card.
+
+EMI terms (financed by your card issuer)
+- Interest of 15% p.a. is charged by the bank and offered back as an upfront discount on the EMI amount.
+- Processing fee: ₹199 + GST, payable upfront at checkout.
+- GST on the interest component (approx. ₹236) will be billed with the first instalment.
+- Pre-closure: 3% of outstanding.
+Deal ends tonight! *Conditions apply.

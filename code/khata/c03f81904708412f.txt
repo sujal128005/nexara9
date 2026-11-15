@@ -1,0 +1,26 @@
+/**
+ * Constants shared between the Node server and the Edge middleware.
+ *
+ * Middleware cannot import lib/auth.ts because that pulls in node:crypto,
+ * which does not exist in the Edge runtime. Rather than copy the cookie
+ * name and the fallback secret into middleware.ts and let the two drift,
+ * both import them from here. This file must stay free of any Node import.
+ */
+
+export const SESSION_COOKIE = "khata_session";
+
+export const SESSION_TTL_SECONDS = 60 * 60 * 12;
+
+/**
+ * Deterministic on purpose. The Edge middleware and the Node server are
+ * separate module instances; a random per-process fallback would make
+ * them disagree about every cookie and produce an endless login loop.
+ * Insecure by construction, warned about at startup, unused whenever
+ * KHATA_SESSION_SECRET is set.
+ */
+export const DEV_FALLBACK_SECRET =
+  "khata-dev-session-secret-not-for-production";
+
+export function resolveSecret(): string {
+  return process.env.KHATA_SESSION_SECRET?.trim() || DEV_FALLBACK_SECRET;
+}
