@@ -49,7 +49,14 @@
     const code = el('div', 'crash-code');
     const run = el('p', 'crash-run');
     const out = el('div', 'crash-out');
-    page.append(err, tab, code, run);
+    // reading mode: the program stays on screen, scrollable, with Copy, Download and Close
+    const bar = el('div', 'crash-bar');
+    const copyBtn = el('button', 'crash-btn', 'Copy code'); copyBtn.type = 'button';
+    const dl = el('a', 'crash-btn', 'Download nexara9.hs'); dl.href = '/nexara9.hs'; dl.setAttribute('download', 'nexara9.hs');
+    const closeBtn = el('button', 'crash-btn crash-btn-x', 'Close'); closeBtn.type = 'button';
+    const hint = el('p', 'crash-hint', 'Run it with GHC:  runghc nexara9.hs');
+    bar.append(hint, copyBtn, dl, closeBtn);
+    page.append(bar, err, tab, code, run);
     wipe.append(page);
     root.append(wipe, line, out);
     document.body.append(root);
@@ -61,9 +68,10 @@
     const lines = src.replace(/\n+$/, '').split('\n');
     const rows = lines.map((l) => { const r = el('div', `crash-ln${/^\s*--/.test(l) ? ' crash-c' : ''}`); code.append(r); return r; });
     const total = lines.reduce((a, l) => a + l.length + 1, 0);
-    out.append(el('pre', 'crash-logo', logo.replace(/\n+$/, '')), el('p', 'crash-cap', 'Haskell · nexara9.me/nexara9.hs'));
+    const viewBtn = el('button', 'crash-view', 'View code'); viewBtn.type = 'button';
+    out.append(el('pre', 'crash-logo', logo.replace(/\n+$/, '')), el('p', 'crash-cap', 'Haskell · nexara9.me/nexara9.hs'), viewBtn);
 
-    let ended = false;
+    let ended = false, reading = false;
     const end = () => {
       if (ended) return;
       ended = true;
@@ -76,8 +84,25 @@
       }
     };
     const key = (e) => { if (e.key === 'Escape') end(); };
+    function read() {
+      if (reading || ended) return;
+      reading = true;
+      root.classList.add('crash-reading');
+      root.removeAttribute('aria-hidden');
+      root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'nexara9.hs, the program that draws the logo');
+      for (let i = 0; i < lines.length; i++) { rows[i].textContent = lines[i] || '\u00a0'; rows[i].classList.add('on'); rows[i].classList.remove('caret'); }
+      code.scrollTop = 0;
+      closeBtn.focus({ preventScroll: true });
+    }
+    viewBtn.addEventListener('click', (e) => { e.stopPropagation(); read(); });
+    bar.addEventListener('click', (e) => e.stopPropagation());
+    closeBtn.addEventListener('click', () => end());
+    copyBtn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(src); copyBtn.textContent = 'Copied'; } catch (_) { copyBtn.textContent = 'Copy failed'; }
+      setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1600);
+    });
     window.addEventListener('keydown', key);
-    root.addEventListener('click', end);
+    root.addEventListener('click', () => { if (!reading) end(); });   // a click ends it early, except while reading the code
 
     if (reduce) {                                         // reduced motion: no sweep or typing, just the result
       wipe.style.clipPath = 'none'; line.remove();
@@ -91,7 +116,7 @@
     const t0 = performance.now();
     let typedLine = -1, ranAt = 0;
     function frame(now) {
-      if (ended) return;
+      if (ended || reading) return;                       // reading the code: everything stays until Close
       const t = now - t0;
       holdScroll();
       // 1. the red line sweeps down; the page behind it turns into the error screen

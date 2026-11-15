@@ -1078,3 +1078,19 @@ body { font-size: 1rem; }
 .crash-logo { margin: 0; font: 700 clamp(7px, 2.2vmin, 18px)/1.2 var(--mono); color: #b8892c; text-shadow: 0 0 18px rgba(217, 180, 90, .35); white-space: pre; }
 .crash-cap { max-width: 46ch; margin: 0; font: 500 clamp(10px, 1.1vw, 13px)/1.45 var(--mono); color: #8a6a1f; text-align: center; }
 @media (prefers-reduced-motion: reduce) { .crash-ln.caret::after { animation: none; } }
+.crash-view { justify-self: center; display: inline-flex; align-items: center; height: 40px; margin-top: 2px; padding: 0 20px; border: 1px solid #c9a24b; border-radius: 999px; background: #fff; color: #8a6a1f; font: 600 13px/1 var(--sans); cursor: pointer; pointer-events: none; transition: background .2s, color .2s; }
+.crash-done .crash-view { pointer-events: auto; }
+.crash-view:hover, .crash-view:focus-visible { background: #b8892c; color: #fff; outline: none; }
+.crash-bar { display: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.crash-hint { flex: 1 1 220px; margin: 0; color: #8a6a1f; font-weight: 600; }
+.crash-btn { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border: 1px solid #f0b8bc; border-radius: 999px; background: #fff; color: #a3121a; font: 600 12.5px/1 var(--sans); text-decoration: none; cursor: pointer; white-space: nowrap; }
+.crash-btn:hover, .crash-btn:focus-visible { border-color: #e0182d; background: #fff1f1; outline: none; }
+.crash-btn-x { background: #e0182d; border-color: #e0182d; color: #fff; }
+.crash-btn-x:hover, .crash-btn-x:focus-visible { background: #b8121f; color: #fff; }
+.crash-reading .crash-bar { display: flex; }
+.crash-reading .crash-err, .crash-reading .crash-run { display: none; }
+.crash-reading .crash-out { opacity: 0; visibility: hidden; }
+.crash-reading .crash-code { overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.crash-reading .crash-ln { color: #a3121a; }
+.crash-reading .crash-c { color: #c76a71; }
+@media (max-width: 520px) { .crash-hint { flex-basis: 100%; } .crash-btn { flex: 1 1 auto; justify-content: center; } }
