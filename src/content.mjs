@@ -55,6 +55,7 @@ export const founderProfiles = [
     focus: ['Mechanical design', 'Program management', 'AI products', 'Procurement technology'],
     highlights: [
       'Winner, IBM SkillsBuild Hackathon South Region Finale 2026 · National finalist',
+      'Winner, RizeOS Hackathon 2026',
       'Bangalore finalist, Paytm Build for India AI Hackathon',
       'Dolphin Tank India Founder Mentorship Program, 2026',
       'Second runner-up, KL University AI Build 2026',
@@ -113,7 +114,7 @@ export const flagships = [
     name: 'Limen',
     kind: 'Venture',
     glyph: 'limen',
-    badge: 'Winner · IBM SkillsBuild South Region Finale 2026',
+    badge: 'Winner · IBM SkillsBuild South Region Finale 2026 · RizeOS Hackathon 2026',
     line: 'AI purchasing infrastructure where the spending limit is enforced, not trusted.',
     funding: true,
   },
