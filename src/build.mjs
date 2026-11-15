@@ -12,7 +12,7 @@ import { glyph, logoMark, icon } from './glyphs.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Cache-busting version: a hash of every stylesheet and script, so a changed file always gets a new URL.
 const V = createHash('sha256')
-  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/css/search.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js', 'assets/js/code.js', 'assets/js/search.js', 'assets/js/orb.js', 'assets/js/rain.js']
+  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/css/search.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js', 'assets/js/code.js', 'assets/js/search.js', 'assets/js/orb.js', 'assets/js/crash.js']
     .map((f) => readFileSync(join(ROOT, f))).join('\n'))
   .digest('hex').slice(0, 10);
 
@@ -81,7 +81,7 @@ ${inner ? '<link rel="preload" href="/assets/fonts/archivo-display.woff2" as="fo
 <link rel="stylesheet" href="/assets/css/search.css?v=${V}">
 <script src="/assets/js/main.js?v=${V}" defer></script>
 <script src="/assets/js/search.js?v=${V}" defer></script>
-${inner ? `<script src="/assets/js/rain.js?v=${V}" defer></script>` : ''}
+${inner ? `<script src="/assets/js/crash.js?v=${V}" defer></script>` : ''}
 ${scripts.map((s) => `<script src="/assets/js/${s}?v=${V}" defer></script>`).join('\n')}
 </head>`;
 }
