@@ -1,7 +1,7 @@
 // Nexara9 — the "crash", hidden in the big NEXARA9 at the bottom of every page.
 // Click or tap it: a red line sweeps down the screen and the site turns into a white error page. A red error
 // appears, then real code types itself out line by line: a Haskell program that draws the Nexara9 "9" from the
-// logo's own geometry. It "runs", the logo it draws appears, and the site comes back, all in about four seconds.
+// logo's own geometry. It "runs", the logo it draws appears, and the site comes back, all in about seven seconds.
 // The program is real: /nexara9.hs runs on any computer with GHC (runghc nexara9.hs).
 (() => {
   'use strict';
@@ -10,7 +10,7 @@
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const canBuzz = typeof navigator.vibrate === 'function';
   const buzz = (p) => { if (canBuzz) { try { navigator.vibrate(p); } catch (_) { /* not allowed */ } } };
-  const T = { sweep: 420, error: 260, type: 2050, run: 260, show: 950, out: 300 };   // about 4.3 s in all
+  const T = { sweep: 420, error: 650, type: 3300, run: 300, show: 2000, out: 300 };  // about 7 s in all
 
   // the program and what it prints, fetched once from this site (the same files anyone can download)
   let files = null;
@@ -61,7 +61,7 @@
     const lines = src.replace(/\n+$/, '').split('\n');
     const rows = lines.map((l) => { const r = el('div', `crash-ln${/^\s*--/.test(l) ? ' crash-c' : ''}`); code.append(r); return r; });
     const total = lines.reduce((a, l) => a + l.length + 1, 0);
-    out.append(el('pre', 'crash-logo', logo.replace(/\n+$/, '')), el('p', 'crash-cap', 'Haskell · draws the Nexara9 logo from its own geometry · nexara9.me/nexara9.hs'));
+    out.append(el('pre', 'crash-logo', logo.replace(/\n+$/, '')), el('p', 'crash-cap', 'Haskell · nexara9.me/nexara9.hs'));
 
     let ended = false;
     const end = () => {
