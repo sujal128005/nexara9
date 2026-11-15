@@ -58,7 +58,7 @@ export const founderProfiles = [
       'Winner, RizeOS Hackathon 2026',
       'Bangalore finalist, Paytm Build for India AI Hackathon',
       'Dolphin Tank India Founder Mentorship Program, 2026',
-      'Second runner-up, AI Build 2026 · among 1,039 students from 75+ colleges',
+      'Second runner-up, AI Build 2026, Vijayawada · among 1,039 students from 75+ colleges',
       'Club lead, DataWorks Club (AI/ML and Data Science), IIITDM Kurnool',
       'Institute coordinator, Udbhav Inter-IIIT Tech Meet 2025',
       'Author of 10 books in English and Hindi as [alfaazsujalke](https://alfaaz.sujalnegi.tech/)',
