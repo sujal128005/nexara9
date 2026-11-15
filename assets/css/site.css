@@ -1039,3 +1039,19 @@ body { font-size: 1rem; }
 }
 @media (max-width: 300px) { .orb-menu-b { grid-template-columns: 1fr; } .orb-fab { width: 44px; height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .orb-ball, .orb-thinking span { animation: none; } }
+
+/* =====================================================================
+   The code rain, hidden in the big NEXARA9 at the bottom
+   ===================================================================== */
+.ft-egg { display: inline-block; margin: 0; padding: 0 0.04em; border: 0; background: none; font: inherit; letter-spacing: inherit; color: transparent; -webkit-text-stroke: inherit; cursor: default; transition: -webkit-text-stroke-color .35s, transform .35s var(--ease, ease), filter .35s; -webkit-tap-highlight-color: transparent; }
+.ft-egg:focus { outline: none; }
+.ft-egg:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; border-radius: 12px; }
+@media (hover: hover) and (pointer: fine) {
+  .ft-egg:hover { cursor: pointer; -webkit-text-stroke-color: rgba(226, 184, 90, 0.95); background: linear-gradient(110deg, rgba(246, 231, 176, .0) 20%, rgba(246, 231, 176, .55) 45%, rgba(217, 180, 90, .35) 55%, rgba(246, 231, 176, .0) 80%) 0 0 / 250% 100%; -webkit-background-clip: text; background-clip: text; animation: egg-sheen 1.6s ease-in-out infinite; transform: translateY(-3px); filter: drop-shadow(0 10px 24px rgba(217, 180, 90, .25)); }
+}
+.ft-egg:active { transform: scale(.985); }
+@keyframes egg-sheen { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+.rain { position: fixed; inset: 0; z-index: 400; width: 100%; height: 100%; display: block; touch-action: none; cursor: pointer; }
+.rain-calm { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; background: rgba(10, 9, 7, .82); color: #e8c46a; font: 820 min(15vw, 18rem)/1 var(--display); letter-spacing: -0.04em; pointer-events: none; animation: calm-in 1.4s ease forwards; }
+@keyframes calm-in { 0% { opacity: 0; } 25%, 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ft-egg:hover { animation: none; } }

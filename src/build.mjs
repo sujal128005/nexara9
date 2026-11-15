@@ -12,7 +12,7 @@ import { glyph, logoMark, icon } from './glyphs.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Cache-busting version: a hash of every stylesheet and script, so a changed file always gets a new URL.
 const V = createHash('sha256')
-  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/css/search.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js', 'assets/js/code.js', 'assets/js/search.js', 'assets/js/orb.js']
+  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/css/search.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js', 'assets/js/code.js', 'assets/js/search.js', 'assets/js/orb.js', 'assets/js/rain.js']
     .map((f) => readFileSync(join(ROOT, f))).join('\n'))
   .digest('hex').slice(0, 10);
 
@@ -81,6 +81,7 @@ ${inner ? '<link rel="preload" href="/assets/fonts/archivo-display.woff2" as="fo
 <link rel="stylesheet" href="/assets/css/search.css?v=${V}">
 <script src="/assets/js/main.js?v=${V}" defer></script>
 <script src="/assets/js/search.js?v=${V}" defer></script>
+${inner ? `<script src="/assets/js/rain.js?v=${V}" defer></script>` : ''}
 ${scripts.map((s) => `<script src="/assets/js/${s}?v=${V}" defer></script>`).join('\n')}
 </head>`;
 }
@@ -187,7 +188,7 @@ function footer() {
     <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'ftr')}<span class="brand-word">NEXARA<b>9</b></span></a>
     <nav class="ft-nav" aria-label="Footer"><a href="/projects/">Projects</a><a href="/ventures/">Ventures</a><a href="/founders/">Founders</a>${ext('https://github.com/sujal128005', 'GitHub')}</nav>
   </div>
-  <p class="ft-mark" aria-hidden="true">NEXARA9</p>
+  <p class="ft-mark"><button type="button" class="ft-egg" aria-label="Nexara9">NEXARA9</button></p>
   <div class="wrap ft-bottom"><span>© ${new Date().getFullYear()} Nexara9</span><span>Kurnool, India</span></div>
 </footer>`;
 }
