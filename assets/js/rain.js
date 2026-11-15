@@ -81,6 +81,8 @@
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
     const html = document.documentElement, overflow = html.style.overflow;
+    const sx0 = window.scrollX, sy0 = window.scrollY;            // the page must not scroll while pieces are loose
+    const holdScroll = () => { if (window.scrollX !== sx0 || window.scrollY !== sy0) window.scrollTo({ left: sx0, top: sy0, behavior: 'instant' }); };
     html.style.overflow = 'hidden';
 
     // one picture per word, drawn once: light words pale, heavy words deep amber with a stronger edge
@@ -129,6 +131,66 @@
     makeWalls();
     const blocks = [];
 
+    // Phones and tablets: what is on screen becomes part of the scene. It stays put (the words pile up around it)
+    // until the phone is tilted, then it all comes loose; afterwards every piece glides back to its place.
+    let freeable = window.matchMedia('(pointer: coarse)').matches;
+    const parts = [], partBodies = [], opened = [];
+    let freed = false;
+    if (freeable) {
+      const SEL = '.site-header .brand, .site-header .hdr-link, .site-header .theme-toggle, .dock-in > *, main h1, main h2, main h3, main p, main a.btn, main .pager-link, main img, main .chip, main .sort, main .t-row, main summary, main .tier, main .st-row, main .qa, main .person, main dl > div, main .live, main .venture, main .jump a, main .fdr-photo, footer .kicker, footer .ft-title, footer .btn, footer .brand, footer .ft-nav a, footer .ft-mark, footer .ft-bottom span';
+      const area = (el) => { const r = el.getBoundingClientRect(); return r.width * r.height; };
+      let els = Array.from(document.querySelectorAll(SEL)).filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 6 && r.height > 6 && r.bottom > 0 && r.right > 0 && r.top < H && r.left < W && getComputedStyle(el).visibility !== 'hidden';
+      });
+      els = els.filter((el) => !els.some((o) => o !== el && o.contains(el)));          // whole pieces, not their insides
+      els.sort((a, b) => area(b) - area(a));
+      for (const el of els.slice(0, 48)) {
+        if (getComputedStyle(el).transform !== 'none') continue;
+        const r = el.getBoundingClientRect();
+        const w = Math.max(6, Math.min(r.width, W - 4) - 2), h = Math.max(6, Math.min(r.height, H * 0.6) - 2);
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const body = Bodies.rectangle(cx, cy, w, h, { density: 0.0011, friction: 0.4, frictionStatic: 0.6, restitution: 0.04, chamfer: { radius: Math.min(10, h / 3) } });
+        Body.setStatic(body, true);                          // pinned for now; made as a normal body first so it keeps its real weight when let go
+        Composite.add(engine.world, body);
+        partBodies.push(body);
+        parts.push({ el, body, cx, cy, saved: { transform: el.style.transform, transition: el.style.transition, transformOrigin: el.style.transformOrigin, willChange: el.style.willChange } });
+      }
+    }
+    function freeParts() {
+      if (freed || !parts.length) return;
+      freed = true;
+      for (const p of parts) {
+        // let pieces move past the edges of their boxes while they are loose
+        for (let a = p.el.parentElement; a && a !== document.body && a !== html; a = a.parentElement) {
+          const cs = getComputedStyle(a);
+          if ((cs.overflowX !== 'visible' || cs.overflowY !== 'visible') && !opened.some((o) => o.el === a)) { opened.push({ el: a, overflow: a.style.overflow }); a.style.overflow = 'visible'; }
+        }
+        p.el.style.transition = 'none'; p.el.style.transformOrigin = '50% 50%'; p.el.style.willChange = 'transform';
+        Body.setStatic(p.body, false);
+        Sleeping.set(p.body, false);
+      }
+      buzz([22, 30, 18, 30, 12]);
+    }
+    function moveParts() {
+      if (!freed) return;
+      for (const p of parts) if (Number.isFinite(p.body.position.x) && Number.isFinite(p.body.angle)) p.el.style.transform = `translate(${(p.body.position.x - p.cx).toFixed(1)}px, ${(p.body.position.y - p.cy).toFixed(1)}px) rotate(${p.body.angle.toFixed(3)}rad)`;
+    }
+    function restoreParts() {
+      if (!parts.length) return;
+      const list = parts.splice(0);
+      if (freed) {
+        for (const p of list) p.el.style.transition = 'transform .8s cubic-bezier(.2, .8, .2, 1)';
+        requestAnimationFrame(() => { for (const p of list) p.el.style.transform = p.saved.transform; });
+      }
+      const keep = setInterval(holdScroll, 16);
+      setTimeout(() => {
+        for (const p of list) Object.assign(p.el.style, p.saved);
+        for (const o of opened.splice(0)) o.el.style.overflow = o.overflow;
+        holdScroll(); clearInterval(keep);
+      }, freed ? 850 : 0);
+    }
+
     // new blocks appear along the "upper" edge (opposite to gravity), wherever there is room
     function spawn() {
       const word = WORDS[(Math.random() * WORDS.length) | 0];
@@ -140,7 +202,7 @@
       const x = Math.min(W - half, Math.max(half, W / 2 - gx * (R - half - depth) + px * u));
       const y = Math.min(H - half, Math.max(half, H / 2 - gy * (R - half - depth) + py * u));
       const box = { min: { x: x - s.w / 2 - 2, y: y - bh / 2 - 2 }, max: { x: x + s.w / 2 + 2, y: y + bh / 2 + 2 } };
-      if (Query.region(blocks, box).length) return false;
+      if (Query.region(blocks, box).length || (partBodies.length && Query.region(partBodies, box).length)) return false;
       const b = Bodies.rectangle(x, y, s.w, bh, {
         chamfer: { radius: rad }, density: 0.0009 * (0.55 + s.heavy * 1.6),
         friction: 0.3, frictionStatic: 0.55, frictionAir: 0.004, restitution: 0.06, angle: Math.atan2(gy, gx) - Math.PI / 2 + (Math.random() - 0.5) * 0.35,
@@ -168,7 +230,8 @@
       if (best > 3) { buzz(Math.round(Math.min(28, 4 + best * 0.7))); lastBuzz = now; }
     });
 
-    let phase = 'fill', fullAt = 0, drainAt = 0, blockedFrames = 0, last = performance.now(), raf = 0, ga = Math.atan2(gy, gx);
+    let phase = 'fill', fullAt = 0, holdAt = 0, drainAt = 0, blockedFrames = 0, last = performance.now(), raf = 0, ga = Math.atan2(gy, gx);
+    const ga0 = ga;                                           // the starting "down", to notice a real tilt
     const began = last;
     const per = Math.max(8, Math.round(target / 11));        // spawn tries per frame: full in about two seconds
 
@@ -194,7 +257,8 @@
       // follow the tilt; wake the pile up when "down" changes
       engine.gravity.x = gx; engine.gravity.y = gy;
       const na = Math.atan2(gy, gx);
-      if (Math.abs(Math.atan2(Math.sin(na - ga), Math.cos(na - ga))) > 0.12) { ga = na; for (const b of blocks) Sleeping.set(b, false); }
+      if (Math.abs(Math.atan2(Math.sin(na - ga), Math.cos(na - ga))) > 0.12) { ga = na; for (const b of blocks) Sleeping.set(b, false); for (const b of partBodies) if (!b.isStatic) Sleeping.set(b, false); }
+      if (freeable && !freed && phase !== 'drain' && Math.abs(Math.atan2(Math.sin(na - ga0), Math.cos(na - ga0))) > 0.3) freeParts();   // tilted: the page comes loose
 
       if (phase === 'fill') {
         let made = 0;
@@ -205,12 +269,10 @@
           phase = 'full'; fullAt = now;
           buzz([45, 30, 25]);
         }
-      } else if (phase === 'full' && now - fullAt > 380) {
-        phase = 'drain'; drainAt = now;
-        Composite.remove(engine.world, walls); walls = [];
-        engine.gravity.scale = 0.008;
-        for (const b of blocks) { Sleeping.set(b, false); Body.setVelocity(b, { x: b.velocity.x + gx * 10, y: b.velocity.y + gy * 10 }); }
-        buzz([14, 22, 12, 22, 10, 22, 8]);
+      } else if (phase === 'full' && now - fullAt > 420) {
+        phase = 'hold'; holdAt = now;                        // stays full for a while; tilting still moves it
+      } else if (phase === 'hold' && now - holdAt > 2500) {
+        drain(now);
       }
       const steps = Math.min(4, Math.max(2, Math.ceil(dt / 12)));   // small steps keep tall piles from sinking; slow screens catch up
       for (let s = 0; s < steps; s++) Engine.update(engine, Math.min(dt / steps, 12));
@@ -222,15 +284,27 @@
         }
         if (!blocks.length || now - drainAt > 950) return finish();
       }
+      moveParts();
+      holdScroll();
       draw(now);
       raf = requestAnimationFrame(frame);
+    }
+
+    function drain(now) {
+      if (phase === 'drain') return;
+      phase = 'drain'; drainAt = now;
+      Composite.remove(engine.world, walls); walls = [];
+      engine.gravity.scale = 0.008;
+      for (const b of blocks) { Sleeping.set(b, false); Body.setVelocity(b, { x: b.velocity.x + gx * 10, y: b.velocity.y + gy * 10 }); }
+      for (const b of partBodies) if (!b.isStatic) { Sleeping.set(b, false); Body.setVelocity(b, { x: b.velocity.x + gx * 6, y: b.velocity.y + gy * 6 }); }
+      buzz([14, 22, 12, 22, 10, 22, 8]);
     }
 
     function draw(now) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const fill = phase === 'fill' ? Math.min(1, pileLevel() * 1.1) : 1;
-      ctx.fillStyle = `rgba(10, 9, 7, ${(0.42 + fill * 0.45).toFixed(3)})`;
+      ctx.fillStyle = `rgba(10, 9, 7, ${(parts.length ? 0.12 + fill * 0.22 : 0.42 + fill * 0.45).toFixed(3)})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       const flashing = phase === 'full';
       for (const b of blocks) {
@@ -255,7 +329,7 @@
     }
 
     // a tap or Esc while it runs skips straight to the end
-    const skip = (e) => { if (e.type === 'keydown' && e.key !== 'Escape') return; if (phase === 'fill') { phase = 'full'; fullAt = performance.now() - 300; } };
+    const skip = (e) => { if (e.type === 'keydown' && e.key !== 'Escape') return; if (phase === 'fill') { phase = 'full'; fullAt = performance.now() - 300; } else if (phase === 'hold' || phase === 'full') drain(performance.now()); };
     canvas.addEventListener('pointerdown', skip);
     window.addEventListener('keydown', skip);
     // turning the screen: new walls in the new shape; blocks left outside fall away
@@ -263,6 +337,7 @@
       W = window.innerWidth; H = window.innerHeight;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
       if (phase !== 'drain') makeWalls();
+      if (parts.length) { restoreParts(); for (const b of partBodies.splice(0)) Composite.remove(engine.world, b); freeable = false; }
       for (let i = blocks.length - 1; i >= 0; i--) { const p = blocks[i].position; if (p.x < 0 || p.y < 0 || p.x > W || p.y > H) { Composite.remove(engine.world, blocks[i]); blocks.splice(i, 1); } else Sleeping.set(blocks[i], false); }
     };
     window.addEventListener('resize', resize);
@@ -271,9 +346,10 @@
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', skip);
       window.removeEventListener('resize', resize);
+      restoreParts();
       Engine.clear(engine);
       const a = canvas.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140 });
-      a.onfinish = () => { canvas.remove(); html.style.overflow = overflow; running = false; };
+      a.onfinish = () => { canvas.remove(); html.style.overflow = overflow; holdScroll(); running = false; };
     }
     raf = requestAnimationFrame(frame);
   }
