@@ -412,6 +412,7 @@ export const projects = [
     year: 2026,
     cats: ['ai', 'fintech'],
     context: 'AI Build 2026 · KL University · Team Code Catalyst',
+    award: { place: '2nd Runner-Up', event: 'KL University AI Build 2026', detail: '24+ hour offline hackathon · 1,039 students from 75+ colleges' },
     status: 'Live demo',
     glyph: 'khata',
     team: ['sujal', 'vaishnavi'],

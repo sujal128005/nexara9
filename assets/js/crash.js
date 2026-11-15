@@ -1,7 +1,7 @@
 // Nexara9 — the "crash", hidden in the big NEXARA9 at the bottom of every page.
 // Click or tap it: a red line sweeps down the screen and the site turns into a white error page. A red error
 // appears, then real code types itself out line by line: a Haskell program that draws the Nexara9 "9" from the
-// logo's own geometry. It "runs", the logo it draws appears, and the site comes back, all in about seven seconds.
+// logo's own geometry. It "runs", the logo it draws appears, and the site comes back, all in about eight seconds (a ✕ closes it sooner).
 // The program is real: /nexara9.hs runs on any computer with GHC (runghc nexara9.hs).
 (() => {
   'use strict';
@@ -10,7 +10,7 @@
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const canBuzz = typeof navigator.vibrate === 'function';
   const buzz = (p) => { if (canBuzz) { try { navigator.vibrate(p); } catch (_) { /* not allowed */ } } };
-  const T = { sweep: 420, error: 650, type: 3300, run: 300, show: 2000, out: 300 };  // about 7 s in all
+  const T = { sweep: 420, error: 650, type: 3300, run: 300, show: 3500, out: 300 };  // about 8.5 s in all; a ✕ ends it sooner
 
   // the program and what it prints, fetched once from this site (the same files anyone can download)
   let files = null;
@@ -58,7 +58,9 @@
     bar.append(hint, copyBtn, dl, closeBtn);
     page.append(bar, err, tab, code, run);
     wipe.append(page);
-    root.append(wipe, line, out);
+    const xBtn = el('button', 'crash-x'); xBtn.type = 'button'; xBtn.setAttribute('aria-label', 'Close');
+    xBtn.innerHTML = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg>';
+    root.append(wipe, line, out, xBtn);
     document.body.append(root);
 
     let src = '', logo = '';
@@ -97,6 +99,9 @@
     viewBtn.addEventListener('click', (e) => { e.stopPropagation(); read(); });
     bar.addEventListener('click', (e) => e.stopPropagation());
     closeBtn.addEventListener('click', () => end());
+    xBtn.addEventListener('click', (e) => { e.stopPropagation(); end(); });
+    // a moment after the logo appears, a ✕ at the top lets people close it straight away
+    const showX = () => setTimeout(() => { if (!ended) root.classList.add('crash-x-on'); }, reduce ? 0 : 900);
     copyBtn.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(src); copyBtn.textContent = 'Copied'; } catch (_) { copyBtn.textContent = 'Copy failed'; }
       setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1600);
@@ -108,7 +113,7 @@
       wipe.style.clipPath = 'none'; line.remove();
       for (let i = 0; i < lines.length; i++) rows[i].textContent = lines[i] || ' ';
       run.textContent = '$ runghc nexara9.hs';
-      root.classList.add('crash-done');
+      root.classList.add('crash-done'); showX();
       setTimeout(end, 2600);
       return;
     }
@@ -144,7 +149,7 @@
           ranAt = now;
           for (let i = 0; i < lines.length; i++) { rows[i].textContent = lines[i] || ' '; rows[i].classList.remove('caret'); }
           run.textContent = '$ runghc nexara9.hs';
-          root.classList.add('crash-done');
+          root.classList.add('crash-done'); showX();
           buzz(18);
         }
       }

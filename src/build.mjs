@@ -224,12 +224,12 @@ function projectRow(p, i) {
   const langs = tech[p.slug]?.languages?.slice(0, 2).map(([l]) => l).join(', ') || '';
   const dots = p.cats.map((c) => `<i class="dot d-${c}" title="${esc(catLabel(c))}"></i>`).join('');
   const secs = sectionsFor(p);
-  return `<li class="row" data-cats="${p.cats.join(' ')}" data-cx="${p.complexity || 0}" data-order="${i}">
+  return `<li class="row" data-cats="${[...p.cats, ...(p.award ? ['wins'] : [])].join(' ')}" data-cx="${p.complexity || 0}" data-order="${i}">
   <div class="row-main">
     <span class="r-code">${code(i)}</span>
     <span class="r-thumb ${catClass(p)}" aria-hidden="true">${glyph(p.glyph)}</span>
     <span class="r-namecell"><a class="r-name" href="/projects/${p.slug}/">${esc(p.name)}</a><button type="button" class="r-toggle" aria-expanded="false" aria-controls="secs-${p.slug}" aria-label="Show the sections of ${esc(p.name)}">${CHEV}</button>${cxMeter(p.complexity)}</span>
-    <span class="r-desc">${fmt(p.short)}</span>
+    <span class="r-desc">${p.award ? `<span class="award" title="${esc(`${p.award.place}, ${p.award.event} · ${p.award.detail}`)}">${icon.trophy}${esc(p.award.place)} · ${esc(p.award.event)}</span>` : ''}${fmt(p.short)}</span>
     <span class="r-stack">${dots}<span>${esc(langs)}</span></span>
     <span class="r-year">${p.year}</span>
     <span class="r-go" aria-hidden="true">${icon.arrow}</span>
@@ -240,8 +240,8 @@ function projectRow(p, i) {
 }
 
 function projectsPage() {
-  const chips = [{ id: 'all', label: 'All' }, ...categories]
-    .map((c, i) => `<button type="button" class="chip" data-filter="${c.id}" aria-pressed="${i === 0}">${c.id === 'all' ? '' : `<i class="dot d-${c.id}"></i>`}${esc(c.label)}</button>`)
+  const chips = [{ id: 'all', label: 'All' }, ...categories, ...(open.some((x) => x.award) ? [{ id: 'wins', label: 'Hackathon wins' }] : [])]
+    .map((c, i) => `<button type="button" class="chip${c.id === 'wins' ? ' chip-win' : ''}" data-filter="${c.id}" aria-pressed="${i === 0}">${c.id === 'all' ? '' : c.id === 'wins' ? icon.trophy : `<i class="dot d-${c.id}"></i>`}${esc(c.label)}</button>`)
     .join('');
   return `${head({ title: 'Projects · Nexara9', description: 'Every open Nexara9 project, with its architecture, code structure, demo and the ideas behind it.', path: '/projects/' })}
 <body class="page-projects">
@@ -488,6 +488,7 @@ ${header('projects')}
   <section class="wrap d-head">
     <a class="back" href="/projects/">${icon.back}<span>All projects</span></a>
     <p class="d-meta reveal"><span class="r-code">${code(idx)}</span>${p.cats.map((c) => `<span><i class="dot d-${c}"></i>${esc(catLabel(c))}</span>`).join('')}${cxMeter(p.complexity)}</p>
+    ${p.award ? `<p class="d-award reveal">${icon.trophy}<strong>${esc(p.award.place)}</strong><span class="d-award-e">${esc(p.award.event)}</span><span class="d-award-d">${esc(p.award.detail)}</span></p>` : ''}
     <h1 class="d-title reveal">${esc(p.name)}</h1>
     <div class="d-intro reveal">
       <p class="d-lead">${fmt(p.short)}</p>
@@ -608,8 +609,8 @@ function searchIndex() {
     const cats = p.cats.map((c) => categories.find((x) => x.id === c)?.label).filter(Boolean);
     const langs = (t.languages || []).map(([l]) => l);
     const html = detailPage(p, i, open[i - 1], open[i + 1]);
-    add('Projects', p.name, `${cats.join(', ')} · ${p.year}`, `/projects/${p.slug}/`, [p.short, p.context, p.status].filter(Boolean).map(plain).join(' '),
-      [...cats, ...langs, ...p.team.map((k) => people[k]?.name).filter(Boolean)].join(' '));
+    add('Projects', p.name, `${cats.join(', ')} · ${p.year}`, `/projects/${p.slug}/`, [p.award ? `${p.award.place}, ${p.award.event}: ${p.award.detail}.` : '', p.short, p.context, p.status].filter(Boolean).map(plain).join(' '),
+      [...cats, ...langs, ...p.team.map((k) => people[k]?.name).filter(Boolean), ...(p.award ? ['hackathon', 'win', 'winner', 'award', 'prize', 'runner-up'] : [])].join(' '));
     const rx = /<section id="([a-z0-9-]+)" class="sec[^"]*"><header class="sec-h"><span class="sec-n">[^<]*<\/span><h2>([^<]*)<\/h2><\/header><div class="sec-b">([\s\S]*?)<\/div><\/section>/g;
     for (const [, id, title, body] of html.matchAll(rx)) {
       const text = decode(body.split('<p class="code-meta">')[0]);
