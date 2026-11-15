@@ -12,7 +12,7 @@ import { glyph, logoMark, icon } from './glyphs.mjs';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Cache-busting version: a hash of every stylesheet and script, so a changed file always gets a new URL.
 const V = createHash('sha256')
-  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js']
+  .update(['assets/css/main.css', 'assets/css/site.css', 'assets/css/search.css', 'assets/js/main.js', 'assets/js/home.js', 'assets/js/demos.js', 'assets/js/theme.js', 'assets/js/code.js', 'assets/js/search.js']
     .map((f) => readFileSync(join(ROOT, f))).join('\n'))
   .digest('hex').slice(0, 10);
 
@@ -53,7 +53,8 @@ function head({ title, description, path, scripts = [], inner = true }) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="${inner ? CSP.replace("connect-src 'none'", "connect-src 'self'") : CSP}">
+<meta http-equiv="Content-Security-Policy" content="${CSP.replace("connect-src 'none'", "connect-src 'self'")}">
+<meta name="n9-search" content="/search-index.json?v=${SV}">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>${esc(title)}</title>
@@ -76,7 +77,9 @@ ${inner ? `<script src="/assets/js/theme.js?v=${V}"></script>` : `<link rel="pre
 <link rel="preload" href="/assets/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 ${inner ? '<link rel="preload" href="/assets/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>' : ''}
 <link rel="stylesheet" href="/assets/css/${inner ? 'site' : 'main'}.css?v=${V}">
+<link rel="stylesheet" href="/assets/css/search.css?v=${V}">
 <script src="/assets/js/main.js?v=${V}" defer></script>
+<script src="/assets/js/search.js?v=${V}" defer></script>
 ${scripts.map((s) => `<script src="/assets/js/${s}?v=${V}" defer></script>`).join('\n')}
 </head>`;
 }
@@ -100,6 +103,7 @@ function header(active = '', { inner = true, brand = true } = {}) {
 <header class="site-header${brand ? '' : ' no-brand'}">
   ${brand ? `<a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'hdr')}<span class="brand-word">NEXARA<b>9</b></span></a>` : ''}
   <div class="header-right">
+    <button type="button" class="hdr-search" aria-label="Search the site" aria-keyshortcuts="/">${searchIcon}</button>
     <nav id="site-nav" class="site-nav" aria-label="Main">
       ${link('/projects/', 'Projects', 'projects')}
       ${link('/ventures/', 'Ventures', 'ventures')}
@@ -110,6 +114,9 @@ function header(active = '', { inner = true, brand = true } = {}) {
   </div>
 </header>`;
 }
+
+const searchIcon = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5.6"/><path d="M13 13l4.2 4.2"/></svg>';
+let SV = '';   // version of the search index, filled in once the index is built
 
 // Bottom navigation for inside pages. On project pages it also carries the section and project menu.
 const dockIcon = {
@@ -123,6 +130,7 @@ function dock(active, menu = '') {
   const seg = (href, key, label) => `<a class="sw-seg" href="${href}"${active === key ? ' aria-current="page"' : ''}>${dockIcon[key]}<span>${label}</span></a>`;
   return `<nav class="dock${menu ? ' dock-has-menu' : ''}" aria-label="Projects and ventures">
   <div class="dock-in">
+    <button type="button" class="dock-search" aria-label="Search the site" aria-keyshortcuts="/">${searchIcon}</button>
     ${menu}
     <div class="sw${active === 'ventures' ? ' sw-r' : active === 'projects' ? ' sw-l' : ''}"><span class="sw-thumb" aria-hidden="true"></span>${seg('/projects/', 'projects', 'Projects')}${seg('/ventures/', 'ventures', 'Ventures')}</div>
   </div>
@@ -257,7 +265,7 @@ ${footer()}
 
 // ---------- ventures ----------
 function ventureCard(f, big) {
-  return `<li class="venture${big ? ' venture-big' : ''} reveal">
+  return `<li class="venture${big ? ' venture-big' : ''} reveal" id="v-${slugify(f.name)}">
     <div class="venture-head"><span class="venture-kind">${esc(f.kind)}</span><span class="venture-lock">${icon.lock}<span>Private</span></span></div>
     <div class="venture-glyph">${glyph(f.glyph)}</div>
     <h3 class="venture-name">${esc(f.name)}</h3>
@@ -276,7 +284,7 @@ ${header('ventures')}
   <section class="wrap title"><h1 class="mega reveal">Ventures<sup>${flagships.length}</sup></h1></section>
   <section class="wrap">
     <ul class="venture-grid">${ventureCard(limen, true)}${ventureCard(housefi, true)}</ul>
-    <div class="autonomy reveal">
+    <div class="autonomy reveal" id="autonomy">
       <div class="autonomy-copy">
         <p class="kicker">The Autonomy Program</p>
         <h2 class="h2">Two machines.<br>One idea.</h2>
@@ -362,7 +370,7 @@ function archHTML(a) {
     .join('');
   return `<figure class="arch"><figcaption class="arch-title">${esc(a.title)}</figcaption><div class="arch-tiers tiers-${a.tiers.length}">${tiers}</div></figure>
   <h3 class="sub">Request flow</h3>
-  <ol class="flow">${a.flow.map((f) => `<li>${fmt(f)}</li>`).join('')}</ol>`;
+  <ol class="flow">${a.flow.map((f) => `<li><span>${fmt(f)}</span></li>`).join('')}</ol>`;
 }
 
 function langHTML(langs) {
@@ -499,7 +507,7 @@ ${header('projects')}
       ${sec('how', 'How it works', stepsHTML(p))}
       ${t.arch ? sec('architecture', 'Architecture', archHTML(t.arch)) : ''}
       ${t.repo ? sec('code', 'Languages and code', `${langHTML(t.languages)}<h3 class="sub">Repository</h3>${codeTreeHTML(p)}`) : ''}
-      ${sec('method', 'Methodology', `<ol class="method">${p.methodology.map((m) => `<li>${fmt(m)}</li>`).join('')}</ol>`)}
+      ${sec('method', 'Methodology', `<ol class="method">${p.methodology.map((m) => `<li><span>${fmt(m)}</span></li>`).join('')}</ol>`)}
       ${sec('stack', 'Technology', `<div class="stack">${p.stack.map((g) => g.items.map((it, j) => `<div class="st-row"><span class="st-g">${j === 0 ? esc(g.group) : ''}</span><span class="st-n">${esc(it.name)}</span><span class="st-w">${fmt(it.why)}</span></div>`).join('')).join('')}</div>`)}
       ${sec('demo', 'Demo', demoSection(p))}
       ${p.results ? sec('results', 'Results', tableHTML(p.results)) : ''}
@@ -553,6 +561,57 @@ for (const d of ['projects', 'ventures', 'founders']) {
   const p = join(ROOT, d);
   if (existsSync(p)) rmSync(p, { recursive: true });
 }
+// ---------- search index ----------
+// Built from the same text the pages show (never more), so search can only find what is already public.
+const decode = (h) => h
+  .replace(/<(script|style|svg|template)[\s\S]*?<\/\1>/g, ' ')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+  .replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+  .replace(/\s+/g, ' ').trim();
+const plain = (s) => decode(fmt(s));
+function searchIndex() {
+  const out = [];   // [group, title, sub, url, text, keywords]
+  const add = (g, t, sub, u, x, k = '') => out.push([g, t, sub, u, x, k]);
+  add('Pages', 'Projects', `All ${open.length} open projects`, '/projects/', 'Every open Nexara9 project, with its architecture, code structure, demo and the ideas behind it.', 'list all work portfolio');
+  add('Pages', 'Ventures', 'Limen, Housefi and the Autonomy Program', '/ventures/', 'Our flagship ventures. Raising pre-seed for Limen and Housefi.', 'startups flagship funding invest pre-seed');
+  add('Pages', 'Founders', founderProfiles.map((f) => people[f.key].name).join(' and '), '/founders/', 'The founders of Nexara9.', 'team about who');
+  add('Pages', 'Contact', 'Email the founders', 'mail:', 'Talk to the founders. Email us about projects, funding or working together.', 'email mail reach hire invest funding fund message write talk');
+  add('Pages', 'Home', 'Nexara9', '/', site.tagline || '', 'start main nexara9');
+  for (const f of founderProfiles) {
+    const p = people[f.key];
+    const built = open.filter((x) => x.team.includes(f.key) && !(f.hideProjects || []).includes(x.slug));
+    add('Founders', p.name, `${f.role} · ${f.study}`, `/founders/#${f.key}`,
+      [f.quote, ...f.bio, ...f.highlights, `Studies ${f.study} at ${f.college}.`, `Focus: ${f.focus.join(', ')}.`, built.length ? `Projects: ${built.map((b) => b.name).join(', ')}.` : '', (f.repos || []).length ? `Also: ${f.repos.map((r) => r.name).join(', ')}.` : '']
+        .filter(Boolean).map(plain).join(' '), `founder co-founder ${f.college}`);
+  }
+  for (const v of flagships) {
+    add('Ventures', v.name, v.kind, `/ventures/#v-${slugify(v.name)}`, [v.line, v.badge, v.funding ? `Raising pre-seed. Fund ${v.name}.` : ''].filter(Boolean).map(plain).join(' '), 'venture startup flagship private');
+  }
+  add('Ventures', 'The Autonomy Program', 'Project Navya and Project Navyam', '/ventures/#autonomy', 'Two machines. One idea. An autonomous car and an autonomous drone, built to work together.', 'autonomous self-driving car drone uav robotics');
+  open.forEach((p, i) => {
+    const t = tech[p.slug] || {};
+    const cats = p.cats.map((c) => categories.find((x) => x.id === c)?.label).filter(Boolean);
+    const langs = (t.languages || []).map(([l]) => l);
+    const html = detailPage(p, i, open[i - 1], open[i + 1]);
+    add('Projects', p.name, `${cats.join(', ')} · ${p.year}`, `/projects/${p.slug}/`, [p.short, p.context, p.status].filter(Boolean).map(plain).join(' '),
+      [...cats, ...langs, ...p.team.map((k) => people[k]?.name).filter(Boolean)].join(' '));
+    const rx = /<section id="([a-z0-9-]+)" class="sec[^"]*"><header class="sec-h"><span class="sec-n">[^<]*<\/span><h2>([^<]*)<\/h2><\/header><div class="sec-b">([\s\S]*?)<\/div><\/section>/g;
+    for (const [, id, title, body] of html.matchAll(rx)) {
+      const text = decode(body.split('<p class="code-meta">')[0]);
+      if (text) add('Projects', p.name, decode(title), `/projects/${p.slug}/#${id}`, text);
+    }
+    for (const f of codeIndex[p.slug]?.files || []) {
+      const name = f.path.split('/').pop();
+      add('Code', name, `${p.name} · ${f.path}`, `/projects/${p.slug}/${f.large ? '' : `?file=${encodeURIComponent(f.path)}`}#repo-${slugify(f.path)}`, f.path.replace(/[/_.-]/g, ' '), f.lang);
+    }
+  });
+  return out;
+}
+const index = JSON.stringify(searchIndex());
+SV = createHash('sha256').update(index).digest('hex').slice(0, 10);
+write('search-index.json', index);
+
 write('index.html', homePage());
 write('projects/index.html', projectsPage());
 write('ventures/index.html', venturesPage());

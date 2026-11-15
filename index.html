@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests">
+<meta name="n9-search" content="/search-index.json?v=99fcacaef2">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>Nexara9</title>
@@ -25,9 +26,11 @@
 <link rel="preload" href="/assets/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 
-<link rel="stylesheet" href="/assets/css/main.css?v=ed6ff611c6">
-<script src="/assets/js/main.js?v=ed6ff611c6" defer></script>
-<script src="/assets/js/home.js?v=ed6ff611c6" defer></script>
+<link rel="stylesheet" href="/assets/css/main.css?v=2a6d07e244">
+<link rel="stylesheet" href="/assets/css/search.css?v=2a6d07e244">
+<script src="/assets/js/main.js?v=2a6d07e244" defer></script>
+<script src="/assets/js/search.js?v=2a6d07e244" defer></script>
+<script src="/assets/js/home.js?v=2a6d07e244" defer></script>
 </head>
 <body class="page-home">
 <div class="aura" aria-hidden="true"><i class="aura-a"></i><i class="aura-b"></i><i class="aura-c"></i></div>
@@ -36,6 +39,7 @@
 <header class="site-header no-brand">
   
   <div class="header-right">
+    <button type="button" class="hdr-search" aria-label="Search the site" aria-keyshortcuts="/"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5.6"/><path d="M13 13l4.2 4.2"/></svg></button>
     <nav id="site-nav" class="site-nav" aria-label="Main">
       <a href="/projects/">Projects</a>
       <a href="/ventures/">Ventures</a>

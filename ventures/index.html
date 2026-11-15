@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; manifest-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; upgrade-insecure-requests">
+<meta name="n9-search" content="/search-index.json?v=99fcacaef2">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>Ventures · Nexara9</title>
@@ -22,11 +23,13 @@
 <link rel="icon" href="/assets/brand/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/assets/brand/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<script src="/assets/js/theme.js?v=ed6ff611c6"></script>
+<script src="/assets/js/theme.js?v=2a6d07e244"></script>
 <link rel="preload" href="/assets/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/archivo-display.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/css/site.css?v=ed6ff611c6">
-<script src="/assets/js/main.js?v=ed6ff611c6" defer></script>
+<link rel="stylesheet" href="/assets/css/site.css?v=2a6d07e244">
+<link rel="stylesheet" href="/assets/css/search.css?v=2a6d07e244">
+<script src="/assets/js/main.js?v=2a6d07e244" defer></script>
+<script src="/assets/js/search.js?v=2a6d07e244" defer></script>
 
 </head>
 <body class="page-ventures">
@@ -48,14 +51,14 @@
 <main id="main">
   <section class="wrap title"><h1 class="mega reveal">Ventures<sup>4</sup></h1></section>
   <section class="wrap">
-    <ul class="venture-grid"><li class="venture venture-big reveal">
+    <ul class="venture-grid"><li class="venture venture-big reveal" id="v-limen">
     <div class="venture-head"><span class="venture-kind">Venture</span><span class="venture-lock"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg><span>Private</span></span></div>
     <div class="venture-glyph"><svg class="glyph" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 56V24a18 18 0 0 1 36 0v32"/><path d="M22 56V26a10 10 0 0 1 20 0v30"/><path d="M8 56h48"/><path d="M32 38v8" opacity=".7"/></svg></div>
     <h3 class="venture-name">Limen</h3>
     <p class="venture-line">AI purchasing infrastructure where the spending limit is enforced, not trusted.</p>
     <p class="venture-badge">Winner · IBM SkillsBuild South Region Finale 2026</p>
     <a class="btn btn-gold" href="/#contact" data-mail-u="offsujal128005" data-mail-d="gmail.com" data-mail-s="Limen: funding enquiry"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="14" height="10" rx="2"/><path d="M3.5 6l6.5 5 6.5-5"/></svg><span>Fund Limen</span></a>
-  </li><li class="venture venture-big reveal">
+  </li><li class="venture venture-big reveal" id="v-housefi">
     <div class="venture-head"><span class="venture-kind">Venture</span><span class="venture-lock"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg><span>Private</span></span></div>
     <div class="venture-glyph"><svg class="glyph" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 30L32 10l24 20"/><path d="M14 26v28h36V26"/><path d="M27 54V40h10v14" opacity=".5"/><path d="M40 22l6-6m-2 8 6-6-3-3" opacity=".7"/></svg></div>
     <h3 class="venture-name">Housefi</h3>
@@ -63,20 +66,20 @@
     <p class="venture-badge">Home services startup · IBM SkillsBuild National Finalist 2026</p>
     <a class="btn btn-gold" href="/#contact" data-mail-u="offsujal128005" data-mail-d="gmail.com" data-mail-s="Housefi: funding enquiry"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="14" height="10" rx="2"/><path d="M3.5 6l6.5 5 6.5-5"/></svg><span>Fund Housefi</span></a>
   </li></ul>
-    <div class="autonomy reveal">
+    <div class="autonomy reveal" id="autonomy">
       <div class="autonomy-copy">
         <p class="kicker">The Autonomy Program</p>
         <h2 class="h2">Two machines.<br>One idea.</h2>
         <p class="muted">An autonomous car and an autonomous drone, built to work together.</p>
       </div>
-      <ul class="autonomy-pair"><li class="venture reveal">
+      <ul class="autonomy-pair"><li class="venture reveal" id="v-project-navya">
     <div class="venture-head"><span class="venture-kind">Ground</span><span class="venture-lock"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg><span>Private</span></span></div>
     <div class="venture-glyph"><svg class="glyph" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="18" y="8" width="28" height="48" rx="9"/><path d="M22 20h20M22 44h20" opacity=".5"/><rect x="11" y="13" width="5" height="10" rx="2"/><rect x="48" y="13" width="5" height="10" rx="2"/><rect x="11" y="41" width="5" height="10" rx="2"/><rect x="48" y="41" width="5" height="10" rx="2"/><path d="M26 30h12v6H26z" opacity=".8"/></svg></div>
     <h3 class="venture-name">Project Navya</h3>
     <p class="venture-line">An autonomous car.</p>
     <p class="venture-badge">Under wraps</p>
     
-  </li><li class="autonomy-link" aria-hidden="true"><span></span></li><li class="venture reveal">
+  </li><li class="autonomy-link" aria-hidden="true"><span></span></li><li class="venture reveal" id="v-project-navyam">
     <div class="venture-head"><span class="venture-kind">Air</span><span class="venture-lock"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 0 1 6 0v3"/></svg><span>Private</span></span></div>
     <div class="venture-glyph"><svg class="glyph" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14" cy="14" r="8"/><circle cx="50" cy="14" r="8"/><circle cx="14" cy="50" r="8"/><circle cx="50" cy="50" r="8"/><path d="M20 20l7 7M44 20l-7 7M20 44l7-7M44 44l-7-7"/><rect x="25" y="25" width="14" height="14" rx="3"/><circle cx="32" cy="32" r="2" /></svg></div>
     <h3 class="venture-name">Project Navyam</h3>
@@ -94,6 +97,7 @@
 </main>
 <nav class="dock" aria-label="Projects and ventures">
   <div class="dock-in">
+    <button type="button" class="dock-search" aria-label="Search the site" aria-keyshortcuts="/"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="8.6" cy="8.6" r="5.6"/><path d="M13 13l4.2 4.2"/></svg></button>
     
     <div class="sw sw-r"><span class="sw-thumb" aria-hidden="true"></span><a class="sw-seg" href="/projects/"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/></svg><span>Projects</span></a><a class="sw-seg" href="/ventures/" aria-current="page"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M10 2.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.8l5-.7z"/></svg><span>Ventures</span></a></div>
   </div>

@@ -170,6 +170,18 @@
     const x = e.clientX || r.left + r.width / 2, y = e.clientY || r.top + r.height / 2;
     show(btn, x, y);
   });
+  // Arriving from search with ?file=path: open that file straight away.
+  const want = new URLSearchParams(location.search).get('file');
+  if (want) {
+    const btn = Array.from(document.querySelectorAll('.t-file[data-code]')).find((b) => b.dataset.path === want);
+    history.replaceState(null, '', location.pathname + location.hash);
+    if (btn) {
+      for (let p = btn.parentElement; p; p = p.parentElement) if (p.tagName === 'DETAILS') p.open = true;
+      btn.scrollIntoView({ block: 'center' });
+      const r = btn.getBoundingClientRect();
+      show(btn, r.left + 20, r.top + r.height / 2);
+    }
+  }
   // Warm up the colouring library the first time someone reaches the file tree.
   document.querySelectorAll('.tree-root').forEach((t) => t.addEventListener('pointerenter', loadHljs, { once: true }));
 })();
