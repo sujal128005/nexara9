@@ -268,7 +268,7 @@
       const link = (n) => { const s = src[n - 1]; if (!s) return ''; used.add(n); return `<a class="sx-cite" href="${s.u === 'mail:' ? '#' : esc(s.u)}"${s.u === 'mail:' ? ' data-mail' : ''} title="${esc(s.t + (s.sub ? ' · ' + s.sub : ''))}">${n}</a>`; };
       b.innerHTML = `<p>${esc(d.answer).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\[(\d+)\]/g, (_, n) => link(+n)).replace(/\n+/g, '</p><p>')}</p>`;
       if (used.size) b.insertAdjacentHTML('beforeend', `<p class="sx-src">${[...used].sort((x, y) => x - y).map((n) => { const s = src[n - 1]; return `<a href="${s.u === 'mail:' ? '#' : esc(s.u)}"${s.u === 'mail:' ? ' data-mail' : ''}><span>${n}</span>${esc(s.t)}${s.sub ? ` · ${esc(s.sub)}` : ''}</a>`; }).join('')}</p>`);
-      f.textContent = `Answered by ${d.by}${d.ms ? ` in ${(d.ms / 1000).toFixed(1)} s` : ''} · AI can make mistakes`;
+      f.textContent = '';
     } catch (e) {
       if (!box.isConnected) return;
       b.innerHTML = `<p class="sx-ans-err">${esc(e.name === 'AbortError' ? 'The AI took too long. Please try again.' : (e.message || 'The AI could not answer right now.'))}</p>`;

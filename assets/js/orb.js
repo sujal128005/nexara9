@@ -146,7 +146,7 @@
       }
       if (!ctx || ctx.btn.dataset.code !== forFile) return;
       bodyEl.innerHTML = (question ? `<p class="orb-q">${esc(question)}</p>` : '') + md(data.answer);
-      foot.textContent = `Answered by ${data.by}${data.ms ? ` in ${(data.ms / 1000).toFixed(1)} s` : ''}${data.cached ? ' (saved answer)' : ''} · AI can make mistakes. It only reads this code; it cannot change anything.`;
+      foot.textContent = 'Nexara9 AI';
     } catch (e) {
       if (!ctx || ctx.btn.dataset.code !== forFile) return;
       bodyEl.innerHTML = `<p class="orb-err">${esc(e.name === 'AbortError' ? 'The AI took too long. Please try again.' : (e.message || 'The AI could not answer right now.'))}</p>`;

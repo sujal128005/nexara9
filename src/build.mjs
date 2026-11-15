@@ -580,6 +580,17 @@ function searchIndex() {
   add('Pages', 'Founders', founderProfiles.map((f) => people[f.key].name).join(' and '), '/founders/', 'The founders of Nexara9.', 'team about who');
   add('Pages', 'Contact', 'Email the founders', 'mail:', 'Talk to the founders. Email us about projects, funding or working together.', 'email mail reach hire invest funding fund message write talk');
   add('Pages', 'Home', 'Nexara9', '/', site.tagline || '', 'start main nexara9');
+  {
+    const names = founderProfiles.map((f) => people[f.key].name);
+    const college = [...new Set(founderProfiles.map((f) => f.college))].join(', ');
+    add('Pages', 'About Nexara9', 'What Nexara9 is', '/', [
+      site.description, site.tagline,
+      `Founded in ${site.since} by ${names.join(' and ')} (${college}).`,
+      `Open projects (${open.length}): ${open.map((x) => x.name).join(', ')}.`,
+      `Ventures (${flagships.length}): ${flagships.map((v) => v.name).join(', ')}. Limen and Housefi are raising pre-seed.`,
+      'Every open project has a page with its architecture, its source code to read, a demo and the ideas behind it.',
+    ].join(' '), 'about company startup studio who what nexara9');
+  }
   for (const f of founderProfiles) {
     const p = people[f.key];
     const built = open.filter((x) => x.team.includes(f.key) && !(f.hideProjects || []).includes(x.slug));
