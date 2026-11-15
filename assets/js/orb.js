@@ -65,7 +65,7 @@
     const menu = document.createElement('div'); menu.className = 'orb-menu'; menu.hidden = true; menu.setAttribute('role', 'menu');
     menu.innerHTML = `<p class="orb-menu-h"></p><div class="orb-menu-b">${ACTIONS.map(([k, label, p]) => `<button type="button" role="menuitem" data-act="${k}">${svg(p)}<span>${label}</span></button>`).join('')}</div>`;
     const card = document.createElement('section'); card.className = 'orb-card'; card.hidden = true; card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-label', 'AI Orb answer');
-    card.innerHTML = `<header class="orb-card-h"><span class="orb-ball sm" aria-hidden="true"></span><div><p class="orb-card-k">AI Orb</p><p class="orb-card-t"></p></div><button type="button" class="orb-x" aria-label="Close the answer">${svg('<path d="M5 5l10 10M15 5L5 15"/>')}</button></header>
+    card.innerHTML = `<header class="orb-card-h"><span class="orb-ball sm" aria-hidden="true"></span><div><p class="orb-card-k">AI Orb<span class="ai-beta">Beta</span></p><p class="orb-card-t"></p></div><button type="button" class="orb-x" aria-label="Close the answer">${svg('<path d="M5 5l10 10M15 5L5 15"/>')}</button></header>
       <div class="orb-card-b"></div>
       <form class="orb-ask"><input type="text" maxlength="300" placeholder="Ask about this code…" aria-label="Ask the AI Orb about this code" enterkeyhint="send"><button type="submit" aria-label="Send">${svg('<path d="M4 10h12M11 5l5 5-5 5"/>')}</button></form>
       <p class="orb-card-f"></p>`;
@@ -146,7 +146,7 @@
       }
       if (!ctx || ctx.btn.dataset.code !== forFile) return;
       bodyEl.innerHTML = (question ? `<p class="orb-q">${esc(question)}</p>` : '') + md(data.answer);
-      foot.textContent = 'Nexara9 AI';
+      foot.innerHTML = 'Nexara9 AI<span class="ai-beta">Beta</span>';
     } catch (e) {
       if (!ctx || ctx.btn.dataset.code !== forFile) return;
       bodyEl.innerHTML = `<p class="orb-err">${esc(e.name === 'AbortError' ? 'The AI took too long. Please try again.' : (e.message || 'The AI could not answer right now.'))}</p>`;

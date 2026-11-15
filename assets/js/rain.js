@@ -21,25 +21,54 @@
   let running = false;
 
   // ------------------------------------------------------------------ which way is down
-  let gx = 0, gy = 1;                                     // on screen; laptops keep straight down
-  let tiltSeen = false;                                   // has this device actually sent any tilt?
+  // Phones give gravity two ways. The accelerometer (devicemotion) measures the real gravity vector and works in
+  // every pose, portrait or landscape. The orientation angles (deviceorientation) flip near landscape, so they are
+  // used only to check the accelerometer's sign (a few browsers report it reversed) and when there is no
+  // accelerometer. The direction is smoothed and leans gently toward the bottom of the screen, so a phone held
+  // loosely or lying flat always rains downward; only a real tilt steers it. Laptops keep straight down.
+  let gx = 0, gy = 1;
+  let motionSeen = false, sign = 1, votes = 0, lastOrient = null;
+  const screenAngle = () => (((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI) / 180;
+  const toScreen = (dx, dy) => { const a = screenAngle(); return [dx * Math.cos(a) + dy * Math.sin(a), -dx * Math.sin(a) + dy * Math.cos(a)]; };
+  function steer(vx, vy) {                                // v: gravity in the screen plane, in g (0 flat … 1 upright)
+    const x = vx, y = vy + 0.35;                          // the gentle lean toward the bottom of the screen
+    const len = Math.hypot(x, y);
+    if (len < 0.05) return;
+    gx += (x / len - gx) * 0.3; gy += (y / len - gy) * 0.3;
+    const l = Math.hypot(gx, gy) || 1; gx /= l; gy /= l;
+  }
+  function onMotion(e) {
+    const a = e.accelerationIncludingGravity;
+    if (!a || a.x == null || a.y == null || (a.x === 0 && a.y === 0 && !a.z)) return;
+    // standard reading: a phone held upright shows y ≈ +9.8, i.e. gravity points down the screen
+    let dx = Math.max(-1, Math.min(1, (-a.x / 9.81) * sign)), dy = Math.max(-1, Math.min(1, (a.y / 9.81) * sign));
+    if (lastOrient && Math.abs(lastOrient.gamma) < 30 && Math.abs(lastOrient.beta) > 25 && Math.abs(lastOrient.beta) < 155 && Math.abs(dy) > 0.3) {
+      votes = Math.max(-12, Math.min(12, votes + (Math.sign(dy) === Math.sign(Math.sin((lastOrient.beta * Math.PI) / 180)) ? 1 : -1)));
+      if (votes <= -4) { sign = -sign; votes = 0; dx = -dx; dy = -dy; }   // this browser reports it reversed
+    }
+    motionSeen = true;
+    const [sx, sy] = toScreen(dx, dy);
+    steer(sx, sy);
+  }
   function onTilt(e) {
     if (e.beta == null || e.gamma == null) return;
-    tiltSeen = true;
+    lastOrient = { beta: e.beta, gamma: e.gamma };
+    if (motionSeen) return;
     const b = (e.beta * Math.PI) / 180, g = (e.gamma * Math.PI) / 180;
-    const x = Math.cos(b) * Math.sin(g), y = Math.sin(b);  // gravity on the device's screen plane
-    const a = (((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI) / 180;
-    const sx = x * Math.cos(a) + y * Math.sin(a), sy = -x * Math.sin(a) + y * Math.cos(a);
-    const len = Math.hypot(sx, sy);
-    if (len > 0.2) { gx = sx / len; gy = sy / len; }        // lying flat: keep the last direction
+    const [sx, sy] = toScreen(Math.cos(b) * Math.sin(g), Math.sin(b));
+    steer(sx, sy);
   }
   let tiltOn = false;
   async function listenTilt() {
-    if (tiltOn || !('DeviceOrientationEvent' in window)) return;
-    window.addEventListener('deviceorientation', onTilt);   // where tilt isn't allowed, no events come: it falls straight down
+    if (tiltOn) return;
     tiltOn = true;
-    try {
-      if (typeof DeviceOrientationEvent.requestPermission === 'function') await DeviceOrientationEvent.requestPermission();   // iPhone and iPad ask first
+    if ('DeviceMotionEvent' in window) window.addEventListener('devicemotion', onMotion);
+    if ('DeviceOrientationEvent' in window) window.addEventListener('deviceorientation', onTilt);   // where not allowed, no events come: straight down
+    try {                                                 // iPhone and iPad ask first (one question covers both)
+      const asks = [];
+      if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') asks.push(DeviceMotionEvent.requestPermission());
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') asks.push(DeviceOrientationEvent.requestPermission());
+      await Promise.allSettled(asks);
     } catch (_) { /* not allowed: straight down */ }
   }
 
@@ -133,9 +162,8 @@
     makeWalls();
     const blocks = [];
 
-    // What is on screen becomes part of the scene. On phones it stays put (the words pile up around it) until the
-    // phone is tilted, then it all comes loose; laptops (no tilt) let go by themselves just after the rain starts.
-    // Afterwards every piece glides back to its place.
+    // What is on screen becomes part of the scene: as the rain starts it all comes loose and falls (on a
+    // phone, tilting then steers everything). Afterwards every piece glides back to its place.
     let freeable = true;
     const parts = [], partBodies = [], opened = [];
     let freed = false;
@@ -151,9 +179,12 @@
       for (const el of els.slice(0, 48)) {
         if (getComputedStyle(el).transform !== 'none') continue;
         const r = el.getBoundingClientRect();
-        const w = Math.max(6, Math.min(r.width, W - 4) - 2), h = Math.max(6, Math.min(r.height, H * 0.6) - 2);
+        const inset = Math.max(2, Math.min(8, r.width * 0.06, r.height * 0.18));
+        const w = Math.max(6, Math.min(r.width, W - 4) - inset * 2), h = Math.max(6, Math.min(r.height, H * 0.6) - inset * 2);
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        const body = Bodies.rectangle(cx, cy, w, h, { density: 0.0011, friction: 0.4, frictionStatic: 0.6, restitution: 0.04, chamfer: { radius: Math.min(10, h / 3) } });
+        const box = { min: { x: cx - w / 2, y: cy - h / 2 }, max: { x: cx + w / 2, y: cy + h / 2 } };
+        if (partBodies.length && Query.region(partBodies, box).length) continue;   // overlaps a bigger piece: leave it in place
+        const body = Bodies.rectangle(cx, cy, w, h, { density: 0.0011, friction: 0.4, frictionStatic: 0.6, restitution: 0, frictionAir: 0.01, chamfer: { radius: Math.min(10, h / 3) } });
         Body.setStatic(body, true);                          // pinned for now; made as a normal body first so it keeps its real weight when let go
         Composite.add(engine.world, body);
         partBodies.push(body);
@@ -234,7 +265,6 @@
     });
 
     let phase = 'fill', fullAt = 0, holdAt = 0, drainAt = 0, blockedFrames = 0, last = performance.now(), raf = 0, ga = Math.atan2(gy, gx);
-    const ga0 = ga;                                           // the starting "down", to notice a real tilt
     const began = last;
     const per = Math.max(8, Math.round(target / 11));        // spawn tries per frame: full in about two seconds
 
@@ -261,15 +291,14 @@
       engine.gravity.x = gx; engine.gravity.y = gy;
       const na = Math.atan2(gy, gx);
       if (Math.abs(Math.atan2(Math.sin(na - ga), Math.cos(na - ga))) > 0.12) { ga = na; for (const b of blocks) Sleeping.set(b, false); for (const b of partBodies) if (!b.isStatic) Sleeping.set(b, false); }
-      if (freeable && !freed && phase !== 'drain' && Math.abs(Math.atan2(Math.sin(na - ga0), Math.cos(na - ga0))) > 0.3) freeParts();   // tilted: the page comes loose
-      if (freeable && !freed && !tiltSeen && now - began > 700) freeParts();                                                           // no tilt here: it collapses by itself
+      if (freeable && !freed && phase !== 'drain' && now - began > 250) freeParts();                                                   // the page comes loose
 
       if (phase === 'fill') {
         let made = 0;
         for (let i = 0; i < per; i++) if (spawn()) made++;
         blockedFrames = made ? 0 : blockedFrames + 1;
         const R2 = (Math.abs(W * gx) + Math.abs(H * gy));
-        if (pileLevel() > 1 - (2.4 * bh) / R2 || (blockedFrames > 10 && coverage() > 0.4) || now - began > 5000) {   // the pile reaches the top
+        if ((now - began > 1200 && coverage() > 0.35 && (pileLevel() > 1 - (1.4 * bh) / R2 || (blockedFrames > 10 && coverage() > 0.4))) || now - began > 5500) {   // the pile reaches the top
           phase = 'full'; fullAt = now;
           buzz([45, 30, 25]);
         }
@@ -279,7 +308,12 @@
         drain(now);
       }
       const steps = Math.min(4, Math.max(2, Math.ceil(dt / 12)));   // small steps keep tall piles from sinking; slow screens catch up
-      for (let s = 0; s < steps; s++) Engine.update(engine, Math.min(dt / steps, 12));
+      for (let s = 0; s < steps; s++) {
+        Engine.update(engine, Math.min(dt / steps, 12));
+        const vmax = phase === 'drain' ? 60 : 26;            // a speed limit: nothing gets flung away
+        for (const b of blocks) limit(b, vmax);
+        for (const b of partBodies) if (!b.isStatic) limit(b, vmax);
+      }
 
       if (phase === 'drain') {
         for (let i = blocks.length - 1; i >= 0; i--) {
@@ -292,6 +326,12 @@
       holdScroll();
       draw(now);
       raf = requestAnimationFrame(frame);
+    }
+
+    function limit(b, vmax) {
+      const v = Math.hypot(b.velocity.x, b.velocity.y);
+      if (v > vmax) Body.setVelocity(b, { x: (b.velocity.x / v) * vmax, y: (b.velocity.y / v) * vmax });
+      if (Math.abs(b.angularVelocity) > 0.25) Body.setAngularVelocity(b, Math.sign(b.angularVelocity) * 0.25);
     }
 
     function drain(now) {
@@ -332,16 +372,16 @@
       }
     }
 
-    // a tap or Esc while it runs skips straight to the end
+    // Esc ends it early (a touch does not: on a phone you are holding the screen)
     const skip = (e) => { if (e.type === 'keydown' && e.key !== 'Escape') return; if (phase === 'fill') { phase = 'full'; fullAt = performance.now() - 300; } else if (phase === 'hold' || phase === 'full') drain(performance.now()); };
-    canvas.addEventListener('pointerdown', skip);
     window.addEventListener('keydown', skip);
     // turning the screen: new walls in the new shape; blocks left outside fall away
     const resize = () => {
+      const turned = Math.abs(window.innerWidth - W) > 40;   // a real turn changes the width; the address bar only the height
       W = window.innerWidth; H = window.innerHeight;
       canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
       if (phase !== 'drain') makeWalls();
-      if (parts.length) { restoreParts(); for (const b of partBodies.splice(0)) Composite.remove(engine.world, b); freeable = false; }
+      if (turned && parts.length) { restoreParts(); for (const b of partBodies.splice(0)) Composite.remove(engine.world, b); freeable = false; }
       for (let i = blocks.length - 1; i >= 0; i--) { const p = blocks[i].position; if (p.x < 0 || p.y < 0 || p.x > W || p.y > H) { Composite.remove(engine.world, blocks[i]); blocks.splice(i, 1); } else Sleeping.set(blocks[i], false); }
     };
     window.addEventListener('resize', resize);

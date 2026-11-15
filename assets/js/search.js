@@ -240,7 +240,7 @@
   const aiCache = new Map();
   let lastIds = [];
   const looksLikeQuestion = (q) => /\?\s*$/.test(q) || q.trim().split(/\s+/).length >= 3 || /^(what|which|who|whom|whose|how|why|where|when|does|do|did|is|are|was|can|could|should|tell|explain|show|list|give|compare)\b/i.test(q.trim());
-  const aiRow = (q, n) => `<a class="sx-r sx-ai" role="option" id="sx-o${n}" data-n="${n}" data-ai href="#"><span class="sx-t"><span class="sx-ai-ball" aria-hidden="true"></span>Ask Nexara9 AI</span><span class="sx-x2">“${esc(q)}”: a short answer from what is on this site</span><span class="sx-go" aria-hidden="true">${GO}</span></a>`;
+  const aiRow = (q, n) => `<a class="sx-r sx-ai" role="option" id="sx-o${n}" data-n="${n}" data-ai href="#"><span class="sx-t"><span class="sx-ai-ball" aria-hidden="true"></span>Ask Nexara9 AI<span class="ai-beta">Beta</span></span><span class="sx-x2">“${esc(q)}”: a short answer from what is on this site</span><span class="sx-go" aria-hidden="true">${GO}</span></a>`;
   function renumber() { listEl.querySelectorAll('.sx-r').forEach((el, i) => { el.id = `sx-o${i}`; el.dataset.n = i; }); }
   async function askAI(q) {
     const slot = listEl.querySelector('.sx-ai');
@@ -248,7 +248,7 @@
     remember(q);
     const box = document.createElement('div');
     box.className = 'sx-ans'; box.setAttribute('aria-live', 'polite');
-    box.innerHTML = '<p class="sx-ans-h"><span class="sx-ai-ball" aria-hidden="true"></span>Nexara9 AI</p><div class="sx-ans-b"><span class="sx-dots" aria-hidden="true"><i></i><i></i><i></i></span> Thinking…</div><p class="sx-ans-f"></p>';
+    box.innerHTML = '<p class="sx-ans-h"><span class="sx-ai-ball" aria-hidden="true"></span>Nexara9 AI<span class="ai-beta">Beta</span></p><div class="sx-ans-b"><span class="sx-dots" aria-hidden="true"><i></i><i></i><i></i></span> Thinking…</div><p class="sx-ans-f"></p>';
     slot.replaceWith(box); renumber(); setActive(0);
     const b = box.querySelector('.sx-ans-b'), f = box.querySelector('.sx-ans-f');
     const body = JSON.stringify({ q, v: VER, ids: lastIds });
