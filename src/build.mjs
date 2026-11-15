@@ -174,7 +174,7 @@ ${header('home', { inner: false, brand: false })}
   </div>
 </main>
 <footer class="home-foot">
-  <p class="since">Since ${site.since}</p>
+  <p class="since">Since ${site.since} · ${ext(site.linkedin, 'LinkedIn')}</p>
 </footer>
 </div>
 </body>
@@ -194,13 +194,14 @@ function footer() {
     </div>
     <div class="ft-actions">
       <a class="btn btn-gold" ${mailAttrs('Hello Nexara9')}>${icon.mail}<span>Email us</span></a>
+      ${ext(site.linkedin, `<span>Nexara9 on LinkedIn</span>${icon.external}`, 'btn btn-dark')}
       ${ext(people.sujal.links[1].href, `<span>Sujal on LinkedIn</span>${icon.external}`, 'btn btn-dark')}
       ${ext(people.navya.links[0].href, `<span>Navya on LinkedIn</span>${icon.external}`, 'btn btn-dark')}
     </div>
   </div>
   <div class="wrap ft-top">
     <a class="brand" href="/" aria-label="Nexara9 home">${logoMark('brand-mark', 'ftr')}<span class="brand-word">NEXARA<b>9</b></span></a>
-    <nav class="ft-nav" aria-label="Footer"><a href="/projects/">Projects</a><a href="/ventures/">Ventures</a><a href="/founders/">Founders</a>${ext('https://github.com/sujal128005', 'GitHub')}</nav>
+    <nav class="ft-nav" aria-label="Footer"><a href="/projects/">Projects</a><a href="/ventures/">Ventures</a><a href="/founders/">Founders</a>${ext(site.linkedin, 'LinkedIn')}${ext('https://github.com/sujal128005', 'GitHub')}</nav>
   </div>
   <p class="ft-mark"><button type="button" class="ft-egg" aria-label="Nexara9">NEXARA9</button></p>
   <div class="wrap ft-bottom"><span>© ${new Date().getFullYear()} Nexara9</span><span>Kurnool, India</span></div>
