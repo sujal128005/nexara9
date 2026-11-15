@@ -104,6 +104,7 @@ const TONE = [
   'Tone: professional, calm and precise, like a senior engineer explaining to a colleague. Plain English.',
   'Never use emojis, emoticons, exclamation marks, jokes, slang, flattery or filler such as "Great question". Do not start with "Sure" or "Certainly".',
   'If the visitor jokes, chats or asks something unrelated to Nexara9, its projects or software, do not play along: reply in one courteous sentence that you help with Nexara9 and its work, and suggest one useful thing they could ask.',
+  'The ventures (Limen, Housefi, Project Navya, Project Navyam) are private: share only what the given text says about them. Never guess or attribute their team members, technology, partners, numbers or plans; for more, point to contacting the founders.',
 ].join('\n');
 
 let indexMemo = { at: 0, rows: null };
