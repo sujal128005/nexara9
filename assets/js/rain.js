@@ -22,8 +22,10 @@
 
   // ------------------------------------------------------------------ which way is down
   let gx = 0, gy = 1;                                     // on screen; laptops keep straight down
+  let tiltSeen = false;                                   // has this device actually sent any tilt?
   function onTilt(e) {
     if (e.beta == null || e.gamma == null) return;
+    tiltSeen = true;
     const b = (e.beta * Math.PI) / 180, g = (e.gamma * Math.PI) / 180;
     const x = Math.cos(b) * Math.sin(g), y = Math.sin(b);  // gravity on the device's screen plane
     const a = (((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI) / 180;
@@ -131,9 +133,10 @@
     makeWalls();
     const blocks = [];
 
-    // Phones and tablets: what is on screen becomes part of the scene. It stays put (the words pile up around it)
-    // until the phone is tilted, then it all comes loose; afterwards every piece glides back to its place.
-    let freeable = window.matchMedia('(pointer: coarse)').matches;
+    // What is on screen becomes part of the scene. On phones it stays put (the words pile up around it) until the
+    // phone is tilted, then it all comes loose; laptops (no tilt) let go by themselves just after the rain starts.
+    // Afterwards every piece glides back to its place.
+    let freeable = true;
     const parts = [], partBodies = [], opened = [];
     let freed = false;
     if (freeable) {
@@ -259,6 +262,7 @@
       const na = Math.atan2(gy, gx);
       if (Math.abs(Math.atan2(Math.sin(na - ga), Math.cos(na - ga))) > 0.12) { ga = na; for (const b of blocks) Sleeping.set(b, false); for (const b of partBodies) if (!b.isStatic) Sleeping.set(b, false); }
       if (freeable && !freed && phase !== 'drain' && Math.abs(Math.atan2(Math.sin(na - ga0), Math.cos(na - ga0))) > 0.3) freeParts();   // tilted: the page comes loose
+      if (freeable && !freed && !tiltSeen && now - began > 700) freeParts();                                                           // no tilt here: it collapses by itself
 
       if (phase === 'fill') {
         let made = 0;
