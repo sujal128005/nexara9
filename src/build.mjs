@@ -28,10 +28,24 @@ const ext = (href, inner, cls = '') =>
   `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
 const catLabel = (id) => categories.find((c) => c.id === id)?.label ?? id;
 const pad = (n) => String(n).padStart(2, '0');
-const mailAttrs = (subject) => {
+const mailAttrs = (subject, body = '') => {
   const [u, d] = site.email.split('@');
-  return `href="/#contact" data-mail-u="${esc(u)}" data-mail-d="${esc(d)}" data-mail-s="${esc(subject)}"`;
+  return `href="/#contact" data-mail-u="${esc(u)}" data-mail-d="${esc(d)}" data-mail-s="${esc(subject)}"${body ? ` data-mail-b="${esc(body)}"` : ''}`;
 };
+// A ready-to-send note for investors: they only fill in their name, designation and company.
+const investorNote = (what) => [
+  'Hi Sujal and Navya,',
+  '',
+  "I'm [Your name], [Your designation] at [Company name].",
+  '',
+  `We came across ${what} on nexara9.me and would like to explore what you are building. Could you share your pitch deck and the best way to reach you? We would love to set up a call.`,
+  '',
+  'Looking forward to hearing from you.',
+  '',
+  'Best regards,',
+  '[Your name]',
+  '[Your designation], [Company name]',
+].join('\n');
 const open = projects.filter((p) => !p.comingSoon);
 const catClass = (p) => `c-${p.cats[0] || 'none'}`;
 
@@ -274,7 +288,7 @@ function ventureCard(f, big) {
     <h3 class="venture-name">${esc(f.name)}</h3>
     <p class="venture-line">${esc(f.line)}</p>
     <p class="venture-badge">${esc(f.badge)}</p>
-    ${f.funding ? `<a class="btn btn-gold" ${mailAttrs(`${f.name}: funding enquiry`)}>${icon.mail}<span>Fund ${esc(f.name)}</span></a>` : ''}
+    ${f.funding ? `<a class="btn btn-gold" ${mailAttrs(`${f.name}: funding enquiry`, investorNote(f.name))}>${icon.mail}<span>Fund ${esc(f.name)}</span></a>` : ''}
   </li>`;
 }
 
@@ -297,7 +311,7 @@ ${header('ventures')}
     </div>
     <div class="fund-band reveal">
       <p class="fund-text">Raising pre-seed for <strong>Limen</strong> and <strong>Housefi</strong>.</p>
-      <a class="btn btn-gold" ${mailAttrs('Nexara9: pre-seed funding')}>${icon.mail}<span>Talk to the founders</span></a>
+      <a class="btn btn-gold" ${mailAttrs('Nexara9: pre-seed funding', investorNote('Limen and Housefi'))}>${icon.mail}<span>Talk to the founders</span></a>
     </div>
   </section>
   ${jumpNav([['/projects/', 'Projects', '01'], ['/founders/', 'Founders', '03']])}

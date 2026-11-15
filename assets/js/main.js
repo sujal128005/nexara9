@@ -48,8 +48,10 @@
     // Email links are assembled here so the address is not sitting in the HTML for scrapers.
     document.querySelectorAll('[data-mail-u]').forEach((a) => {
       const addr = `${a.dataset.mailU}@${a.dataset.mailD}`;
-      const subject = a.dataset.mailS ? `?subject=${encodeURIComponent(a.dataset.mailS)}` : '';
-      a.setAttribute('href', `mailto:${addr}${subject}`);
+      const q = [];
+      if (a.dataset.mailS) q.push(`subject=${encodeURIComponent(a.dataset.mailS)}`);
+      if (a.dataset.mailB) q.push(`body=${encodeURIComponent(a.dataset.mailB.replace(/\r?\n/g, '\r\n'))}`);   // a ready-written message
+      a.setAttribute('href', `mailto:${addr}${q.length ? `?${q.join('&')}` : ''}`);
     });
 
     // Reveal on scroll
