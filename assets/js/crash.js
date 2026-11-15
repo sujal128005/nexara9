@@ -30,6 +30,8 @@
     running = true;
     buzz([28, 40, 28]);
     const html = document.documentElement, overflow = html.style.overflow;
+    const sx0 = window.scrollX, sy0 = window.scrollY;            // the page underneath must not move
+    const holdScroll = () => { if (window.scrollX !== sx0 || window.scrollY !== sy0) window.scrollTo({ left: sx0, top: sy0, behavior: 'instant' }); };
     html.style.overflow = 'hidden';
 
     const root = el('div', 'crash'); root.setAttribute('aria-hidden', 'true');
@@ -67,7 +69,7 @@
       ended = true;
       window.removeEventListener('keydown', key);
       const fade = root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: reduce ? 1 : T.out, easing: 'ease-in', fill: 'forwards' });
-      fade.onfinish = () => { root.remove(); html.style.overflow = overflow; running = false; };
+      fade.onfinish = () => { root.remove(); html.style.overflow = overflow; holdScroll(); requestAnimationFrame(holdScroll); running = false; };
       if (!told) {                                        // for the curious: the whole program, ready to run
         told = true;
         try { console.log('%cNexara9%c  save this as nexara9.hs and run:  runghc nexara9.hs\n\n' + src, 'color:#d9b45a;font-weight:700', 'color:inherit'); } catch (_) { /* no console */ }
@@ -91,6 +93,7 @@
     function frame(now) {
       if (ended) return;
       const t = now - t0;
+      holdScroll();
       // 1. the red line sweeps down; the page behind it turns into the error screen
       const p = Math.min(1, t / T.sweep), eased = 1 - Math.pow(1 - p, 3);
       wipe.style.clipPath = `inset(0 0 ${((1 - eased) * 100).toFixed(2)}% 0)`;
