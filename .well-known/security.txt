@@ -1,4 +1,4 @@
-Contact: mailto:offsujal128005@gmail.com
-Expires: 2027-11-15T22:46:07Z
+Contact: mailto:hello@nexara9.me
+Expires: 2027-11-20T00:19:19Z
 Preferred-Languages: en
 Canonical: https://nexara9.me/.well-known/security.txt

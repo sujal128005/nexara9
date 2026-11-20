@@ -8,7 +8,7 @@ export const site = {
   tagline: 'Many ventures. One golden standard.',
   description:
     'Nexara9 is a venture studio in the making: autonomous machines, AI systems and everyday products, built under one name and one standard.',
-  email: 'offsujal128005@gmail.com',
+  email: 'hello@nexara9.me',
   linkedin: 'https://www.linkedin.com/company/nexara9/',
   since: 2023,
 };
